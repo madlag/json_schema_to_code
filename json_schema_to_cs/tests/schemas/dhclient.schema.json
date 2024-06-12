@@ -1,0 +1,453 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "DHMessage": {
+            "type": "object",
+            "properties": {
+                "type": { "type": "string" },
+                "id": {
+                    "type": "array",
+                    "items": { "type": ["string", "integer"] }
+                }
+            },
+            "required": ["type", "id"]
+        },
+        "DHMError": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": "integer" },
+                        "codeDescription": { "type": "string" },
+                        "service": { "type": "integer" },
+                        "serviceDescription": { "type": "string" },
+                        "serviceProvider": { "type": "integer" },
+                        "serviceProviderDescription": { "type": "string" },
+                        "message": { "type": "string" }
+                    },
+                    "required": [
+                        "code",
+                        "codeDescription",
+                        "service",
+                        "serviceDescription",
+                        "serviceProvider",
+                        "serviceProviderDescription",
+                        "message"
+                    ]
+                }
+            ]
+        },
+        "DHMChatInfo": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            ]
+        },
+        "DHMSetChatView": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "view": { "$ref": "#/definitions/ChatViewConfig" }
+                    },
+                    "required": ["view"]
+                }
+            ]
+        },
+        "DHMAgentChatView": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "agentId": { "type": "integer" },
+                        "view": { "$ref": "#/definitions/ChatViewInfo" }
+                    },
+                    "required": ["view", "agentId"]
+                }
+            ]
+        },
+        "DHMAddHuman": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "humanId": { "type": "integer" }
+                    },
+                    "required": ["humanId"]
+                }
+            ]
+        },
+        "DHMAddAgent": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "agentId": { "type": "integer" }
+                    },
+                    "required": ["agentId"]
+                }
+            ]
+        },
+        "DHMHumanTextChunk": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "humanId": { "type": "integer" },
+                        "text": { "type": "string" },
+                        "final": { "type": "boolean" }
+                    },
+                    "required": ["humanId", "text", "final"]
+                }
+            ]
+        },
+        "DHMHumanAction": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "humanId": { "type": "integer" },
+                        "actionType": { "type": "string" },
+                        "action": { "type": "string" }
+                    },
+                    "required": ["humanId", "actionType", "action"]
+                }
+            ]
+        },
+        "DHMHumanAudioChunk": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "humanId": { "type": "integer" },
+                        "buffer": { "type": "string" },
+                        "sampleIndex": { "type": "integer" },
+                        "sampleRate": { "type": "integer" },
+                        "channels": { "type": "integer" },
+                        "format": { "type": "string" },
+                        "final": { "type": "boolean" },
+                        "language": { "type": "string" }
+                    },
+                    "required": [
+                        "humanId",
+                        "buffer",
+                        "sampleIndex",
+                        "sampleRate",
+                        "channels",
+                        "format",
+                        "final",
+                        "language"
+                    ]
+                }
+            ]
+        },
+        "DHMHumanImage": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "humanId": { "type": "integer" },
+                        "text": { "type": "string" },
+                        "url": { "type": "string" }
+                    },
+                    "required": ["humanId", "url", "text"]
+                }
+            ]
+        },
+        "DHMAgentTextChunk": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "agentId": { "type": "integer" },
+                        "text": { "type": "string" },
+                        "final": { "type": "boolean" },
+                        "system": { "type": "boolean" }
+                    },
+                    "required": ["agentId", "text", "final", "system"]
+                }
+            ]
+        },
+        "DHMAgentTimedMediaChunk": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "agentId": { "type": "integer" },
+                        "timedMedia": {
+                            "type": "array",
+                            "items": { "$ref": "#/definitions/TimedMedia" }
+                        }
+                    },
+                    "required": ["agentId", "tts"]
+                }
+            ]
+        },
+        "TimedMedia": {
+            "type": "object",
+            "properties": {
+                "type": { "type": "string" },
+                "time": { "type": "number" },
+                "duration": { "type": "number" }
+            },
+            "required": ["type", "time"],
+            "additionalProperties": false
+        },
+        "TimedAudio": {
+            "allOf": [
+                { "$ref": "#/definitions/TimedMedia" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "buffer": { "type": "string" },
+                        "sampleIndex": { "type": "integer" },
+                        "sampleRate": { "type": "integer" },
+                        "channels": { "type": "integer" },
+                        "audioByteSize": { "type": "integer" }
+                    },
+                    "required": [
+                        "duration",
+                        "buffer",
+                        "sampleIndex",
+                        "sampleRate",
+                        "channels",
+                        "audioByteSize"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "TimedViseme": {
+            "allOf": [
+                { "$ref": "#/definitions/TimedMedia" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "viseme": { "type": "string" }
+                    },
+                    "required": ["viseme"],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "TimedText": {
+            "allOf": [
+                { "$ref": "#/definitions/TimedMedia" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "textType": {
+                            "type": "string",
+                            "enum": [
+                                "CHARACTER",
+                                "WORD",
+                                "PUNCTUATION",
+                                "SENTENCE",
+                                "PARAGRAPH"
+                            ]
+                        },
+                        "text": { "type": "string" }
+                    },
+                    "required": ["duration", "textType", "text"],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "ActionDefinition": {
+            "type": "object",
+            "properties": {
+                "type": { "type": "string" },
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "minItems": 2,
+                        "maxItems": 2
+                    }
+                }
+            },
+            "required": ["type", "attributes"]
+        },
+
+        "TimedAction": {
+            "allOf": [
+                { "$ref": "#/definitions/TimedMedia" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "span": {
+                            "type": "string",
+                            "enum": ["start", "end", "point"]
+                        },
+                        "startId": { "type": "integer" },
+                        "endId": { "type": "integer" },
+                        "actionId": { "type": "string" },
+                        "actionDefinition": {
+                            "$ref": "#/definitions/ActionDefinition"
+                        }
+                    },
+                    "required": ["span", "startId", "endId"],
+                    "additionalProperties": false
+                }
+            ]
+        },
+        "TimedMetadata": {
+            "allOf": [
+                { "$ref": "#/definitions/TimedMedia" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "totalAudioSamples": { "type": ["integer", "null"] },
+                        "sampleRate": { "type": "integer" },
+                        "channels": { "type": "integer" },
+                        "totalAudioByteSize": { "type": "integer" },
+                        "final": { "type": "boolean" }
+                    },
+                    "required": [
+                        "metadata",
+                        "final",
+                        "sampleRate",
+                        "channels",
+                        "totalAudioByteSize"
+                    ],
+                    "additionalProperties": false
+                }
+            ]
+        },
+
+        "DHMAgentActionDefinition": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "agentId": { "type": "integer" },
+                        "actionId": { "type": "string" },
+                        "actionDefinition": {
+                            "$ref": "#/definitions/ActionDefinition"
+                        }
+                    },
+                    "required": ["agentId", "actionDefinition", "actionId"]
+                }
+            ]
+        },
+        "DHMMetadata": {
+            "allOf": [
+                { "$ref": "#/definitions/DHMessage" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "metadata": {
+                            "type": "array",
+                            "items": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "minItems": 2,
+                                "maxItems": 2
+                            }
+                        }
+                    },
+                    "required": ["content"]
+                }
+            ]
+        },
+        "ChatViewTextConfig": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "source": { "type": "boolean", "default": false }
+            },
+            "required": ["enabled", "source"],
+            "additionalProperties": false
+        },
+        "ChatViewSpeechConfig": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": false }
+            },
+            "required": ["enabled"],
+            "additionalProperties": false
+        },
+        "ChatViewVisemeConfig": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": false }
+            },
+            "required": ["enabled"],
+            "additionalProperties": false
+        },
+        "ChatViewConfig": {
+            "type": "object",
+            "properties": {
+                "language": { "type": "string", "default": "en-US" },
+                "text": { "$ref": "#/definitions/ChatViewTextConfig" },
+                "speech": { "$ref": "#/definitions/ChatViewSpeechConfig" },
+                "viseme": { "$ref": "#/definitions/ChatViewVisemeConfig" }
+            },
+            "required": ["language", "text", "speech", "viseme"],
+            "additionalProperties": false
+        },
+        "ChatViewTextInfo": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "source": { "type": "boolean", "default": false }
+            },
+            "required": ["enabled", "source"],
+            "additionalProperties": false
+        },
+        "ChatViewSpeechInfo": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": false },
+                "sampleRate": { "type": "number", "default": -1 },
+                "channels": { "type": "number", "default": 1 },
+                "bitsPerSample": { "type": "number", "default": 16 },
+                "format": { "type": "string", "default": "PCM" }
+            },
+            "required": [
+                "enabled",
+                "sampleRate",
+                "channels",
+                "bitsPerSample",
+                "format"
+            ],
+            "additionalProperties": false
+        },
+        "ChatViewVisemeInfo": {
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "default": false }
+            },
+            "required": ["enabled"],
+            "additionalProperties": false
+        },
+        "ChatViewInfo": {
+            "type": "object",
+            "properties": {
+                "language": { "type": "string", "default": "en-US" },
+                "text": { "$ref": "#/definitions/ChatViewTextInfo" },
+                "speech": { "$ref": "#/definitions/ChatViewSpeechInfo" },
+                "viseme": { "$ref": "#/definitions/ChatViewVisemeInfo" }
+            },
+            "required": ["language", "text", "speech", "viseme"],
+            "additionalProperties": false
+        }
+    }
+}

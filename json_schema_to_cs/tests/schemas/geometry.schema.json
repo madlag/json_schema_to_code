@@ -1,0 +1,373 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "GeometryObject": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type",
+                "points"
+            ]
+        },
+        "GeometryObjectPoint": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "point"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "coordinate": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+
+                    },
+                    "required": [
+                        "type",
+                        "name"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectSegment": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "segment"
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    },
+                    "required": [
+                        "points"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectLine": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "line"
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    },
+                    "required":[]
+                }
+            ]
+        },
+        "GeometryObjectRay": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "ray"
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    },
+                    "required": [
+                        "points"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectVector": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "vector"
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    },
+                    "required": [
+                        "points"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectTriangle": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "triangle"
+                        },
+                        "kind": {
+                            "enum": [
+                                "isosceles",
+                                "equilateral",
+                                "general"
+                            ]
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
+                        }
+                    },
+                    "required": [
+                        "points"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectQuadrilateral": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "quadrilateral"
+                        },
+                        "kind": {
+                            "enum": [
+                                "square",
+                                "rectangle",
+                                "rhombus",
+                                "parallelogram",
+                                "trapezoid",
+                                "kite",
+                                "general"
+                            ]
+                        },
+                        "points": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 4,
+                            "maxItems": 4
+                        }
+                    },
+                    "required": [
+                        "kind"
+                    ]
+                }
+            ]
+        },
+        "GeometryObjectCircle": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/GeometryObject"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "center"
+                        },
+                        "center": {
+                            "type": "string"
+                        },
+                        "radius": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "center",
+                        "radius"
+                    ]
+                }
+            ]
+        },
+        "Constraint": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "type"
+            ]
+        },
+        "ConstraintDistanceFixed": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/Constraint"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "distance_fixed"
+                        },
+                        "distance": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "distance"
+                    ]
+                }
+            ]
+        },
+        "ConstraintDistanceEquals": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/Constraint"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "distance_equals"
+                        }
+                    }
+                }
+            ]
+        },
+        "ConstraintAngleFixed": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/Constraint"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "angle_fixed"
+                        },
+                        "angle": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "angle"
+                    ]
+                }
+            ]
+        },
+        "ConstraintAngleEquals": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/Constraint"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "const": "angle_equals"
+                        }
+                    }
+                }
+            ]
+        },
+        "Style": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "color": {
+                    "type": "string"
+                },
+                "strokeWidth": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "name",
+                "color",
+                "strokeWidth"
+            ]
+        }
+    },
+    "type": "object",
+    "properties": {
+        "objects": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/GeometryObject"
+            }
+        },
+        "constraints": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/Constraint"
+            }
+        },
+        "styles": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/Style"
+            }
+        }
+    },
+    "required": [
+        "objects",
+        "constraints",
+        "styles"
+    ]
+}
