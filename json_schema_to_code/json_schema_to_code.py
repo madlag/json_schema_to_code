@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import click
-from codegen import CodeGenerator
+from .codegen import CodeGenerator
 
 
 @click.command()
