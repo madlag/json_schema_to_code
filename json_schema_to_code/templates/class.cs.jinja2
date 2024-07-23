@@ -9,7 +9,7 @@ public class {{CLASS_NAME}}{% if EXTENDS %} : {{EXTENDS}}
 {% endif %}
 {
     {% for property, info in properties.items() %}
-    public {{info.TYPE.type}} {{property}};{{info.TYPE.comment}}
+    public {{info.TYPE.modifier}}{{info.TYPE.type}} {{property}};{{info.TYPE.comment}}
     {% endfor %}
     public {{CLASS_NAME}}({% for property, info in constructor_properties.items() %}{{info.TYPE.type}} {{property}}{% if not loop.last %}, {% endif %}{% endfor %}){% if EXTENDS %}: base({% for property, info in BASE_PROPERTIES.items() %}{{property}}{% if not loop.last %}, {% endif %}{% endfor %})
     {% endif %}

@@ -6,11 +6,24 @@ import jinja2
 
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
 
+class CodeGeneratorConfig:
+    ignoreSubClassOverrides: bool = False
+    drop_min_max_items: bool = False
+    use_array_of_super_type_for_variable_length_tuple:bool = True
+    use_tuples:bool = True
+
+    @staticmethod
+    def from_dict(d):
+        config = CodeGeneratorConfig()
+        for k, v in d.items():
+            setattr(config, k, v)
+        return config
 
 class CodeGenerator:
-    def __init__(self, class_name: str, schema: str):
+    def __init__(self, class_name: str, schema: str, config: CodeGeneratorConfig):
         self.class_name = class_name
         self.schema = schema
+        self.config = config
 
         self.jinja_env = jinja2.Environment(lstrip_blocks=True, trim_blocks=True)
         self.prefix = self.jinja_env.from_string(
@@ -33,14 +46,59 @@ class CodeGenerator:
 
     def ref_type(self, ref):
         return ref.split("/")[-1]
+    
+    def super_type(self, items):
+        types = set()
+        for item in items:
+            if "type" in item:
+                if isinstance(item["type"], list):
+                    for t in item["type"]:
+                        types.add(t)
+                elif isinstance(item["type"], str):
+                    types.add(item["type"])
+            else:
+                raise Exception("Unknown type " + str(item))
+        types = list(types)
+        types.sort()
+        return {"type": types}
 
     def translate_type(self, type_info):
         if "type" in type_info:
             type = type_info["type"]
             if type == "array":
-                item_type_info = self.translate_type(type_info["items"])
-                item_type = item_type_info["type"]
-                type = f"List<{item_type}>"
+                if isinstance(type_info["items"], dict):
+                    item_type_info = self.translate_type(type_info["items"])
+                    item_type = item_type_info["type"]
+                    type = f"List<{item_type}>"
+                elif isinstance(type_info["items"], list):
+                    if type_info.get("minItems") != type_info.get("maxItems"):
+                        if not self.config.drop_min_max_items:
+                            raise Exception("Variable length tuple is not supported")
+
+                    if type_info.get("minItems") != type_info.get("maxItems") or not self.config.use_tuples:
+                        if not self.config.use_array_of_super_type_for_variable_length_tuple:
+                            # Check if all items are of the same type
+                            item_types = [
+                                self.translate_type(t)["type"]
+                                for t in type_info["items"]
+                            ]
+
+                            for item_type in item_types[1:]:
+                                # Items are not of the same type
+                                if item_type != item_types[0]:
+                                    raise Exception("The items are not of the same type: " + str(item_types))
+                        item_type = self.super_type(type_info["items"])
+                        item_type = self.translate_type(item_type)
+                        type = f"List<{item_type['type']}>"
+                    elif self.config.use_tuples:
+                        item_types = [
+                            self.translate_type(t)["type"]
+                            for t in type_info["items"]
+                        ]
+                        type = f"Tuple<{', '.join(item_types)}>"
+
+                else:
+                    raise Exception("Unknown type " + str(type_info["items"]))
             elif isinstance(type, list):
                 nullable = False
                 if "null" in type:
@@ -52,13 +110,12 @@ class CodeGenerator:
                     if nullable:
                         type = type + "?"
                 else:
-                    type = "Or".join(
-                        [
+                    typeNames = [
                             self.translate_type({"type": t})["type"].capitalize()
                             for t in type
                         ]
-                    )
-
+                    typeNames.sort()
+                    type = "Or".join(typeNames)
             else:
                 return {"type": self.type_map[type]}
         elif "$ref" in type_info:
@@ -147,10 +204,17 @@ class CodeGenerator:
                     p["BASE_PROPERTIES"][init_value] = property_info
             new_properties = dict()
             for property, property_info in properties.items():
+                override_base_property = property in p["BASE_PROPERTIES"]
+                if override_base_property and self.config.ignoreSubClassOverrides:
+                    continue
+
                 TYPE = self.translate_type(property_info)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
+                type_modifier = "new " if override_base_property else ""
+                property_info["TYPE"]["modifier"] = type_modifier
+
                 if "type" in TYPE:
                     constructor_properties[property] = property_info
                     new_properties[property] = property_info
