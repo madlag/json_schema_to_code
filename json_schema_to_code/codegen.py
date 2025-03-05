@@ -1,16 +1,21 @@
 import collections
 import copy
 from pathlib import Path
+import traceback
+from typing import Any, Dict
 
 import jinja2
 
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
 
+
 class CodeGeneratorConfig:
+    ignore_classes: list[str] = []
+    global_ignore_fields: list[str] = []
     ignoreSubClassOverrides: bool = False
     drop_min_max_items: bool = False
-    use_array_of_super_type_for_variable_length_tuple:bool = True
-    use_tuples:bool = True
+    use_array_of_super_type_for_variable_length_tuple: bool = True
+    use_tuples: bool = True
 
     @staticmethod
     def from_dict(d):
@@ -18,6 +23,7 @@ class CodeGeneratorConfig:
         for k, v in d.items():
             setattr(config, k, v)
         return config
+
 
 class CodeGenerator:
     def __init__(self, class_name: str, schema: str, config: CodeGeneratorConfig):
@@ -44,10 +50,10 @@ class CodeGenerator:
         self.base_class = dict()
         self.class_info = dict()
 
-    def ref_type(self, ref):
+    def ref_type(self, ref: str) -> str:
         return ref.split("/")[-1]
-    
-    def super_type(self, items):
+
+    def super_type(self, items: Dict[str, Any]):
         types = set()
         for item in items:
             if "type" in item:
@@ -75,7 +81,10 @@ class CodeGenerator:
                         if not self.config.drop_min_max_items:
                             raise Exception("Variable length tuple is not supported")
 
-                    if type_info.get("minItems") != type_info.get("maxItems") or not self.config.use_tuples:
+                    if (
+                        type_info.get("minItems") != type_info.get("maxItems")
+                        or not self.config.use_tuples
+                    ):
                         if not self.config.use_array_of_super_type_for_variable_length_tuple:
                             # Check if all items are of the same type
                             item_types = [
@@ -86,14 +95,16 @@ class CodeGenerator:
                             for item_type in item_types[1:]:
                                 # Items are not of the same type
                                 if item_type != item_types[0]:
-                                    raise Exception("The items are not of the same type: " + str(item_types))
+                                    raise Exception(
+                                        "The items are not of the same type: "
+                                        + str(item_types)
+                                    )
                         item_type = self.super_type(type_info["items"])
                         item_type = self.translate_type(item_type)
                         type = f"List<{item_type['type']}>"
                     elif self.config.use_tuples:
                         item_types = [
-                            self.translate_type(t)["type"]
-                            for t in type_info["items"]
+                            self.translate_type(t)["type"] for t in type_info["items"]
                         ]
                         type = f"Tuple<{', '.join(item_types)}>"
 
@@ -111,9 +122,9 @@ class CodeGenerator:
                         type = type + "?"
                 else:
                     typeNames = [
-                            self.translate_type({"type": t})["type"].capitalize()
-                            for t in type
-                        ]
+                        self.translate_type({"type": t})["type"].capitalize()
+                        for t in type
+                    ]
                     typeNames.sort()
                     type = "Or".join(typeNames)
             else:
@@ -159,7 +170,8 @@ class CodeGenerator:
             json_name = self.convert_message_class_to_json_name(
                 allOf[1].get("properties", {}), class_name
             )
-            self.subclasses[base_class].append([class_name, json_name])
+            if class_name not in self.config.ignore_classes:
+                self.subclasses[base_class].append([class_name, json_name])
             self.base_class[class_name] = base_class
         self.class_info[class_name] = p
 
@@ -219,8 +231,8 @@ class CodeGenerator:
                     constructor_properties[property] = property_info
                     new_properties[property] = property_info
 
-            p["properties"] = new_properties
-            p["constructor_properties"] = constructor_properties
+                p["properties"] = new_properties
+                p["constructor_properties"] = constructor_properties
         else:
             p["constructor_properties"] = properties
 
@@ -230,10 +242,19 @@ class CodeGenerator:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
 
+
+        if "properties" in p:
+            p["properties"] = {k: v for k, v in p["properties"].items() if k not in self.config.global_ignore_fields}
+        if "constructor_properties" in p:
+            p["constructor_properties"] = {k: v for k, v in p["constructor_properties"].items() if k not in self.config.global_ignore_fields}
+
         return p
 
     def generate(self):
-        definitions = self.schema.get("definitions", {})
+        definitions = self.schema.get("definitions") or self.schema.get("$defs")
+        if definitions is None:
+            raise Exception("No definitions found in schema")
+
         for k, v in definitions.items():
             self.preprocess(k, v)
 
@@ -241,9 +262,15 @@ class CodeGenerator:
 
         out = self.prefix.render()
         for k, v in definitions.items():
+            if k in self.config.ignore_classes:
+                continue
             p = self.prepare_class_info(k, v)
-            s = self.class_model.render(p)
-            out += s + "\n"
+            try:
+                s = self.class_model.render(p)
+                out += s + "\n"
+            except Exception as e:
+                print(f"Error generating class {k}: {e}")
+                raise e from None
 
         out += self.suffix.render()
 

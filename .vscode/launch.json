@@ -1,0 +1,15 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "json_schema_to_code.json_schema_to_code",
+            "args":["/Users/lagunas/devel/ai/dh-server/dhserver/models/schemas/messages_schema.json", "messages.cs", "-c", "/Users/lagunas/devel/ai/dh-server/client/cs/messages_generate_config.json"]
+        }
+    ]
+}

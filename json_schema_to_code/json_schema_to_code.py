@@ -30,4 +30,12 @@ def json_schema_to_code(name, config, path, output):
 
 
 if __name__ == "__main__":
+    import sys
+    base = Path("/Users/lagunas/devel/ai/dh-server/dhserver/models/schemas")
+    input = base / "messages_schema.json"
+    output = "messages.cs"
+    config = base / "../../../client/cs/messages_generate_config.json"
+    #messages_schema.json ../../../client/cs/messages.cs  -c ../../../client/cs/messages_generate_config.jso
+
+    sys.argv = ["json_schema_to_code", str(input), str(output), "-c", str(config)]
     json_schema_to_code()
