@@ -1,0 +1,26 @@
+{%if not enum %}
+@dataclass_json
+@dataclass(kw_only=True)
+{% endif %}
+{% if SUB_CLASSES %}
+class {{CLASS_NAME}}(ABC):
+{% else %}
+class {{CLASS_NAME}}{% if EXTENDS %}({{EXTENDS}}{% if enum %}, Enum{% endif %}){% endif %}:
+{% endif %}
+    {% for property, info in properties.items() %}
+    {% if not info.TYPE.init %}
+    {{property}}: {{info.TYPE.type}}{{info.TYPE.comment}}
+    {% endif %}
+    {% endfor %}
+    {% for property, info in properties.items() %}
+    {% if info.TYPE.init %}
+    {{property}}: {{info.TYPE.type}} = {{info.TYPE.init}}{{info.TYPE.comment}}
+    {% endif %}
+    {% endfor %}
+    {% if enum %}
+    {% for enum, value in enum.items() %}
+    {{enum}} = "{{value}}"
+    {% endfor %}
+    {% endif %}
+
+
