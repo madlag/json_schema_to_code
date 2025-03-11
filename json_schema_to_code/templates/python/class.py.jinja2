@@ -22,5 +22,8 @@ class {{CLASS_NAME}}{% if EXTENDS %}({{EXTENDS}}{% if enum %}, Enum{% endif %}){
     {{enum}} = "{{value}}"
     {% endfor %}
     {% endif %}
+    {% if not properties and not enum %}
+    pass
+    {% endif %}
 
 

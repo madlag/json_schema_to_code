@@ -263,26 +263,21 @@ class CodeGenerator:
             p_base = self.class_info.get(bc)
             constructor_properties = dict()
             for property, property_info in p_base["properties"].items():
-                if property != "type":
-                    TYPE = self.translate_type(property_info)
-                    if "TYPE" not in property_info:
-                        property_info["TYPE"] = {}
-                    property_info["TYPE"].update(TYPE)
+                TYPE = self.translate_type(property_info)
+                if "TYPE" not in property_info:
+                    property_info["TYPE"] = {}
+                property_info["TYPE"].update(TYPE)
+                child_property_info = p.get("properties", {}).get(property)
+                if child_property_info is not None and "const" in child_property_info:
+                    const = "\"" + child_property_info["const"] + "\""
+                    p["BASE_PROPERTIES"][const] = property_info
+                else:
                     constructor_properties[property] = property_info
                     p["BASE_PROPERTIES"][property] = property_info
-                else:
-                    init_value = (
-                        '"'
-                        + self.convert_message_class_to_json_name(
-                            properties, class_name
-                        )
-                        + '"'
-                    )
-                    #                    init_value = "nameof(" + class_name + ")"
-                    p["BASE_PROPERTIES"][init_value] = property_info
+
             new_properties = dict()
             for property, property_info in properties.items():
-                override_base_property = property in p["BASE_PROPERTIES"]
+                override_base_property = property in p_base["properties"]
                 if override_base_property and self.config.ignoreSubClassOverrides:
                     continue
 
@@ -297,8 +292,8 @@ class CodeGenerator:
                     constructor_properties[property] = property_info
                     new_properties[property] = property_info
 
-                p["properties"] = new_properties
-                p["constructor_properties"] = constructor_properties
+            p["properties"] = new_properties
+            p["constructor_properties"] = constructor_properties
         else:            
             p["constructor_properties"] = properties
 
@@ -341,6 +336,8 @@ class CodeGenerator:
             if k in self.config.ignore_classes:
                 return
             p = self.prepare_class_info(k, v)
+            if k == "DHMChatEventFinished":
+                print(p)
             try:
                 s = self.class_model.render(p)
                 out += s + "\n"
