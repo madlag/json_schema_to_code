@@ -6,7 +6,7 @@ def readme():
         return f.read()
 
 setup(name='json_schema_to_code',
-      version='0.1',
+      version='1.0.0',
       description='json_schema_to_code is a python package for ...',
       long_description=readme(),
       classifiers=[

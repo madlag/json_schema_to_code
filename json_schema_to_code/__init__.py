@@ -1,5 +1,10 @@
-def run1(path, output):
-  return "run1_ok"
+"""JSON Schema to Code Generator
 
-def run2(path, output):
-  return "run2_ok"
+A Python package for generating code from JSON Schema definitions.
+Supports Python and C# code generation with union types, comments filtering,
+and configurable output options.
+"""
+
+__version__ = "1.0.0"
+__author__ = "Francois Lagunas"
+

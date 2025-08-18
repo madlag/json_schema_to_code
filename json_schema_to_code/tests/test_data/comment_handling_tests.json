@@ -1,0 +1,61 @@
+[
+  {
+    "name": "schema_with_comments",
+    "description": "Test that comment fields in definitions are properly ignored",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "_comment_definitions": "This is a comment explaining the definitions section",
+        "_comment_objects": "This explains the object types below",
+        "SimpleClass": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "value": {"type": "number"}
+          }
+        },
+        "_comment_end": "End of definitions"
+      }
+    },
+    "expected_contains": [
+      "class SimpleClass:",
+      "name: str",
+      "value: float"
+    ],
+    "expected_not_contains": [
+      "class _comment_definitions",
+      "class _comment_objects", 
+      "class _comment_end"
+    ]
+  },
+  {
+    "name": "schema_without_comments",
+    "description": "Test normal schema without comment fields",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "NormalClass": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "active": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "class NormalClass:",
+      "id: str",
+      "active: bool"
+    ],
+    "expected_not_contains": [
+      "_comment"
+    ]
+  }
+]

@@ -21,8 +21,8 @@ using Newtonsoft.Json;
 [JsonSubtypes.KnownSubType(typeof(DHMMetadata), "DHMMetadata")]
 public class DHMessage{
     public string type;
-    public List<StringOrInt> id;
-    public DHMessage(string type, List<StringOrInt> id)    {
+    public List<IntOrString> id;
+    public DHMessage(string type, List<IntOrString> id)    {
         this.type = type;
         this.id = id;
     }
@@ -37,7 +37,7 @@ public class DHMError : DHMessage
     public int serviceProvider;
     public string serviceProviderDescription;
     public string message;
-    public DHMError(List<StringOrInt> id, int code, string codeDescription, int service, string serviceDescription, int serviceProvider, string serviceProviderDescription, string message): base("DHMError", id)
+    public DHMError(string type, List<IntOrString> id, int code, string codeDescription, int service, string serviceDescription, int serviceProvider, string serviceProviderDescription, string message): base(type, id)
     {
         this.code = code;
         this.codeDescription = codeDescription;
@@ -51,7 +51,7 @@ public class DHMError : DHMessage
 [Serializable]
 public class DHMChatInfo : DHMessage
 {
-    public DHMChatInfo(List<StringOrInt> id): base("DHMChatInfo", id)
+    public DHMChatInfo(string type, List<IntOrString> id): base(type, id)
     {
     }
 }
@@ -59,7 +59,7 @@ public class DHMChatInfo : DHMessage
 public class DHMSetChatView : DHMessage
 {
     public ChatViewConfig view;
-    public DHMSetChatView(List<StringOrInt> id, ChatViewConfig view): base("DHMSetChatView", id)
+    public DHMSetChatView(string type, List<IntOrString> id, ChatViewConfig view): base(type, id)
     {
         this.view = view;
     }
@@ -69,7 +69,7 @@ public class DHMAgentChatView : DHMessage
 {
     public int agentId;
     public ChatViewInfo view;
-    public DHMAgentChatView(List<StringOrInt> id, int agentId, ChatViewInfo view): base("DHMAgentChatView", id)
+    public DHMAgentChatView(string type, List<IntOrString> id, int agentId, ChatViewInfo view): base(type, id)
     {
         this.agentId = agentId;
         this.view = view;
@@ -79,7 +79,7 @@ public class DHMAgentChatView : DHMessage
 public class DHMAddHuman : DHMessage
 {
     public int humanId;
-    public DHMAddHuman(List<StringOrInt> id, int humanId): base("DHMAddHuman", id)
+    public DHMAddHuman(string type, List<IntOrString> id, int humanId): base(type, id)
     {
         this.humanId = humanId;
     }
@@ -88,7 +88,7 @@ public class DHMAddHuman : DHMessage
 public class DHMAddAgent : DHMessage
 {
     public int agentId;
-    public DHMAddAgent(List<StringOrInt> id, int agentId): base("DHMAddAgent", id)
+    public DHMAddAgent(string type, List<IntOrString> id, int agentId): base(type, id)
     {
         this.agentId = agentId;
     }
@@ -99,7 +99,7 @@ public class DHMHumanTextChunk : DHMessage
     public int humanId;
     public string text;
     public bool final;
-    public DHMHumanTextChunk(List<StringOrInt> id, int humanId, string text, bool final): base("DHMHumanTextChunk", id)
+    public DHMHumanTextChunk(string type, List<IntOrString> id, int humanId, string text, bool final): base(type, id)
     {
         this.humanId = humanId;
         this.text = text;
@@ -112,7 +112,7 @@ public class DHMHumanAction : DHMessage
     public int humanId;
     public string actionType;
     public string action;
-    public DHMHumanAction(List<StringOrInt> id, int humanId, string actionType, string action): base("DHMHumanAction", id)
+    public DHMHumanAction(string type, List<IntOrString> id, int humanId, string actionType, string action): base(type, id)
     {
         this.humanId = humanId;
         this.actionType = actionType;
@@ -130,7 +130,7 @@ public class DHMHumanAudioChunk : DHMessage
     public string format;
     public bool final;
     public string language;
-    public DHMHumanAudioChunk(List<StringOrInt> id, int humanId, string buffer, int sampleIndex, int sampleRate, int channels, string format, bool final, string language): base("DHMHumanAudioChunk", id)
+    public DHMHumanAudioChunk(string type, List<IntOrString> id, int humanId, string buffer, int sampleIndex, int sampleRate, int channels, string format, bool final, string language): base(type, id)
     {
         this.humanId = humanId;
         this.buffer = buffer;
@@ -148,7 +148,7 @@ public class DHMHumanImage : DHMessage
     public int humanId;
     public string text;
     public string url;
-    public DHMHumanImage(List<StringOrInt> id, int humanId, string text, string url): base("DHMHumanImage", id)
+    public DHMHumanImage(string type, List<IntOrString> id, int humanId, string text, string url): base(type, id)
     {
         this.humanId = humanId;
         this.text = text;
@@ -162,7 +162,7 @@ public class DHMAgentTextChunk : DHMessage
     public string text;
     public bool final;
     public bool system;
-    public DHMAgentTextChunk(List<StringOrInt> id, int agentId, string text, bool final, bool system): base("DHMAgentTextChunk", id)
+    public DHMAgentTextChunk(string type, List<IntOrString> id, int agentId, string text, bool final, bool system): base(type, id)
     {
         this.agentId = agentId;
         this.text = text;
@@ -175,7 +175,7 @@ public class DHMAgentTimedMediaChunk : DHMessage
 {
     public int agentId;
     public List<TimedMedia> timedMedia;
-    public DHMAgentTimedMediaChunk(List<StringOrInt> id, int agentId, List<TimedMedia> timedMedia): base("DHMAgentTimedMediaChunk", id)
+    public DHMAgentTimedMediaChunk(string type, List<IntOrString> id, int agentId, List<TimedMedia> timedMedia): base(type, id)
     {
         this.agentId = agentId;
         this.timedMedia = timedMedia;
@@ -206,7 +206,7 @@ public class TimedAudio : TimedMedia
     public int sampleRate;
     public int channels;
     public int audioByteSize;
-    public TimedAudio(float time, float duration, string buffer, int sampleIndex, int sampleRate, int channels, int audioByteSize): base("TimedAudio", time, duration)
+    public TimedAudio(string type, float time, float duration, string buffer, int sampleIndex, int sampleRate, int channels, int audioByteSize): base(type, time, duration)
     {
         this.buffer = buffer;
         this.sampleIndex = sampleIndex;
@@ -219,7 +219,7 @@ public class TimedAudio : TimedMedia
 public class TimedViseme : TimedMedia
 {
     public string viseme;
-    public TimedViseme(float time, float duration, string viseme): base("TimedViseme", time, duration)
+    public TimedViseme(string type, float time, float duration, string viseme): base(type, time, duration)
     {
         this.viseme = viseme;
     }
@@ -229,7 +229,7 @@ public class TimedText : TimedMedia
 {
     public string textType;
     public string text;
-    public TimedText(float time, float duration, string textType, string text): base("TimedText", time, duration)
+    public TimedText(string type, float time, float duration, string textType, string text): base(type, time, duration)
     {
         this.textType = textType;
         this.text = text;
@@ -252,7 +252,7 @@ public class TimedAction : TimedMedia
     public int endId;
     public string actionId;
     public ActionDefinition actionDefinition;
-    public TimedAction(float time, float duration, string span, int startId, int endId, string actionId, ActionDefinition actionDefinition): base("TimedAction", time, duration)
+    public TimedAction(string type, float time, float duration, string span, int startId, int endId, string actionId, ActionDefinition actionDefinition): base(type, time, duration)
     {
         this.span = span;
         this.startId = startId;
@@ -269,7 +269,7 @@ public class TimedMetadata : TimedMedia
     public int channels;
     public int totalAudioByteSize;
     public bool final;
-    public TimedMetadata(float time, float duration, int? totalAudioSamples, int sampleRate, int channels, int totalAudioByteSize, bool final): base("TimedMetadata", time, duration)
+    public TimedMetadata(string type, float time, float duration, int? totalAudioSamples, int sampleRate, int channels, int totalAudioByteSize, bool final): base(type, time, duration)
     {
         this.totalAudioSamples = totalAudioSamples;
         this.sampleRate = sampleRate;
@@ -284,7 +284,7 @@ public class DHMAgentActionDefinition : DHMessage
     public int agentId;
     public string actionId;
     public ActionDefinition actionDefinition;
-    public DHMAgentActionDefinition(List<StringOrInt> id, int agentId, string actionId, ActionDefinition actionDefinition): base("DHMAgentActionDefinition", id)
+    public DHMAgentActionDefinition(string type, List<IntOrString> id, int agentId, string actionId, ActionDefinition actionDefinition): base(type, id)
     {
         this.agentId = agentId;
         this.actionId = actionId;
@@ -295,7 +295,7 @@ public class DHMAgentActionDefinition : DHMessage
 public class DHMMetadata : DHMessage
 {
     public List<List<string>> metadata;
-    public DHMMetadata(List<StringOrInt> id, List<List<string>> metadata): base("DHMMetadata", id)
+    public DHMMetadata(string type, List<IntOrString> id, List<List<string>> metadata): base(type, id)
     {
         this.metadata = metadata;
     }

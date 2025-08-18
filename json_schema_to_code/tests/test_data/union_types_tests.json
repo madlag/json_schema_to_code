@@ -1,0 +1,234 @@
+[
+  {
+    "name": "anyOf_inline_unions",
+    "description": "Test anyOf with inline unions enabled",
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "mixedField": {
+              "anyOf": [
+                {"type": "string"},
+                {"type": "number"}
+              ]
+            },
+            "optionalRef": {
+              "anyOf": [
+                {"$ref": "#/definitions/SimpleObject"},
+                {"type": "null"}
+              ]
+            }
+          }
+        },
+        "SimpleObject": {
+          "type": "object", 
+          "properties": {
+            "value": {"type": "string"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "mixedField: float | str",
+      "optionalRef: None | SimpleObject"
+    ],
+    "expected_not_contains": [
+      "FloatOrStr =",
+      "NoneOrSimpleobject ="
+    ]
+  },
+  {
+    "name": "anyOf_type_aliases", 
+    "description": "Test anyOf with type aliases enabled",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "mixedField": {
+              "anyOf": [
+                {"type": "string"},
+                {"type": "number"}
+              ]
+            },
+            "optionalRef": {
+              "anyOf": [
+                {"$ref": "#/definitions/SimpleObject"},
+                {"type": "null"}
+              ]
+            }
+          }
+        },
+        "SimpleObject": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "string"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "FloatOrStr = float | str",
+      "NoneOrSimpleobject = None | SimpleObject",
+      "mixedField: FloatOrStr",
+      "optionalRef: NoneOrSimpleobject"
+    ],
+    "expected_not_contains": [
+      "mixedField: float | str",
+      "optionalRef: None | SimpleObject"
+    ]
+  },
+  {
+    "name": "oneOf_inline_unions",
+    "description": "Test oneOf with inline unions enabled", 
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "exclusiveField": {
+              "oneOf": [
+                {"type": "string"},
+                {"type": "integer"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "exclusiveField: int | str"
+    ],
+    "expected_not_contains": [
+      "IntOrStr =",
+      "exclusiveField: IntOrStr"
+    ]
+  },
+  {
+    "name": "oneOf_type_aliases",
+    "description": "Test oneOf with type aliases enabled",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#", 
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "exclusiveField": {
+              "oneOf": [
+                {"type": "string"},
+                {"type": "integer"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "IntOrStr = int | str",
+      "exclusiveField: IntOrStr"
+    ],
+    "expected_not_contains": [
+      "exclusiveField: int | str"
+    ]
+  },
+  {
+    "name": "array_type_unions_inline",
+    "description": "Test array type unions with inline unions enabled",
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "flexibleField": {
+              "type": ["string", "number", "boolean"]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "flexibleField: bool | float | str"
+    ],
+    "expected_not_contains": [
+      "BoolOrFloatOrStr =",
+      "flexibleField: BoolOrFloatOrStr"
+    ]
+  },
+  {
+    "name": "array_type_unions_aliases",
+    "description": "Test array type unions with type aliases enabled", 
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "flexibleField": {
+              "type": ["string", "number", "boolean"]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "BoolOrFloatOrStr = bool | float | str",
+      "flexibleField: BoolOrFloatOrStr"
+    ],
+    "expected_not_contains": [
+      "flexibleField: bool | float | str"
+    ]
+  },
+  {
+    "name": "no_unions_no_aliases",
+    "description": "Test schema with no unions generates no type aliases",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "SimpleClass": {
+          "type": "object",
+          "properties": {
+            "stringField": {"type": "string"},
+            "numberField": {"type": "number"},
+            "boolField": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "stringField: str",
+      "numberField: float", 
+      "boolField: bool"
+    ],
+    "expected_not_contains": [
+      "OrStr =",
+      "OrFloat =",
+      "OrBool ="
+    ]
+  }
+]

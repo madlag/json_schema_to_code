@@ -1,0 +1,131 @@
+[
+  {
+    "name": "ui_hierarchy_inline_unions",
+    "description": "Test complex UI hierarchy schema with inline unions enabled - real-world schema with anyOf patterns, comment fields, inheritance, and complex object hierarchies",
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "expected_contains": [
+      "from dataclasses import dataclass",
+      "from typing import List, Any, Literal",
+      "from dataclasses_json import dataclass_json",
+      "from abc import ABC",
+      "class baseUIObject(ABC):",
+      "class style:",
+      "width: float | str",
+      "height: float | str",
+      "margin: Any | str", 
+      "padding: Any | str",
+      "fontSize: float | str",
+      "fontWeight: float | str",
+      "borderRadius: float | str",
+      "style: None | style",
+      "enabled: bool",
+      "class textObject(baseUIObject):",
+      "class buttonObject(baseUIObject):",
+      "class inputObject(baseUIObject):",
+      "class containerObject(baseUIObject):",
+      "class uiObjectUnion("
+    ],
+    "expected_not_contains": [
+      "FloatOrStr =",
+      "AnyOrStr =", 
+      "NoneOrStyle =",
+      "_comment_definitions",
+      "_comment_base",
+      "_comment_ui_objects",
+      "class _comment"
+    ]
+  },
+  {
+    "name": "ui_hierarchy_type_aliases",
+    "description": "Test complex UI hierarchy schema with type aliases enabled - should generate clean type aliases for union types",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "expected_contains": [
+      "AnyOrStr = Any | str",
+      "FloatOrStr = float | str", 
+      "NoneOrStyle = None | style",
+      "width: FloatOrStr",
+      "height: FloatOrStr",
+      "margin: AnyOrStr",
+      "padding: AnyOrStr",
+      "fontSize: FloatOrStr",
+      "fontWeight: FloatOrStr",
+      "borderRadius: FloatOrStr",
+      "style: NoneOrStyle",
+      "class baseUIObject(ABC):",
+      "class textObject(baseUIObject):",
+      "class buttonObject(baseUIObject):",
+      "class inputObject(baseUIObject):",
+      "class containerObject(baseUIObject):"
+    ],
+    "expected_not_contains": [
+      "width: float | str",
+      "height: float | str", 
+      "margin: Any | str",
+      "fontSize: float | str",
+      "style: None | style",
+      "_comment_definitions",
+      "_comment_base",
+      "class _comment"
+    ]
+  },
+  {
+    "name": "ui_hierarchy_comment_filtering",
+    "description": "Test that comment fields in the UI hierarchy schema are properly filtered out and don't become classes",
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "expected_contains": [
+      "class style:",
+      "class baseUIObject(ABC):",
+      "class textObject(baseUIObject):",
+      "class buttonObject(baseUIObject):",
+      "class uiObjectUnion("
+    ],
+    "expected_not_contains": [
+      "class _comment_definitions:",
+      "class _comment_base:",
+      "class _comment_ui_objects:",
+      "class _comment_union:",
+      "class _comment_main:",
+      "_comment_definitions: str",
+      "_comment_base: str"
+    ]
+  },
+  {
+    "name": "ui_hierarchy_inheritance",
+    "description": "Test that the UI hierarchy schema properly generates inheritance relationships using allOf patterns",
+    "config": {
+      "use_inline_unions": true
+    },
+    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "expected_contains": [
+      "class baseUIObject(ABC):",
+      "class textObject(baseUIObject):",
+      "class buttonObject(baseUIObject):",
+      "class inputObject(baseUIObject):",
+      "class imageObject(baseUIObject):",
+      "class containerObject(baseUIObject):",
+      "class listObject(baseUIObject):",
+      "class modalObject(baseUIObject):",
+      "class formObject(baseUIObject):",
+      "class tableObject(baseUIObject):",
+      "type: str",
+      "style: None | style",
+      "enabled: bool"
+    ],
+    "expected_not_contains": [
+      "class textObject:",
+      "class buttonObject:",
+      "class inputObject:",
+      "extends baseUIObject",
+      "inherits from baseUIObject"
+    ]
+  }
+]
