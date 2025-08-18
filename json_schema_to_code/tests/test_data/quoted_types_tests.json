@@ -1,0 +1,132 @@
+[
+  {
+    "name": "quoted_types_circular_references",
+    "description": "Test that types listed in quoted_types_for_python are properly quoted to handle circular references",
+    "config": {
+      "quoted_types_for_python": ["Node", "Tree"]
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Node": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "children": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Node"}
+            },
+            "parent": {"$ref": "#/definitions/Node"},
+            "tree": {"$ref": "#/definitions/Tree"}
+          },
+          "required": ["id"]
+        },
+        "Tree": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "root": {"$ref": "#/definitions/Node"},
+            "nodes": {
+              "type": "array",
+              "items": {"$ref": "#/definitions/Node"}
+            }
+          },
+          "required": ["name"]
+        },
+        "RegularType": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "string"},
+            "node": {"$ref": "#/definitions/Node"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "from dataclasses import dataclass",
+      "from typing import List, Any, Literal",
+      "from dataclasses_json import dataclass_json",
+      "class Node:",
+      "class Tree:",
+      "class RegularType:",
+      "children: List[\"Node\"]",
+      "parent: \"Node\"",
+      "tree: \"Tree\"",
+      "root: \"Node\"",
+      "nodes: List[\"Node\"]",
+      "node: \"Node\""
+    ],
+    "expected_not_contains": [
+      "children: List[Node]",
+      "parent: Node",
+      "tree: Tree",
+      "root: Node",
+      "nodes: List[Node]",
+      "node: Node"
+    ]
+  },
+  {
+    "name": "quoted_types_no_config",
+    "description": "Test that without quoted_types_for_python config, types are not quoted",
+    "config": {},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Node": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "parent": {"$ref": "#/definitions/Node"}
+          },
+          "required": ["id"]
+        }
+      }
+    },
+    "expected_contains": [
+      "class Node:",
+      "parent: Node"
+    ],
+    "expected_not_contains": [
+      "parent: \"Node\""
+    ]
+  },
+  {
+    "name": "quoted_types_partial_config",
+    "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted",
+    "config": {
+      "quoted_types_for_python": ["CircularType"]
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "CircularType": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "self": {"$ref": "#/definitions/CircularType"},
+            "other": {"$ref": "#/definitions/NormalType"}
+          }
+        },
+        "NormalType": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "string"},
+            "circular": {"$ref": "#/definitions/CircularType"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "class CircularType:",
+      "class NormalType:",
+      "self: \"CircularType\"",
+      "other: NormalType",
+      "circular: \"CircularType\""
+    ],
+    "expected_not_contains": [
+      "self: CircularType",
+      "other: \"NormalType\"",
+      "circular: CircularType"
+    ]
+  }
+]

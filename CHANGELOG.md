@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Quoted Types for Python
+- **New config option**: `quoted_types_for_python: list[str] = []` - List of type names to quote in Python type references to handle circular type definitions
+- **Forward reference support**: Types listed in this config are automatically quoted (e.g., `List["Node"]` instead of `List[Node]`)
+- **Circular dependency resolution**: Solves Python circular import issues for recursive/self-referential types
+- **Example**: Configure `"quoted_types_for_python": ["Node", "Tree"]` to generate `parent: "Node"` instead of `parent: Node`
+
 ## [1.0.0] - 2024-12-19
 
 ### Added

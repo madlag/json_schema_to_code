@@ -22,6 +22,7 @@ class CodeGeneratorConfig:
     use_tuples: bool = True
     use_inline_unions: bool = False
     add_generation_comment: bool = True
+    quoted_types_for_python: list[str] = []
 
     @staticmethod
     def from_dict(d):
@@ -166,7 +167,13 @@ class CodeGenerator:
                 raise Exception("Fix const type for " + self.language)
             
     def ref_type(self, ref: str) -> str:
-        return ref.split("/")[-1]
+        type_name = ref.split("/")[-1]
+        
+        # For Python, quote types that are in the quoted_types_for_python list
+        if self.language == "python" and type_name in self.config.quoted_types_for_python:
+            return f'"{type_name}"'
+        
+        return type_name
 
     def super_type(self, items: Dict[str, Any]):
         types = set()

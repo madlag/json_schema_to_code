@@ -62,7 +62,8 @@ Create a JSON configuration file to customize code generation:
   "ignoreSubClassOverrides": false,
   "drop_min_max_items": false,
   "use_array_of_super_type_for_variable_length_tuple": true,
-  "use_tuples": true
+  "use_tuples": true,
+  "quoted_types_for_python": ["Node", "Tree"]
 }
 ```
 
@@ -75,6 +76,7 @@ Create a JSON configuration file to customize code generation:
 - **`drop_min_max_items`**: Ignore array length constraints
 - **`use_array_of_super_type_for_variable_length_tuple`**: Use arrays for variable-length tuples
 - **`use_tuples`**: Generate tuple types for fixed-length arrays
+- **`quoted_types_for_python`**: List of type names to quote in Python type references (e.g., `List["MyType"]` instead of `List[MyType]`) to handle circular type definitions
 
 ## Supported JSON Schema Features
 
