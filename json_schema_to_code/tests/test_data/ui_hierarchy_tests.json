@@ -8,7 +8,7 @@
     "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
     "expected_contains": [
       "from dataclasses import dataclass",
-      "from typing import List, Any, Literal",
+      "from typing import Any, List",
       "from dataclasses_json import dataclass_json",
       "from abc import ABC",
       "class baseUIObject(ABC):",

@@ -1,6 +1,7 @@
 import collections
 import copy
 import sys
+from enum import Enum
 from pathlib import Path
 import traceback
 from typing import Any, Dict
@@ -10,6 +11,18 @@ import jinja2
 from . import __version__
 
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
+
+
+class ImportType(Enum):
+    """Abstract import types that map to language-specific imports"""
+    BASE = "base" # The base import for the language, always needed
+    LIST = "list"
+    ANY = "any" 
+    LITERAL = "literal"
+    TUPLE = "tuple"
+    ENUM = "enum"
+    SUB_CLASSES = "sub_classes"
+    COLLECTIONS_GENERIC = "collections_generic"
 
 
 class CodeGeneratorConfig:
@@ -33,6 +46,28 @@ class CodeGeneratorConfig:
 
 
 class CodeGenerator:
+    # Language-specific import mappings
+    # None means the feature exists but requires no import
+    PYTHON_IMPORT_MAP = {
+        ImportType.LIST: ("typing", "List"),
+        ImportType.TUPLE: ("typing", "Tuple"), 
+        ImportType.BASE: [("dataclasses", "dataclass"), ("dataclasses_json", "dataclass_json")],
+        ImportType.SUB_CLASSES: ("abc", "ABC"),
+        ImportType.ANY: ("typing", "Any"),
+        ImportType.LITERAL: ("typing", "Literal"),
+        ImportType.ENUM: ("enum", "Enum"),
+    }
+    
+    CS_IMPORT_MAP = {
+        ImportType.LIST: "System.Collections.Generic",
+        ImportType.TUPLE: "System.Collections.Generic",
+        ImportType.BASE: ["System", "Newtonsoft.Json"],
+        ImportType.SUB_CLASSES: "JsonSubTypes",
+        ImportType.ANY: None,
+        ImportType.LITERAL: None,
+        ImportType.ENUM: None,
+    }
+    
     def __init__(self, class_name: str, schema: str, config: CodeGeneratorConfig, language: str):
         self.class_name = class_name
         self.schema = schema
@@ -78,6 +113,66 @@ class CodeGenerator:
         self.base_class = dict()
         self.class_info = dict()
         self.type_aliases = set()  # Track needed type aliases
+        self.required_imports = set()  # Track required imports
+        self.python_import_tuples = set()  # Track Python import tuples (module, name)
+        
+        # Register basic imports for C#
+        self.register_import_needed(ImportType.BASE)
+        
+    def register_import_needed(self, import_type: ImportType) -> None:
+        """Register that a specific import type is needed.
+        
+        Maps abstract import types to actual language-specific imports.
+        
+        Args:
+            import_type: Abstract import type from ImportType enum
+            
+        Raises:
+            ValueError: If the import_type is not supported for the current language
+        """
+        if self.language == "python":
+            if import_type not in self.PYTHON_IMPORT_MAP:
+                raise ValueError(f"Import type {import_type} is not supported for Python")
+            import_specs = self.PYTHON_IMPORT_MAP[import_type]
+            if import_specs is not None:  # None means no import needed
+                # Handle both single tuple and list of tuples
+                if isinstance(import_specs, tuple):
+                    import_specs = [import_specs]
+                for import_spec in import_specs:
+                    self.python_import_tuples.add(import_spec)
+        elif self.language == "cs":
+            if import_type not in self.CS_IMPORT_MAP:
+                raise ValueError(f"Import type {import_type} is not supported for C#")
+            import_names = self.CS_IMPORT_MAP[import_type]
+            if import_names is not None:  # None means no import needed
+                # Handle both single string and list of strings
+                if isinstance(import_names, str):
+                    import_names = [import_names]
+                for import_name in import_names:
+                    self.required_imports.add(import_name)
+        else:
+            raise ValueError(f"Language '{self.language}' is not supported")
+    
+    def _assemble_python_imports(self) -> list[str]:
+        """Assemble Python imports by grouping them by module and sorting"""
+        if self.language != "python":
+            return []
+        
+        # Group imports by module
+        import_groups = collections.defaultdict(set)
+        for module, name in self.python_import_tuples:
+            import_groups[module].add(name)
+        
+        # Assemble import statements
+        assembled_imports = []
+        for module in sorted(import_groups.keys()):
+            names = sorted(import_groups[module])
+            if len(names) == 1:
+                assembled_imports.append(f"from {module} import {names[0]}")
+            else:
+                assembled_imports.append(f"from {module} import {', '.join(names)}")
+        
+        return assembled_imports
         
     def _generate_command_comment(self) -> str:
         """Generate a simplified command line comment for the generated file"""
@@ -160,6 +255,7 @@ class CodeGenerator:
         match self.language:
             case "python":
                 const = t["const"]
+                self.register_import_needed(ImportType.LITERAL)
                 return {"type": f"Literal[\"{const}\"]", "init": f"\"{const}\""}
             case "cs":
                 return {"type": t["type"], "init": t["const"], "modifier": "const"}
@@ -197,6 +293,7 @@ class CodeGenerator:
                 if isinstance(type_info["items"], dict):
                     item_type_info = self.translate_type(type_info["items"])
                     item_type = item_type_info["type"]
+                    self.register_import_needed(ImportType.LIST)
                     type = f"List{self.type_brackets[0]}{item_type}{self.type_brackets[1]}"
                 elif isinstance(type_info["items"], list):
                     if type_info.get("minItems") != type_info.get("maxItems"):
@@ -223,11 +320,13 @@ class CodeGenerator:
                                     )
                         item_type = self.super_type(type_info["items"])
                         item_type = self.translate_type(item_type)
+                        self.register_import_needed(ImportType.LIST)
                         type = f"List{self.type_brackets[0]}{item_type['type']}{self.type_brackets[1]}"
                     elif self.config.use_tuples:
                         item_types = [
                             self.translate_type(t)["type"] for t in type_info["items"]
                         ]
+                        self.register_import_needed(ImportType.TUPLE)
                         type = f"Tuple{self.type_brackets[0]}{', '.join(item_types)}{self.type_brackets[1]}"
 
                 else:
@@ -251,6 +350,10 @@ class CodeGenerator:
                     type = self.union_type(typeNames)
             else:
                 t = self.type_map[type]
+                
+                # Track Any import
+                if t == "Any":
+                    self.register_import_needed(ImportType.ANY)
 
                 if "const" in type_info:
                     return self.const_type(type_info)
@@ -258,8 +361,7 @@ class CodeGenerator:
         elif "$ref" in type_info:
             type = self.ref_type(type_info["$ref"])
         elif "const" in type_info:
-            type = type_info["const"]
-            return {"init": type}
+            return self.const_type(type_info)
         elif "enum" in type_info:
             # TODO deduplicate code handling enums here and lower 
             class_name = None
@@ -326,6 +428,12 @@ class CodeGenerator:
 
         p["CLASS_NAME"] = class_name
         p["SUB_CLASSES"] = self.subclasses.get(class_name, [])
+        
+        # Track imports
+        if p["SUB_CLASSES"]:
+            self.register_import_needed(ImportType.SUB_CLASSES)
+        if "enum" in p and p["enum"]:
+            self.register_import_needed(ImportType.ENUM)
 
         properties = p.get("properties", {})
 
@@ -434,10 +542,16 @@ class CodeGenerator:
             if k not in self.config.order_classes:
                 run_class_generator(k, v)
 
-        # Now render prefix with all collected type aliases
+        # Now render prefix with all collected type aliases and required imports
         sorted_aliases = sorted(list(self.type_aliases))
         generation_comment = self._generate_command_comment()
-        out = self.prefix.render(type_aliases=sorted_aliases, generation_comment=generation_comment)
+        
+        if self.language == "python":
+            required_imports = self._assemble_python_imports()
+        else:
+            required_imports = sorted(list(self.required_imports))
+            
+        out = self.prefix.render(type_aliases=sorted_aliases, generation_comment=generation_comment, required_imports=required_imports)
         out += class_content
         out += self.suffix.render()
 

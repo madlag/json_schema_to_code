@@ -1,9 +1,7 @@
 {% if generation_comment %}{{ generation_comment }}
-{% endif %}from dataclasses import dataclass
-from typing import List, Any, Literal
-from dataclasses_json import dataclass_json
-from enum import Enum
-from abc import ABC
+{% endif %}{% for import in required_imports %}
+{{ import }}
+{% endfor %}
 
 {% for type_alias in type_aliases %}
 {{ type_alias }}

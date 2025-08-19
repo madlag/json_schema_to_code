@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
-using JsonSubTypes;
-using Newtonsoft.Json;
+{% for import in required_imports %}
+using {{ import }};
+{% endfor %}
 
 

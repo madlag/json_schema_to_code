@@ -157,7 +157,7 @@ public class Circle : Shape
 ### Generated Python Code
 ```python
 from dataclasses import dataclass
-from typing import List, Any, Literal
+from typing import Literal
 from dataclasses_json import dataclass_json
 from abc import ABC
 

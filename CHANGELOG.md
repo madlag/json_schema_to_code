@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - 2024-12-19
 
 ### Added
 
@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forward reference support**: Types listed in this config are automatically quoted (e.g., `List["Node"]` instead of `List[Node]`)
 - **Circular dependency resolution**: Solves Python circular import issues for recursive/self-referential types
 - **Example**: Configure `"quoted_types_for_python": ["Node", "Tree"]` to generate `parent: "Node"` instead of `parent: Node`
+
+#### Import Optimization for Python & C#
+- **Smart import detection**: Only imports modules that are actually used in the generated code
+- **Reduces linting errors**: No more unused import warnings for `Enum`, `Literal`, `Any`, `List`, `Tuple`, or `ABC`
+- **Context-aware imports**: Imports are added based on actual feature usage (arrays need `List`, const values need `Literal`, inheritance needs `ABC`, etc.)
+- **Language-agnostic**: New `register_import_needed()` function abstracts import registration for both Python and C#
+- **Type-safe design**: Uses `ImportType` enum instead of strings for better IDE support and error checking
+- **Centralized mapping**: Abstract import types (e.g., `ImportType.LIST`) map to language-specific imports via dedicated dictionaries
+- **Maintainable architecture**: Separate `PYTHON_IMPORT_MAP` and `CS_IMPORT_MAP` for clean language-specific mappings
+- **Security features**: `ValueError` exceptions for unsupported import types, complete mapping coverage with `None` for language-specific features
+- **Robust error handling**: Clear error messages for debugging, prevents silent failures and missing imports
+- **Example**: Simple classes only import basic dependencies, complex schemas only import what they need
 
 ## [1.0.0] - 2024-12-19
 

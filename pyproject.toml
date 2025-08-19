@@ -1,6 +1,6 @@
 [project]
 name = "json_schema_to_code"
-version = "1.0.0"
+version = "1.0.1"
 description = "Generate code from JSON Schema definitions"
 requires-python = ">=3.12"
 
