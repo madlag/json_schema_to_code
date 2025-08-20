@@ -1,12 +1,73 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "json_schema_to_code"
 version = "1.0.1"
-description = "Generate code from JSON Schema definitions"
+description = "Generate strongly-typed classes from JSON Schema definitions for Python and C#"
+readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "François Lagunas", email = "francois.lagunas@gmail.com"}
+]
+keywords = ["json", "schema", "code", "generation", "python", "csharp", "dataclass", "template"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Text Processing",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "click>=8.0.0",
+    "jinja2>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+json_schema_to_code = "json_schema_to_code.json_schema_to_code:json_schema_to_code"
+
+[project.urls]
+Homepage = "https://github.com/flagunas/json_schema_to_code"
+Repository = "https://github.com/flagunas/json_schema_to_code.git"
+Issues = "https://github.com/flagunas/json_schema_to_code/issues"
+
+[tool.setuptools.packages.find]
+include = ["json_schema_to_code*"]
+
+[tool.setuptools.package-data]
+json_schema_to_code = ["templates/**/*.jinja2"]
 
 [tool.black]
 line-length = 100
+target-version = ["py312"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+]
+ignore = [
+    "E501",  # line too long, handled by black
+]
+
+[tool.pytest.ini_options]
+testpaths = ["json_schema_to_code/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
