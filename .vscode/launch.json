@@ -5,11 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Module",
+            "name": "JSON Schema to Code Python Debugger",
             "type": "debugpy",
             "request": "launch",
             "module": "json_schema_to_code.json_schema_to_code",
-            "args":["/Users/lagunas/devel/ai/dh-server/dhserver/models/schemas/messages_schema.json", "messages.cs", "-c", "/Users/lagunas/devel/ai/dh-server/client/cs/messages_generate_config.json"]
+//            "args": [
+//                "/Users/lagunas/devel/ai/dh-server/dhserver/models/schemas/messages_schema.json",
+//                "messages.cs",
+//                "-c",
+//                "/Users/lagunas/devel/ai/dh-server/client/cs/messages_generate_config.json"
+//            ]
+        },
+        {
+            "name": "Test Messages Python Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "json_schema_to_code.test_messages",
+            "args": [
+            ]
         }
+
     ]
 }

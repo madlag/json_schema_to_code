@@ -49,15 +49,15 @@ class CodeGenerator:
     # Language-specific import mappings
     # None means the feature exists but requires no import
     PYTHON_IMPORT_MAP = {
-        ImportType.LIST: ("typing", "List"),
-        ImportType.TUPLE: ("typing", "Tuple"), 
+        ImportType.LIST: None,
+        ImportType.TUPLE: None,
         ImportType.BASE: [("dataclasses", "dataclass"), ("dataclasses_json", "dataclass_json")],
         ImportType.SUB_CLASSES: ("abc", "ABC"),
         ImportType.ANY: ("typing", "Any"),
         ImportType.LITERAL: ("typing", "Literal"),
         ImportType.ENUM: ("enum", "Enum"),
     }
-    
+
     CS_IMPORT_MAP = {
         ImportType.LIST: "System.Collections.Generic",
         ImportType.TUPLE: "System.Collections.Generic",
@@ -89,13 +89,13 @@ class CodeGenerator:
             open(CURRENT_DIR / f"templates/{language}/suffix.{extension}.jinja2").read()
         )
                 
-        self.language_type_maps = {
-            "cs": dict(
-                integer="int", string="string", boolean="bool", number="float", null="null"
-            ),
-            "python": dict(
-                integer="int", string="str", boolean="bool", number="float", null="None", object="Any"
-            )
+        self.language_type_maps: dict[str, dict[str, str]] = {
+            "cs": {
+                "integer": "int", "string": "string", "boolean": "bool", "number": "float", "null": "null", "list": "List", "dict":"Dictionary", "tuple":"Tuple"
+            },
+            "python": {
+                "integer": "int", "string": "str", "boolean": "bool", "number": "float", "null": "None", "object": "Any", "list": "list", "dict":"dict", "tuple":"tuple"
+            }
         }
         if language not in self.language_type_maps:
             raise Exception("Language not supported: " + language)
@@ -258,16 +258,38 @@ class CodeGenerator:
                 self.register_import_needed(ImportType.LITERAL)
                 return {"type": f"Literal[\"{const}\"]", "init": f"\"{const}\""}
             case "cs":
-                return {"type": t["type"], "init": t["const"], "modifier": "const"}
+                # For C#, we need to infer the type from the const value if not provided
+                const_value = t["const"]
+                if "type" in t:
+                    type_name = self.type_map[t["type"]]
+                else:
+                    # Infer type from the const value
+                    if isinstance(const_value, str):
+                        type_name = self.type_map["string"]
+                    elif isinstance(const_value, int):
+                        type_name = self.type_map["integer"]
+                    elif isinstance(const_value, float):
+                        type_name = self.type_map["number"]
+                    elif isinstance(const_value, bool):
+                        type_name = self.type_map["boolean"]
+                    else:
+                        type_name = "object"
+                formatted_value = self.format_default_value(const_value, type_name)
+                return {"type": type_name, "init": formatted_value, "modifier": "const"}
             case _:
                 raise Exception("Fix const type for " + self.language)
+            
+
+    def quote_type(self, type: str) -> str:
+        if self.language == "python" and type in self.config.quoted_types_for_python:
+            return f'"{type}"'
+        return type
             
     def ref_type(self, ref: str) -> str:
         type_name = ref.split("/")[-1]
         
         # For Python, quote types that are in the quoted_types_for_python list
-        if self.language == "python" and type_name in self.config.quoted_types_for_python:
-            return f'"{type_name}"'
+        type_name = self.quote_type(type_name)
         
         return type_name
 
@@ -286,15 +308,79 @@ class CodeGenerator:
         types.sort()
         return {"type": types}
 
+    def format_default_value(self, default_value, type_name: str) -> str:
+        """Format a default value according to the target language"""
+        if default_value is None:
+            match self.language:
+                case "python":
+                    return "None"
+                case "cs":
+                    return "null"
+                case _:
+                    return "null"
+        
+        if isinstance(default_value, bool):
+            match self.language:
+                case "python":
+                    return "True" if default_value else "False"
+                case "cs":
+                    return "true" if default_value else "false"
+                case _:
+                    return "true" if default_value else "false"
+        
+        if isinstance(default_value, str):
+            return f'"{default_value}"'
+        
+        if isinstance(default_value, (int, float)):
+            return str(default_value)
+        
+        if isinstance(default_value, list):
+            match self.language:
+                case "python":
+                    # Format list literals for Python
+                    formatted_items = []
+                    for item in default_value:
+                        if isinstance(item, str):
+                            formatted_items.append(f'"{item}"')
+                        else:
+                            formatted_items.append(str(item))
+                    return f'[{", ".join(formatted_items)}]'
+                case "cs":
+                    # Format C# collection initialization
+                    formatted_items = []
+                    for item in default_value:
+                        if isinstance(item, str):
+                            formatted_items.append(f'"{item}"')
+                        else:
+                            formatted_items.append(str(item))
+                    if len(default_value) == 0:
+                        return f"new {type_name}()"
+                    else:
+                        return f"new {type_name} {{{', '.join(formatted_items)}}}"
+                case _:
+                    return str(default_value)
+        
+        # Fallback for other types
+        return str(default_value)
+
     def translate_type(self, type_info):
         if "type" in type_info:
             type = type_info["type"]
+            list_type = self.type_map["list"]
+            tuple_type = self.type_map["tuple"]
             if type == "array":
                 if isinstance(type_info["items"], dict):
                     item_type_info = self.translate_type(type_info["items"])
                     item_type = item_type_info["type"]
+                    item_type = self.quote_type(item_type)
                     self.register_import_needed(ImportType.LIST)
-                    type = f"List{self.type_brackets[0]}{item_type}{self.type_brackets[1]}"
+                    type = f"{list_type}{self.type_brackets[0]}{item_type}{self.type_brackets[1]}"
+                    
+                    # Handle default values for arrays
+                    result = {"type": type}
+                    if "default" in type_info:
+                        result["init"] = self.format_default_value(type_info["default"], type)
+                    return result
                 elif isinstance(type_info["items"], list):
                     if type_info.get("minItems") != type_info.get("maxItems"):
                         if not self.config.drop_min_max_items:
@@ -321,13 +407,13 @@ class CodeGenerator:
                         item_type = self.super_type(type_info["items"])
                         item_type = self.translate_type(item_type)
                         self.register_import_needed(ImportType.LIST)
-                        type = f"List{self.type_brackets[0]}{item_type['type']}{self.type_brackets[1]}"
+                        type = f"{list_type}{self.type_brackets[0]}{item_type['type']}{self.type_brackets[1]}"
                     elif self.config.use_tuples:
                         item_types = [
                             self.translate_type(t)["type"] for t in type_info["items"]
                         ]
                         self.register_import_needed(ImportType.TUPLE)
-                        type = f"Tuple{self.type_brackets[0]}{', '.join(item_types)}{self.type_brackets[1]}"
+                        type = f"{tuple_type}{self.type_brackets[0]}{', '.join(item_types)}{self.type_brackets[1]}"
 
                 else:
                     raise Exception("Unknown type " + str(type_info["items"]))
@@ -338,9 +424,18 @@ class CodeGenerator:
                     type.remove("null")
 
                 if len(type) == 1:
-                    type = self.translate_type({"type": type[0]})["type"]
+                    base_type = self.translate_type({"type": type[0]})["type"]
                     if nullable:
-                        return self.optional_type(type)
+                        result = self.optional_type(base_type)
+                        # Handle default values for nullable types
+                        if "default" in type_info:
+                            result["init"] = self.format_default_value(type_info["default"], result["type"])
+                        return result
+                    else:
+                        result = {"type": base_type}
+                        if "default" in type_info:
+                            result["init"] = self.format_default_value(type_info["default"], base_type)
+                        return result
                 else:
                     # Use union_type for consistent logic
                     typeNames = [
@@ -349,7 +444,7 @@ class CodeGenerator:
                     ]
                     type = self.union_type(typeNames)
             else:
-                t = self.type_map[type]
+                t = self.type_map[str(type)]
                 
                 # Track Any import
                 if t == "Any":
@@ -357,7 +452,12 @@ class CodeGenerator:
 
                 if "const" in type_info:
                     return self.const_type(type_info)
-                return {"type": t}
+                
+                # Handle default values for basic types
+                result = {"type": t}
+                if "default" in type_info:
+                    result["init"] = self.format_default_value(type_info["default"], t)
+                return result
         elif "$ref" in type_info:
             type = self.ref_type(type_info["$ref"])
         elif "const" in type_info:
@@ -388,7 +488,12 @@ class CodeGenerator:
             return {"type": self.union_type(types)}
         else:
             raise Exception("Unknown type " + str(type_info))
-        return {"type": type}
+        
+        # Handle default values for other types (like $ref)
+        result = {"type": type}
+        if "default" in type_info:
+            result["init"] = self.format_default_value(type_info["default"], type)
+        return result
 
     def convert_message_class_to_json_name(self, properties, class_name):
         if "type" in properties:
@@ -411,6 +516,13 @@ class CodeGenerator:
         self.class_info[class_name] = p
 
     def prepare_class_info(self, class_name, info):
+        """Wrapper function that catches exceptions and adds class name context"""
+        try:
+            return self._prepare_class_info(class_name, info)
+        except Exception as e:
+            raise Exception(f"Error processing class '{class_name}': {str(e)}") from e
+
+    def _prepare_class_info(self, class_name, info):
         p = copy.deepcopy(info)
 
         if "allOf" in p:
