@@ -16,6 +16,12 @@ def load_test_data():
 def test_default_values_python(test_case):
     """Test default value generation for Python"""
     config = CodeGeneratorConfig()
+    
+    # Apply config if provided in test case
+    if "config" in test_case:
+        for key, value in test_case["config"].items():
+            setattr(config, key, value)
+    
     generator = CodeGenerator("TestClass", test_case["schema"], config, "python")
     output = generator.generate()
     
@@ -28,6 +34,12 @@ def test_default_values_python(test_case):
 def test_default_values_cs(test_case):
     """Test default value generation for C#"""
     config = CodeGeneratorConfig()
+    
+    # Apply config if provided in test case
+    if "config" in test_case:
+        for key, value in test_case["config"].items():
+            setattr(config, key, value)
+    
     generator = CodeGenerator("TestClass", test_case["schema"], config, "cs")
     output = generator.generate()
     

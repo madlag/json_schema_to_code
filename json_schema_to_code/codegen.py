@@ -23,6 +23,7 @@ class ImportType(Enum):
     ENUM = "enum"
     SUB_CLASSES = "sub_classes"
     COLLECTIONS_GENERIC = "collections_generic"
+    FUTURE_ANNOTATIONS = "future_annotations"
 
 
 class CodeGeneratorConfig:
@@ -36,6 +37,7 @@ class CodeGeneratorConfig:
     use_inline_unions: bool = False
     add_generation_comment: bool = True
     quoted_types_for_python: list[str] = []
+    use_future_annotations: bool = True
 
     @staticmethod
     def from_dict(d):
@@ -56,6 +58,7 @@ class CodeGenerator:
         ImportType.ANY: ("typing", "Any"),
         ImportType.LITERAL: ("typing", "Literal"),
         ImportType.ENUM: ("enum", "Enum"),
+        ImportType.FUTURE_ANNOTATIONS: ("__future__", "annotations"),
     }
 
     CS_IMPORT_MAP = {
@@ -119,6 +122,10 @@ class CodeGenerator:
         # Register basic imports for C#
         self.register_import_needed(ImportType.BASE)
         
+        # Register future annotations import if requested for Python
+        if self.language == "python" and self.config.use_future_annotations:
+            self.register_import_needed(ImportType.FUTURE_ANNOTATIONS)
+        
     def register_import_needed(self, import_type: ImportType) -> None:
         """Register that a specific import type is needed.
         
@@ -163,8 +170,19 @@ class CodeGenerator:
         for module, name in self.python_import_tuples:
             import_groups[module].add(name)
         
-        # Assemble import statements
+        # Assemble import statements - __future__ imports must come first
         assembled_imports = []
+        
+        # Handle __future__ imports first (they must be at the top)
+        if "__future__" in import_groups:
+            names = sorted(import_groups["__future__"])
+            if len(names) == 1:
+                assembled_imports.append(f"from __future__ import {names[0]}")
+            else:
+                assembled_imports.append(f"from __future__ import {', '.join(names)}")
+            del import_groups["__future__"]
+        
+        # Handle other imports in sorted order
         for module in sorted(import_groups.keys()):
             names = sorted(import_groups[module])
             if len(names) == 1:
@@ -215,20 +233,33 @@ class CodeGenerator:
     def union_type(self, types: list[str]) -> str:
         """Generate union type - either inline or type alias based on config"""
         sorted_types = sorted(types)
-        union_type_string = " | ".join(sorted_types)
         
         match self.language:
             case "python":
+                # Handle quoted types in unions properly
+                has_quoted_types = any(t.startswith('"') and t.endswith('"') for t in sorted_types)
+                
+                if has_quoted_types:
+                    # Unquote all types, create union, then quote the entire union
+                    unquoted_types = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in sorted_types]
+                    union_type_string = " | ".join(unquoted_types)
+                    quoted_union = f'"{union_type_string}"'
+                else:
+                    # Normal union without quotes
+                    union_type_string = " | ".join(sorted_types)
+                    quoted_union = union_type_string
+                
                 if self.config.use_inline_unions:
-                    # Return inline union syntax like "int | str"
-                    return union_type_string
+                    # Return inline union syntax
+                    return quoted_union
                 else:
                     # Generate and return type alias like "IntOrStr"
-                    capitalized_types = [t.capitalize() for t in sorted_types]
+                    unquoted_for_alias = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in sorted_types]
+                    capitalized_types = [t.capitalize() for t in unquoted_for_alias]
                     type_alias_name = "Or".join(capitalized_types)
                     
                     # Generate the type alias definition
-                    type_alias_def = f"{type_alias_name} = {union_type_string}"
+                    type_alias_def = f"{type_alias_name} = {quoted_union}"
                     self.type_aliases.add(type_alias_def)
                     
                     return type_alias_name
@@ -363,14 +394,21 @@ class CodeGenerator:
         # Fallback for other types
         return str(default_value)
 
-    def translate_type(self, type_info):
+    def translate_type(self, type_info, is_required=True):
+        """
+        Translate type information from JSON schema to target language type.
+        
+        Args:
+            type_info: JSON schema type information
+            is_required: Whether this property is required (affects nullability)
+        """
         if "type" in type_info:
             type = type_info["type"]
             list_type = self.type_map["list"]
             tuple_type = self.type_map["tuple"]
             if type == "array":
                 if isinstance(type_info["items"], dict):
-                    item_type_info = self.translate_type(type_info["items"])
+                    item_type_info = self.translate_type(type_info["items"], is_required=True)  # Array items are always considered required
                     item_type = item_type_info["type"]
                     item_type = self.quote_type(item_type)
                     self.register_import_needed(ImportType.LIST)
@@ -380,6 +418,9 @@ class CodeGenerator:
                     result = {"type": type}
                     if "default" in type_info:
                         result["init"] = self.format_default_value(type_info["default"], type)
+                    elif not is_required:
+                        # Array property is not required and has no default - make it nullable
+                        return self.optional_type(type)
                     return result
                 elif isinstance(type_info["items"], list):
                     if type_info.get("minItems") != type_info.get("maxItems"):
@@ -393,7 +434,7 @@ class CodeGenerator:
                         if not self.config.use_array_of_super_type_for_variable_length_tuple:
                             # Check if all items are of the same type
                             item_types = [
-                                self.translate_type(t)["type"]
+                                self.translate_type(t, is_required=True)["type"]
                                 for t in type_info["items"]
                             ]
 
@@ -405,12 +446,12 @@ class CodeGenerator:
                                         + str(item_types)
                                     )
                         item_type = self.super_type(type_info["items"])
-                        item_type = self.translate_type(item_type)
+                        item_type = self.translate_type(item_type, is_required=True)
                         self.register_import_needed(ImportType.LIST)
                         type = f"{list_type}{self.type_brackets[0]}{item_type['type']}{self.type_brackets[1]}"
                     elif self.config.use_tuples:
                         item_types = [
-                            self.translate_type(t)["type"] for t in type_info["items"]
+                            self.translate_type(t, is_required=True)["type"] for t in type_info["items"]
                         ]
                         self.register_import_needed(ImportType.TUPLE)
                         type = f"{tuple_type}{self.type_brackets[0]}{', '.join(item_types)}{self.type_brackets[1]}"
@@ -424,7 +465,7 @@ class CodeGenerator:
                     type.remove("null")
 
                 if len(type) == 1:
-                    base_type = self.translate_type({"type": type[0]})["type"]
+                    base_type = self.translate_type({"type": type[0]}, is_required=True)["type"]
                     if nullable:
                         result = self.optional_type(base_type)
                         # Handle default values for nullable types
@@ -435,11 +476,14 @@ class CodeGenerator:
                         result = {"type": base_type}
                         if "default" in type_info:
                             result["init"] = self.format_default_value(type_info["default"], base_type)
+                        elif not is_required:
+                            # Property is not required and has no default - make it nullable
+                            return self.optional_type(base_type)
                         return result
                 else:
                     # Use union_type for consistent logic
                     typeNames = [
-                        self.translate_type({"type": t})["type"]
+                        self.translate_type({"type": t}, is_required=True)["type"]
                         for t in type
                     ]
                     type = self.union_type(typeNames)
@@ -457,6 +501,9 @@ class CodeGenerator:
                 result = {"type": t}
                 if "default" in type_info:
                     result["init"] = self.format_default_value(type_info["default"], t)
+                elif not is_required:
+                    # Property is not required and has no default - make it nullable
+                    return self.optional_type(t)
                 return result
         elif "$ref" in type_info:
             type = self.ref_type(type_info["$ref"])
@@ -481,10 +528,10 @@ class CodeGenerator:
             )
             return {"type": self.type_map[class_name], "comment": comment}
         elif "oneOf" in type_info:
-            types = [self.translate_type(t)["type"] for t in type_info["oneOf"]]
+            types = [self.translate_type(t, is_required=True)["type"] for t in type_info["oneOf"]]
             return {"type": self.union_type(types)}
         elif "anyOf" in type_info:
-            types = [self.translate_type(t)["type"] for t in type_info["anyOf"]]
+            types = [self.translate_type(t, is_required=True)["type"] for t in type_info["anyOf"]]
             return {"type": self.union_type(types)}
         else:
             raise Exception("Unknown type " + str(type_info))
@@ -493,6 +540,9 @@ class CodeGenerator:
         result = {"type": type}
         if "default" in type_info:
             result["init"] = self.format_default_value(type_info["default"], type)
+        elif not is_required:
+            # Property is not required and has no default - make it nullable
+            return self.optional_type(type)
         return result
 
     def convert_message_class_to_json_name(self, properties, class_name):
@@ -558,7 +608,10 @@ class CodeGenerator:
             p_base = self.class_info.get(bc)
             constructor_properties = dict()
             for property, property_info in p_base["properties"].items():
-                TYPE = self.translate_type(property_info)
+                # For base class properties, we need to check if they're required in the base class
+                base_required = p_base.get("required", [])
+                is_property_required = property in base_required
+                TYPE = self.translate_type(property_info, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
@@ -571,12 +624,14 @@ class CodeGenerator:
                     p["BASE_PROPERTIES"][property] = property_info
 
             new_properties = dict()
+            required_fields = p.get("required", [])
             for property, property_info in properties.items():
                 override_base_property = property in p_base["properties"]
                 if override_base_property and self.config.ignoreSubClassOverrides:
                     continue
 
-                TYPE = self.translate_type(property_info)
+                is_property_required = property in required_fields
+                TYPE = self.translate_type(property_info, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
@@ -591,9 +646,11 @@ class CodeGenerator:
             p["constructor_properties"] = constructor_properties
         else:            
             p["constructor_properties"] = properties
+            required_fields = p.get("required", [])
 
             for property, property_info in properties.items():
-                TYPE = self.translate_type(property_info)
+                is_property_required = property in required_fields
+                TYPE = self.translate_type(property_info, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)

@@ -27,7 +27,8 @@
             "string_without_default": {
               "type": "string"
             }
-          }
+          },
+          "required": ["string_without_default"]
         }
       }
     },
@@ -111,6 +112,47 @@
     "expected_cs": [
       "public List<string> string_array_with_default = new List<string> {\"item1\", \"item2\"};",
       "public List<int> empty_array_default = new List<int>();"
+    ]
+  },
+  {
+    "name": "required_vs_optional_fields",
+    "description": "Test that fields not in required list become nullable when they lack defaults",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "required_field": {
+              "type": "string"
+            },
+            "required_with_default": {
+              "type": "string", 
+              "default": "hello"
+            },
+            "optional_field": {
+              "type": "string"
+            },
+            "optional_with_default": {
+              "type": "integer",
+              "default": 42
+            }
+          },
+          "required": ["required_field", "required_with_default"]
+        }
+      }
+    },
+    "expected_python": [
+      "required_field: str",
+      "required_with_default: str = \"hello\"",
+      "optional_field: str | None = None",
+      "optional_with_default: int = 42"
+    ],
+    "expected_cs": [
+      "public string required_field;",
+      "public string required_with_default = \"hello\";",
+      "public string? optional_field;",
+      "public int optional_with_default = 42;"
     ]
   }
 ]

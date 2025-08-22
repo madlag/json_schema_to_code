@@ -128,5 +128,58 @@
       "other: \"NormalType\"",
       "circular: CircularType"
     ]
+  },
+  {
+    "name": "quoted_union_types_inline",
+    "description": "Test that quoted types in unions generate proper Python syntax with inline unions",
+    "config": {
+      "quoted_types_for_python": ["Component", "Style"],
+      "use_inline_unions": true
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Component": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"}
+          },
+          "required": ["id"]
+        },
+        "Style": {
+          "type": "object", 
+          "properties": {
+            "color": {"type": "string"}
+          },
+          "required": ["color"]
+        },
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "element_pure": {
+              "oneOf": [
+                {"$ref": "#/definitions/Component"},
+                {"$ref": "#/definitions/Style"}
+              ]
+            },
+            "element_mixed": {
+              "oneOf": [
+                {"type": "string"},
+                {"$ref": "#/definitions/Component"}
+              ]
+            }
+          },
+          "required": ["element_pure"]
+        }
+      }
+    },
+    "expected_contains": [
+      "element_pure: \"Component | Style\"",
+      "element_mixed: \"Component | str\""
+    ],
+    "expected_not_contains": [
+      "element_pure: \"Component\" | \"Style\"",
+      "element_mixed: \"Component\" | str"
+    ]
   }
 ]

@@ -162,6 +162,63 @@ class TestImportGrouping:
         
         # Should be alphabetically sorted: Any, List, Tuple
         assert "from typing import Any, List, Tuple" == typing_line
+    
+    def test_future_annotations_import(self):
+        """Test that use_future_annotations config adds __future__ import at the top"""
+        config = CodeGeneratorConfig()
+        config.use_future_annotations = True
+        
+        # Simple schema to generate code
+        schema = {
+            "definitions": {
+                "TestClass": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"}
+                    }
+                }
+            }
+        }
+        
+        generator = CodeGenerator("TestSchema", schema, config, "python")
+        output = generator.generate()
+        
+        # Check that __future__ import is present and at the top
+        lines = output.split('\n')
+        import_lines = [line for line in lines if line.startswith('from ')]
+        
+        # Should have __future__ import
+        assert any("from __future__ import annotations" in line for line in import_lines)
+        
+        # __future__ import should be first among import lines
+        future_import_line = next(i for i, line in enumerate(lines) if "from __future__ import annotations" in line)
+        other_import_lines = [i for i, line in enumerate(lines) if line.startswith('from ') and "__future__" not in line]
+        
+        # Future import should come before all other imports
+        if other_import_lines:
+            assert future_import_line < min(other_import_lines)
+    
+    def test_future_annotations_disabled(self):
+        """Test that __future__ import is not added when use_future_annotations is False"""
+        config = CodeGeneratorConfig()
+        config.use_future_annotations = False  # Default value, but explicit for clarity
+        
+        schema = {
+            "definitions": {
+                "TestClass": {
+                    "type": "object", 
+                    "properties": {
+                        "name": {"type": "string"}
+                    }
+                }
+            }
+        }
+        
+        generator = CodeGenerator("TestSchema", schema, config, "python")
+        output = generator.generate()
+        
+        # Should not contain __future__ import
+        assert "from __future__ import annotations" not in output
 
 if __name__ == "__main__":
     pytest.main([__file__])
