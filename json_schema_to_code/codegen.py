@@ -339,6 +339,22 @@ class CodeGenerator:
         types.sort()
         return {"type": types}
 
+    def _handle_union_type_with_defaults(self, type_info, union_key: str, is_required: bool) -> dict:
+        """Helper method to handle oneOf/anyOf types with proper default value handling"""
+        types = [self.translate_type(t, is_required=True)["type"] for t in type_info[union_key]]
+        result = {"type": self.union_type(types)}
+        
+        # Handle default values for union types
+        if "default" in type_info:
+            result["init"] = self.format_default_value(type_info["default"], result["type"])
+        elif not is_required:
+            # Property is not required and has no default - make it nullable if not already
+            # Check if None/null is already in the union
+            none_type = self.type_map["null"]
+            if none_type not in types:
+                return self.optional_type(result["type"])
+        return result
+
     def format_default_value(self, default_value, type_name: str) -> str:
         """Format a default value according to the target language"""
         if default_value is None:
@@ -527,12 +543,9 @@ class CodeGenerator:
                 [f'"{e}"' for e in type_info["enum"]]
             )
             return {"type": self.type_map[class_name], "comment": comment}
-        elif "oneOf" in type_info:
-            types = [self.translate_type(t, is_required=True)["type"] for t in type_info["oneOf"]]
-            return {"type": self.union_type(types)}
-        elif "anyOf" in type_info:
-            types = [self.translate_type(t, is_required=True)["type"] for t in type_info["anyOf"]]
-            return {"type": self.union_type(types)}
+        elif "oneOf" in type_info or "anyOf" in type_info:
+            union_key = "oneOf" if "oneOf" in type_info else "anyOf"
+            return self._handle_union_type_with_defaults(type_info, union_key, is_required)
         else:
             raise Exception("Unknown type " + str(type_info))
         
@@ -580,6 +593,42 @@ class CodeGenerator:
             p = p["allOf"][1]
             p["EXTENDS"] = extends
 
+        # Check if this is a oneOf with multiple $ref - create type alias instead of class
+        if "oneOf" in p and all("$ref" in item for item in p["oneOf"]) and len(p["oneOf"]) > 1:
+            # This should be a type alias, not a class - skip class generation
+            union_types = [self.ref_type(item["$ref"]) for item in p["oneOf"]]
+            
+            if self.config.use_inline_unions:
+                # Create explicit type alias even with inline unions enabled
+                union_string = " | ".join(sorted(union_types))
+                # Handle quoted types properly
+                has_quoted_types = any(t.startswith('"') and t.endswith('"') for t in union_types)
+                if has_quoted_types:
+                    unquoted_types = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
+                    union_string = " | ".join(sorted(unquoted_types))
+                    union_string = f'"{union_string}"'
+                
+                type_alias_def = f"{class_name} = {union_string}"
+                self.type_aliases.add(type_alias_def)
+            else:
+                # Use the existing union_type method which will create the alias
+                union_type_name = self.union_type(union_types)
+                # Override the generated name with our class name
+                old_alias = None
+                for alias in self.type_aliases:
+                    if alias.startswith(union_type_name + " ="):
+                        old_alias = alias
+                        break
+                if old_alias:
+                    self.type_aliases.remove(old_alias)
+                    # Create new alias with the class name
+                    union_string = old_alias.split(" = ", 1)[1]
+                    type_alias_def = f"{class_name} = {union_string}"
+                    self.type_aliases.add(type_alias_def)
+            
+            # Mark this as a type alias so it won't generate a class
+            return None
+            
         if ("anyOf" in p or "oneOf" in p) or ("type" in p and p["type"] != "object"):
             # Handle anyOf/oneOf at class level or non-object types - treat as union/base type
             base_type = self.translate_type(p)["type"]
@@ -692,6 +741,9 @@ class CodeGenerator:
             if k in self.config.ignore_classes:
                 return
             p = self.prepare_class_info(k, v)
+            if p is None:
+                # This was converted to a type alias, skip class generation
+                return
             if k == "DHMChatEventFinished":
                 print(p)
             try:
@@ -711,8 +763,35 @@ class CodeGenerator:
             if k not in self.config.order_classes:
                 run_class_generator(k, v)
 
-        # Now render prefix with all collected type aliases and required imports
-        sorted_aliases = sorted(list(self.type_aliases))
+        # Separate type aliases into those with forward references and those without
+        forward_ref_aliases = []
+        simple_aliases = []
+        
+        # Get all class names defined in this schema
+        defined_classes = set()
+        for k, v in definitions.items():
+            if isinstance(v, str) or k.startswith("_comment"):
+                continue
+            if k not in self.config.ignore_classes:
+                # Check if this would generate a class (not just a type alias)
+                test_info = self.prepare_class_info(k, v)
+                if test_info is not None:  # This generates a class
+                    defined_classes.add(k)
+        
+        for alias in self.type_aliases:
+            # Check if this alias references any of the defined classes
+            alias_name, alias_def = alias.split(" = ", 1)
+            references_classes = any(class_name in alias_def for class_name in defined_classes)
+            
+            if references_classes:
+                forward_ref_aliases.append(alias)
+            else:
+                simple_aliases.append(alias)
+        
+        # Sort aliases
+        sorted_simple_aliases = sorted(simple_aliases)
+        sorted_forward_ref_aliases = sorted(forward_ref_aliases)
+        
         generation_comment = self._generate_command_comment()
         
         if self.language == "python":
@@ -720,8 +799,16 @@ class CodeGenerator:
         else:
             required_imports = sorted(list(self.required_imports))
             
-        out = self.prefix.render(type_aliases=sorted_aliases, generation_comment=generation_comment, required_imports=required_imports)
+        # Render prefix with only simple aliases (no forward references)
+        out = self.prefix.render(type_aliases=sorted_simple_aliases, generation_comment=generation_comment, required_imports=required_imports)
         out += class_content
+        
+        # Add forward reference aliases after classes
+        if sorted_forward_ref_aliases:
+            for alias in sorted_forward_ref_aliases:
+                out += alias + "\n"
+            out += "\n"
+        
         out += self.suffix.render()
 
         return out

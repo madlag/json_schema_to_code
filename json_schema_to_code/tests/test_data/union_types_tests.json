@@ -230,5 +230,54 @@
       "OrFloat =",
       "OrBool ="
     ]
+  },
+  {
+    "name": "oneOf_multiple_refs_type_alias",
+    "description": "Test that oneOf with multiple $ref creates type alias instead of class",
+    "config": {
+      "use_inline_unions": false
+    },
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Component": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"}
+          }
+        },
+        "Style": {
+          "type": "object", 
+          "properties": {
+            "color": {"type": "string"}
+          }
+        },
+        "UIElement": {
+          "oneOf": [
+            {"$ref": "#/definitions/Component"},
+            {"$ref": "#/definitions/Style"}
+          ]
+        },
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "element": {"$ref": "#/definitions/UIElement"}
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "UIElement = Component | Style",
+      "class Component:",
+      "class Style:",
+      "class TestClass:",
+      "element: UIElement"
+    ],
+    "expected_not_contains": [
+      "class UIElement(",
+      "class UIElement:",
+      "class UIElement(Component",
+      "class UIElement(Style"
+    ]
   }
 ]

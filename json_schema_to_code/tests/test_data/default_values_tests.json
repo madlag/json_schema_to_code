@@ -154,5 +154,55 @@
       "public string? optional_field;",
       "public int optional_with_default = 42;"
     ]
+  },
+  {
+    "name": "oneOf_with_null_default",
+    "description": "Test oneOf with null default value - BaseComponent style property issue",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$defs": {
+        "Style": {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "definitions": {
+        "BaseComponent": {
+          "type": "object",
+          "properties": {
+            "className": {
+              "type": "string",
+              "description": "CSS class names",
+              "default": ""
+            },
+            "style": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/Style"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional styling configuration for the component",
+              "default": null
+            }
+          }
+        }
+      }
+    },
+    "expected_python": [
+      "className: str = \"\"",
+      "style: NoneOrStyle = None",
+      "NoneOrStyle = None | Style"
+    ],
+    "expected_cs": [
+      "public string className = \"\";",
+      "public StyleOrNull style = null;"
+    ]
   }
 ]
