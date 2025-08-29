@@ -3,10 +3,10 @@
   "$id": "https://example.com/ui-hierarchy-schema.json",
   "title": "UI Object Hierarchy Schema",
   "description": "Schema defining a hierarchy of UI object states. This schema is designed for LLM compatibility with strict validation and no additional properties allowed at runtime.",
-  
+
   "definitions": {
     "_comment_definitions": "DEFINITIONS SECTION: Contains reusable schema components ",
-    
+
     "style": {
       "type": "object",
       "description": "Style class containing classic styling attributes.",
@@ -117,9 +117,9 @@
       },
       "additionalProperties": false
     },
-    
+
     "_comment_base": "BASE CLASS: Common fields for all UI objects. All fields are required for LLM compatibility with null defaults for optional fields.",
-    
+
     "baseUIObject": {
       "type": "object",
       "description": "Base class with common fields for all UI objects.",
@@ -163,9 +163,9 @@
       "required": ["type", "id", "style", "enabled", "className", "metadata"],
       "additionalProperties": false
     },
-    
+
     "_comment_ui_objects": "UI OBJECT DEFINITIONS: Cleanly separated object types, each inheriting from baseUIObject using allOf. Using unevaluatedProperties instead of additionalProperties for proper inheritance validation.",
-    
+
     "textObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -189,7 +189,7 @@
         }
       ]
     },
-    
+
     "buttonObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -223,7 +223,7 @@
         }
       ]
     },
-    
+
     "inputObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -268,7 +268,7 @@
         }
       ]
     },
-    
+
     "imageObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -297,7 +297,7 @@
         }
       ]
     },
-    
+
     "containerObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -340,7 +340,7 @@
         }
       ]
     },
-    
+
     "listObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -366,7 +366,7 @@
         }
       ]
     },
-    
+
     "modalObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -400,7 +400,7 @@
         }
       ]
     },
-    
+
     "formObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -431,7 +431,7 @@
         }
       ]
     },
-    
+
     "tableObject": {
       "allOf": [
         { "$ref": "#/definitions/baseUIObject" },
@@ -467,9 +467,9 @@
         }
       ]
     },
-    
+
     "_comment_union": "UNION TYPE: Encompasses all object definitions, used in containers that hold other UI objects (children, items, content, etc.)",
-    
+
     "uiObjectUnion": {
       "oneOf": [
         { "$ref": "#/definitions/textObject" },
@@ -484,8 +484,8 @@
       ]
     }
   },
-  
+
   "_comment_main": "MAIN OBJECT: Root is an instance of uiObjectUnion, allowing any UI object type as the root.",
-  
+
   "$ref": "#/definitions/uiObjectUnion"
 }

@@ -218,7 +218,7 @@ The generator uses Jinja2 templates located in `templates/`:
   - `prefix.py.jinja2`: File header and imports
   - `class.py.jinja2`: Class definition template
   - `suffix.py.jinja2`: File footer
-  
+
 - `templates/cs/`: C#-specific templates
   - `prefix.cs.jinja2`: Using statements
   - `class.cs.jinja2`: Class definition template

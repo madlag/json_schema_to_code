@@ -147,7 +147,7 @@
           "required": ["id"]
         },
         "Style": {
-          "type": "object", 
+          "type": "object",
           "properties": {
             "color": {"type": "string"}
           },

@@ -27,7 +27,7 @@
     ],
     "expected_not_contains": [
       "class _comment_definitions",
-      "class _comment_objects", 
+      "class _comment_objects",
       "class _comment_end"
     ]
   },

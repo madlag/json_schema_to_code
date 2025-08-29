@@ -26,7 +26,7 @@
           }
         },
         "SimpleObject": {
-          "type": "object", 
+          "type": "object",
           "properties": {
             "value": {"type": "string"}
           }
@@ -43,7 +43,7 @@
     ]
   },
   {
-    "name": "anyOf_type_aliases", 
+    "name": "anyOf_type_aliases",
     "description": "Test anyOf with type aliases enabled",
     "config": {
       "use_inline_unions": false
@@ -89,7 +89,7 @@
   },
   {
     "name": "oneOf_inline_unions",
-    "description": "Test oneOf with inline unions enabled", 
+    "description": "Test oneOf with inline unions enabled",
     "config": {
       "use_inline_unions": true
     },
@@ -124,7 +124,7 @@
       "use_inline_unions": false
     },
     "schema": {
-      "$schema": "http://json-schema.org/draft-07/schema#", 
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "definitions": {
         "TestClass": {
           "type": "object",
@@ -176,7 +176,7 @@
   },
   {
     "name": "array_type_unions_aliases",
-    "description": "Test array type unions with type aliases enabled", 
+    "description": "Test array type unions with type aliases enabled",
     "config": {
       "use_inline_unions": false
     },
@@ -222,7 +222,7 @@
     },
     "expected_contains": [
       "stringField: str",
-      "numberField: float", 
+      "numberField: float",
       "boolField: bool"
     ],
     "expected_not_contains": [
@@ -247,7 +247,7 @@
           }
         },
         "Style": {
-          "type": "object", 
+          "type": "object",
           "properties": {
             "color": {"type": "string"}
           }

@@ -13,7 +13,7 @@
               "default": "hello"
             },
             "number_with_default": {
-              "type": "number", 
+              "type": "number",
               "default": 42.5
             },
             "integer_with_default": {
@@ -35,7 +35,7 @@
     "expected_python": [
       "string_with_default: str = \"hello\"",
       "number_with_default: float = 42.5",
-      "integer_with_default: int = 10", 
+      "integer_with_default: int = 10",
       "boolean_with_default: bool = True",
       "string_without_default: str"
     ],
@@ -86,7 +86,7 @@
     "name": "array_defaults",
     "description": "Test array types with default values",
     "schema": {
-      "$schema": "http://json-schema.org/draft-07/schema#", 
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "definitions": {
         "TestClass": {
           "type": "object",
@@ -97,7 +97,7 @@
               "default": ["item1", "item2"]
             },
             "empty_array_default": {
-              "type": "array", 
+              "type": "array",
               "items": {"type": "integer"},
               "default": []
             }
@@ -127,7 +127,7 @@
               "type": "string"
             },
             "required_with_default": {
-              "type": "string", 
+              "type": "string",
               "default": "hello"
             },
             "optional_field": {

@@ -7,4 +7,3 @@ and configurable output options.
 
 __version__ = "1.0.1"
 __author__ = "François Lagunas"
-

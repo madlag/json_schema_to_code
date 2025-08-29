@@ -15,7 +15,7 @@
       "class style:",
       "width: float | str",
       "height: float | str",
-      "margin: Any | str", 
+      "margin: Any | str",
       "padding: Any | str",
       "fontSize: float | str",
       "fontWeight: float | str",
@@ -30,7 +30,7 @@
     ],
     "expected_not_contains": [
       "FloatOrStr =",
-      "AnyOrStr =", 
+      "AnyOrStr =",
       "NoneOrStyle =",
       "_comment_definitions",
       "_comment_base",
@@ -47,7 +47,7 @@
     "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
     "expected_contains": [
       "AnyOrStr = Any | str",
-      "FloatOrStr = float | str", 
+      "FloatOrStr = float | str",
       "NoneOrStyle = None | style",
       "width: FloatOrStr",
       "height: FloatOrStr",
@@ -65,7 +65,7 @@
     ],
     "expected_not_contains": [
       "width: float | str",
-      "height: float | str", 
+      "height: float | str",
       "margin: Any | str",
       "fontSize: float | str",
       "style: None | style",
