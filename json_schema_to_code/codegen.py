@@ -53,7 +53,7 @@ class CodeGenerator:
     PYTHON_IMPORT_MAP = {
         ImportType.LIST: None,
         ImportType.TUPLE: None,
-        ImportType.BASE: [("dataclasses", "dataclass"), ("dataclasses_json", "dataclass_json")],
+        ImportType.BASE: [("dataclasses", "dataclass"), ("dataclasses", "field"), ("dataclasses_json", "dataclass_json")],
         ImportType.SUB_CLASSES: ("abc", "ABC"),
         ImportType.ANY: ("typing", "Any"),
         ImportType.LITERAL: ("typing", "Literal"),
@@ -69,6 +69,22 @@ class CodeGenerator:
         ImportType.ANY: None,
         ImportType.LITERAL: None,
         ImportType.ENUM: None,
+    }
+    
+    # Language-specific default factory patterns for mutable defaults
+    DEFAULT_FACTORY_PATTERNS = {
+        "python": {
+            "empty_list": "field(default_factory=list)",
+            "empty_dict": "field(default_factory=dict)",
+            "populated_list": "field(default_factory=lambda: {content})",
+            "populated_dict": "field(default_factory=lambda: {content})",
+        },
+        "cs": {
+            "empty_list": "new {type_name}()",
+            "empty_dict": "new {type_name}()",
+            "populated_list": "new {type_name} {{{content}}}",
+            "populated_dict": "new {type_name} {{{content}}}",
+        }
     }
     
     def __init__(self, class_name: str, schema: str, config: CodeGeneratorConfig, language: str):
@@ -94,7 +110,7 @@ class CodeGenerator:
                 
         self.language_type_maps: dict[str, dict[str, str]] = {
             "cs": {
-                "integer": "int", "string": "string", "boolean": "bool", "number": "float", "null": "null", "list": "List", "dict":"Dictionary", "tuple":"Tuple"
+                "integer": "int", "string": "string", "boolean": "bool", "number": "float", "null": "null", "object": "object", "list": "List", "dict":"Dictionary", "tuple":"Tuple"
             },
             "python": {
                 "integer": "int", "string": "str", "boolean": "bool", "number": "float", "null": "None", "object": "Any", "list": "list", "dict":"dict", "tuple":"tuple"
@@ -159,6 +175,73 @@ class CodeGenerator:
                     self.required_imports.add(import_name)
         else:
             raise ValueError(f"Language '{self.language}' is not supported")
+    
+    def _create_default_factory_value(self, container_type: str, default_value, type_name: str = None) -> str:
+        """
+        Create a language-appropriate default factory value for mutable containers.
+        
+        Args:
+            container_type: "list" or "dict"
+            default_value: The default value (list or dict)
+            type_name: Type name for languages that need it (like C#)
+            
+        Returns:
+            String representing the default factory pattern
+        """
+        if self.language not in self.DEFAULT_FACTORY_PATTERNS:
+            raise ValueError(f"Language '{self.language}' not supported for default factories")
+        
+        patterns = self.DEFAULT_FACTORY_PATTERNS[self.language]
+        is_empty = len(default_value) == 0
+        
+        if container_type == "list":
+            if is_empty:
+                return patterns["empty_list"].format(type_name=type_name)
+            else:
+                # Format list content
+                formatted_items = []
+                for item in default_value:
+                    if isinstance(item, str):
+                        formatted_items.append(f'"{item}"')
+                    else:
+                        formatted_items.append(str(item))
+                if self.language == "python":
+                    content = "[" + ", ".join(formatted_items) + "]"
+                else:  # C# and other languages
+                    content = ", ".join(formatted_items)
+                return patterns["populated_list"].format(content=content, type_name=type_name)
+        
+        elif container_type == "dict":
+            if is_empty:
+                return patterns["empty_dict"].format(type_name=type_name)
+            else:
+                # Format dict content
+                formatted_items = []
+                for key, value in default_value.items():
+                    if isinstance(key, str):
+                        formatted_key = f'"{key}"'
+                    else:
+                        formatted_key = str(key)
+                    
+                    if isinstance(value, str):
+                        formatted_value = f'"{value}"'
+                    else:
+                        formatted_value = str(value)
+                    
+                    if self.language == "python":
+                        formatted_items.append(f"{formatted_key}: {formatted_value}")
+                    elif self.language == "cs":
+                        formatted_items.append(f"[{formatted_key}] = {formatted_value}")
+                
+                if self.language == "python":
+                    content = "{" + ", ".join(formatted_items) + "}"
+                else:
+                    content = ", ".join(formatted_items)
+                    
+                return patterns["populated_dict"].format(content=content, type_name=type_name)
+        
+        else:
+            raise ValueError(f"Unsupported container type: {container_type}")
     
     def _assemble_python_imports(self) -> list[str]:
         """Assemble Python imports by grouping them by module and sorting"""
@@ -382,30 +465,10 @@ class CodeGenerator:
             return str(default_value)
         
         if isinstance(default_value, list):
-            match self.language:
-                case "python":
-                    # Format list literals for Python
-                    formatted_items = []
-                    for item in default_value:
-                        if isinstance(item, str):
-                            formatted_items.append(f'"{item}"')
-                        else:
-                            formatted_items.append(str(item))
-                    return f'[{", ".join(formatted_items)}]'
-                case "cs":
-                    # Format C# collection initialization
-                    formatted_items = []
-                    for item in default_value:
-                        if isinstance(item, str):
-                            formatted_items.append(f'"{item}"')
-                        else:
-                            formatted_items.append(str(item))
-                    if len(default_value) == 0:
-                        return f"new {type_name}()"
-                    else:
-                        return f"new {type_name} {{{', '.join(formatted_items)}}}"
-                case _:
-                    return str(default_value)
+            return self._create_default_factory_value("list", default_value, type_name)
+        
+        if isinstance(default_value, dict):
+            return self._create_default_factory_value("dict", default_value, type_name)
         
         # Fallback for other types
         return str(default_value)

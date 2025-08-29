@@ -106,8 +106,8 @@
       }
     },
     "expected_python": [
-      "string_array_with_default: list[str] = [\"item1\", \"item2\"]",
-      "empty_array_default: list[int] = []"
+      "string_array_with_default: list[str] = field(default_factory=lambda: [\"item1\", \"item2\"])",
+      "empty_array_default: list[int] = field(default_factory=list)"
     ],
     "expected_cs": [
       "public List<string> string_array_with_default = new List<string> {\"item1\", \"item2\"};",
@@ -203,6 +203,36 @@
     "expected_cs": [
       "public string className = \"\";",
       "public StyleOrNull style = null;"
+    ]
+  },
+  {
+    "name": "dict_defaults",
+    "description": "Test dict types with default values using field() to avoid mutable defaults",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "empty_dict": {
+              "type": "object",
+              "default": {}
+            },
+            "populated_dict": {
+              "type": "object",
+              "default": {"key1": "value1", "key2": 42}
+            }
+          }
+        }
+      }
+    },
+    "expected_python": [
+      "empty_dict: Any = field(default_factory=dict)",
+      "populated_dict: Any = field(default_factory=lambda: {\"key1\": \"value1\", \"key2\": 42})"
+    ],
+    "expected_cs": [
+      "public object empty_dict = new object();",
+      "public object populated_dict = new object {[\"key1\"] = \"value1\", [\"key2\"] = 42};"
     ]
   }
 ]
