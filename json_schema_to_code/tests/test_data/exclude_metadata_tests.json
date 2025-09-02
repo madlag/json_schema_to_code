@@ -1,0 +1,214 @@
+[
+  {
+    "name": "basic_exclude_metadata",
+    "description": "Test basic exclude metadata for primitive types with default values",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "string_with_default": {
+              "type": "string",
+              "default": "hello"
+            },
+            "number_with_default": {
+              "type": "number",
+              "default": 42.5
+            },
+            "integer_with_default": {
+              "type": "integer",
+              "default": 10
+            },
+            "boolean_with_default_true": {
+              "type": "boolean",
+              "default": true
+            },
+            "boolean_with_default_false": {
+              "type": "boolean",
+              "default": false
+            },
+            "null_default": {
+              "type": ["string", "null"],
+              "default": null
+            },
+            "string_without_default": {
+              "type": "string"
+            }
+          },
+          "required": ["string_without_default"]
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true
+    },
+    "expected_python": [
+      "string_with_default: str = field(default=\"hello\", metadata=config(exclude=lambda x: x == \"hello\"))",
+      "number_with_default: float = field(default=42.5, metadata=config(exclude=lambda x: x == 42.5))",
+      "integer_with_default: int = field(default=10, metadata=config(exclude=lambda x: x == 10))",
+      "boolean_with_default_true: bool = field(default=True, metadata=config(exclude=lambda x: x is True))",
+      "boolean_with_default_false: bool = field(default=False, metadata=config(exclude=lambda x: x is False))",
+      "null_default: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",
+      "string_without_default: str"
+    ]
+  },
+  {
+    "name": "array_exclude_metadata",
+    "description": "Test exclude metadata for array types with default values",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "string_array_with_default": {
+              "type": "array",
+              "items": {"type": "string"},
+              "default": ["item1", "item2"]
+            },
+            "empty_array_default": {
+              "type": "array",
+              "items": {"type": "integer"},
+              "default": []
+            },
+            "number_array_default": {
+              "type": "array",
+              "items": {"type": "number"},
+              "default": [1.5, 2.7]
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true
+    },
+    "expected_python": [
+      "string_array_with_default: list[str] = field(default_factory=lambda: [\"item1\", \"item2\"], metadata=config(exclude=lambda x: x == [\"item1\", \"item2\"]))",
+      "empty_array_default: list[int] = field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))",
+      "number_array_default: list[float] = field(default_factory=lambda: [1.5, 2.7], metadata=config(exclude=lambda x: x == [1.5, 2.7]))"
+    ]
+  },
+  {
+    "name": "dict_exclude_metadata",
+    "description": "Test exclude metadata for dict types with default values",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "empty_dict": {
+              "type": "object",
+              "default": {}
+            },
+            "populated_dict": {
+              "type": "object",
+              "default": {"key1": "value1", "key2": 42}
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true
+    },
+    "expected_python": [
+      "empty_dict: Any = field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))",
+      "populated_dict: Any = field(default_factory=lambda: {\"key1\": \"value1\", \"key2\": 42}, metadata=config(exclude=lambda x: x == {\"key1\": \"value1\", \"key2\": 42}))"
+    ]
+  },
+  {
+    "name": "exclude_metadata_disabled",
+    "description": "Test that fields are generated normally when exclude metadata is disabled",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "string_with_default": {
+              "type": "string",
+              "default": "hello"
+            },
+            "array_with_default": {
+              "type": "array",
+              "items": {"type": "string"},
+              "default": ["item1"]
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": false
+    },
+    "expected_python": [
+      "string_with_default: str = \"hello\"",
+      "array_with_default: list[str] = field(default_factory=lambda: [\"item1\"])"
+    ]
+  },
+  {
+    "name": "string_with_quotes",
+    "description": "Test exclude metadata for strings that contain quotes",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "string_with_quotes": {
+              "type": "string",
+              "default": "He said \"hello\""
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true
+    },
+    "expected_python": [
+      "string_with_quotes: str = field(default=\"He said \\\"hello\\\"\", metadata=config(exclude=lambda x: x == \"He said \\\"hello\\\"\"))"
+    ]
+  },
+  {
+    "name": "mixed_fields_exclude_metadata",
+    "description": "Test mixed fields - some with defaults, some without, some required",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "required_field": {
+              "type": "string"
+            },
+            "required_with_default": {
+              "type": "string",
+              "default": "hello"
+            },
+            "optional_field": {
+              "type": "string"
+            },
+            "optional_with_default": {
+              "type": "integer",
+              "default": 42
+            }
+          },
+          "required": ["required_field", "required_with_default"]
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true
+    },
+    "expected_python": [
+      "required_field: str",
+      "required_with_default: str = field(default=\"hello\", metadata=config(exclude=lambda x: x == \"hello\"))",
+      "optional_field: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",
+      "optional_with_default: int = field(default=42, metadata=config(exclude=lambda x: x == 42))"
+    ]
+  }
+]

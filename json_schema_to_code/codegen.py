@@ -38,6 +38,7 @@ class CodeGeneratorConfig:
     add_generation_comment: bool = True
     quoted_types_for_python: list[str] = []
     use_future_annotations: bool = True
+    exclude_default_value_from_json: bool = False
 
     @staticmethod
     def from_dict(d):
@@ -57,6 +58,7 @@ class CodeGenerator:
             ("dataclasses", "dataclass"),
             ("dataclasses", "field"),
             ("dataclasses_json", "dataclass_json"),
+            ("dataclasses_json", "config"),
         ],
         ImportType.SUB_CLASSES: ("abc", "ABC"),
         ImportType.ANY: ("typing", "Any"),
@@ -212,7 +214,10 @@ class CodeGenerator:
 
         if container_type == "list":
             if is_empty:
-                return patterns["empty_list"].format(type_name=type_name)
+                base_pattern = patterns["empty_list"].format(type_name=type_name)
+                if self.config.exclude_default_value_from_json and self.language == "python":
+                    return "field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))"
+                return base_pattern
             else:
                 # Format list content
                 formatted_items = []
@@ -223,13 +228,18 @@ class CodeGenerator:
                         formatted_items.append(str(item))
                 if self.language == "python":
                     content = "[" + ", ".join(formatted_items) + "]"
+                    if self.config.exclude_default_value_from_json:
+                        return f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))"
                 else:  # C# and other languages
                     content = ", ".join(formatted_items)
                 return patterns["populated_list"].format(content=content, type_name=type_name)
 
         elif container_type == "dict":
             if is_empty:
-                return patterns["empty_dict"].format(type_name=type_name)
+                base_pattern = patterns["empty_dict"].format(type_name=type_name)
+                if self.config.exclude_default_value_from_json and self.language == "python":
+                    return "field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))"
+                return base_pattern
             else:
                 # Format dict content
                 formatted_items = []
@@ -251,6 +261,8 @@ class CodeGenerator:
 
                 if self.language == "python":
                     content = "{" + ", ".join(formatted_items) + "}"
+                    if self.config.exclude_default_value_from_json:
+                        return f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))"
                 else:
                     content = ", ".join(formatted_items)
 
@@ -322,7 +334,11 @@ class CodeGenerator:
         match self.language:
             case "python":
                 t = type + " | None"
-                return {"type": t, "init": "None"}
+                if self.config.exclude_default_value_from_json:
+                    init_value = self.format_field_with_metadata(None, t)
+                else:
+                    init_value = "None"
+                return {"type": t, "init": init_value}
             case "cs":
                 t = type + "?"
                 return {"type": t}
@@ -450,7 +466,7 @@ class CodeGenerator:
 
         # Handle default values for union types
         if "default" in type_info:
-            result["init"] = self.format_default_value(type_info["default"], result["type"])
+            result["init"] = self.format_field_with_metadata(type_info["default"], result["type"])
         elif not is_required:
             # Property is not required and has no default - make it nullable if not already
             # Check if None/null is already in the union
@@ -480,7 +496,9 @@ class CodeGenerator:
                     return "true" if default_value else "false"
 
         if isinstance(default_value, str):
-            return f'"{default_value}"'
+            # Escape quotes in the string
+            escaped_value = default_value.replace('"', '\\"')
+            return f'"{escaped_value}"'
 
         if isinstance(default_value, (int, float)):
             return str(default_value)
@@ -493,6 +511,35 @@ class CodeGenerator:
 
         # Fallback for other types
         return str(default_value)
+
+    def format_field_with_metadata(self, default_value, type_name: str) -> str:
+        """Format a field definition with metadata for dataclasses-json exclude functionality"""
+        if self.language != "python" or not self.config.exclude_default_value_from_json:
+            return self.format_default_value(default_value, type_name)
+
+        # Create the exclude lambda based on the default value
+        if default_value is None:
+            exclude_condition = "x is None"
+        elif isinstance(default_value, str):
+            # Escape quotes in the string for the lambda
+            escaped_value = default_value.replace('"', '\\"')
+            exclude_condition = f'x == "{escaped_value}"'
+        elif isinstance(default_value, bool):
+            exclude_condition = f"x is {str(default_value)}"
+        elif isinstance(default_value, (int, float)):
+            exclude_condition = f"x == {default_value}"
+        elif isinstance(default_value, list):
+            # For lists, use the factory pattern with metadata
+            return self._create_default_factory_value("list", default_value, type_name)
+        elif isinstance(default_value, dict):
+            # For dicts, use the factory pattern with metadata
+            return self._create_default_factory_value("dict", default_value, type_name)
+        else:
+            exclude_condition = f"x == {default_value}"
+
+        # For simple types, use field with default and metadata
+        formatted_default = self.format_default_value(default_value, type_name)
+        return f"field(default={formatted_default}, metadata=config(exclude=lambda x: {exclude_condition}))"
 
     def translate_type(self, type_info, is_required=True):
         """
@@ -519,7 +566,7 @@ class CodeGenerator:
                     # Handle default values for arrays
                     result = {"type": type}
                     if "default" in type_info:
-                        result["init"] = self.format_default_value(type_info["default"], type)
+                        result["init"] = self.format_field_with_metadata(type_info["default"], type)
                     elif not is_required:
                         # Array property is not required and has no default - make it nullable
                         return self.optional_type(type)
@@ -572,14 +619,14 @@ class CodeGenerator:
                         result = self.optional_type(base_type)
                         # Handle default values for nullable types
                         if "default" in type_info:
-                            result["init"] = self.format_default_value(
+                            result["init"] = self.format_field_with_metadata(
                                 type_info["default"], result["type"]
                             )
                         return result
                     else:
                         result = {"type": base_type}
                         if "default" in type_info:
-                            result["init"] = self.format_default_value(
+                            result["init"] = self.format_field_with_metadata(
                                 type_info["default"], base_type
                             )
                         elif not is_required:
@@ -605,7 +652,7 @@ class CodeGenerator:
                 # Handle default values for basic types
                 result = {"type": t}
                 if "default" in type_info:
-                    result["init"] = self.format_default_value(type_info["default"], t)
+                    result["init"] = self.format_field_with_metadata(type_info["default"], t)
                 elif not is_required:
                     # Property is not required and has no default - make it nullable
                     return self.optional_type(t)
@@ -639,7 +686,7 @@ class CodeGenerator:
         # Handle default values for other types (like $ref)
         result = {"type": type}
         if "default" in type_info:
-            result["init"] = self.format_default_value(type_info["default"], type)
+            result["init"] = self.format_field_with_metadata(type_info["default"], type)
         elif not is_required:
             # Property is not required and has no default - make it nullable
             return self.optional_type(type)
