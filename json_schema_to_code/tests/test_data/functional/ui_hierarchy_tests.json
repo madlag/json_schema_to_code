@@ -5,11 +5,11 @@
     "config": {
       "use_inline_unions": true
     },
-    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "schema_file": "schemas/ui_hierarchy_schema.json",
     "expected_contains": [
-      "from dataclasses import dataclass",
-      "from typing import Any, List",
-      "from dataclasses_json import dataclass_json",
+      "from dataclasses import dataclass, field",
+      "from typing import Any, Literal",
+      "from dataclasses_json import config, dataclass_json",
       "from abc import ABC",
       "class baseUIObject(ABC):",
       "class style:",
@@ -26,7 +26,7 @@
       "class buttonObject(baseUIObject):",
       "class inputObject(baseUIObject):",
       "class containerObject(baseUIObject):",
-      "class uiObjectUnion("
+      "uiObjectUnion ="
     ],
     "expected_not_contains": [
       "FloatOrStr =",
@@ -44,7 +44,7 @@
     "config": {
       "use_inline_unions": false
     },
-    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "schema_file": "schemas/ui_hierarchy_schema.json",
     "expected_contains": [
       "AnyOrStr = Any | str",
       "FloatOrStr = float | str",
@@ -80,13 +80,13 @@
     "config": {
       "use_inline_unions": true
     },
-    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "schema_file": "schemas/ui_hierarchy_schema.json",
     "expected_contains": [
       "class style:",
       "class baseUIObject(ABC):",
       "class textObject(baseUIObject):",
       "class buttonObject(baseUIObject):",
-      "class uiObjectUnion("
+      "uiObjectUnion ="
     ],
     "expected_not_contains": [
       "class _comment_definitions:",
@@ -104,7 +104,7 @@
     "config": {
       "use_inline_unions": true
     },
-    "schema_file": "test_data/schemas/ui_hierarchy_schema.json",
+    "schema_file": "schemas/ui_hierarchy_schema.json",
     "expected_contains": [
       "class baseUIObject(ABC):",
       "class textObject(baseUIObject):",

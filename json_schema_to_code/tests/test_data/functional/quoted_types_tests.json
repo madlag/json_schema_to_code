@@ -43,25 +43,24 @@
       }
     },
     "expected_contains": [
-      "from dataclasses import dataclass",
-      "from typing import List",
-      "from dataclasses_json import dataclass_json",
+      "from dataclasses import dataclass, field",
+      "from dataclasses_json import config, dataclass_json",
       "class Node:",
       "class Tree:",
       "class RegularType:",
-      "children: List[\"Node\"]",
+      "children: list[\"Node\"]",
       "parent: \"Node\"",
       "tree: \"Tree\"",
       "root: \"Node\"",
-      "nodes: List[\"Node\"]",
+      "nodes: list[\"Node\"]",
       "node: \"Node\""
     ],
     "expected_not_contains": [
-      "children: List[Node]",
+      "children: list[Node]",
       "parent: Node",
       "tree: Tree",
       "root: Node",
-      "nodes: List[Node]",
+      "nodes: list[Node]",
       "node: Node"
     ]
   },

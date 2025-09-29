@@ -151,8 +151,8 @@ class TestTemplateSimplification:
             code = generator.generate()
 
             # All should generate valid code with proper imports
-            assert "from dataclasses import dataclass" in code
-            assert "from dataclasses_json import dataclass_json" in code
+            assert "from dataclasses import dataclass, field" in code
+            assert "from dataclasses_json import config, dataclass_json" in code
             assert "@dataclass_json" in code
             assert "@dataclass(kw_only=True)" in code
 

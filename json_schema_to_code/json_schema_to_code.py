@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import click
+
 from .codegen import CodeGenerator, CodeGeneratorConfig
 
 
@@ -14,6 +15,7 @@ from .codegen import CodeGenerator, CodeGeneratorConfig
 def json_schema_to_code(name, config, language, path, output):
     with open(path) as f:
         schema = json.load(f)
+
     if config is not None:
         with open(config) as f:
             config = json.load(f)
@@ -34,19 +36,45 @@ if __name__ == "__main__":
     import sys
 
     base = Path("/Users/lagunas/devel/")
-    input = base / "ai/dh-server/dhserver/models/schemas/messages_schema.json"
-    language_to_extension = {
-        "cs": "cs",
-        "python": "py"
+    project_base = Path("/Users/lagunas/devel/public/json_schema_to_code")
+    #    input = base / "ai/dh-server/dhserver/models/schemas/messages_schema.json"
+    input = (
+        base
+        / "edu/explayn_main/python/explayn-dh-agent/explayn_dh_agent/barbara/ui/ui_hierarchy_schema.json"
+    )
+    language_to_extension = {"cs": "cs", "python": "py"}
+
+    outputs = {
+        "python": base / "ai/dh-server/client/python/",
+        "cs": base / "ai/dh-server/client/cs/",
+    }
+    outputs = {
+        "python": base
+        / "edu/explayn_main/python/explayn-dh-agent/explayn_dh_agent/barbara/ui/ui_hierarchy.py",
+        "cs": base
+        / "edu/explayn_main/python/explayn-dh-agent/explayn_dh_agent/barbara/ui/ui_hierarchy.cs",
     }
 
-    outputs = {"python": base / "ai/dh-server/client/python/", "cs": base / "ai/dh-server/client/cs/"}
-    
-    generate = {"python": ["agent"]} # "cs": ["client"], 
+    generate = {"python": ["agent"]}  # "cs": ["client"],
+    #    generate = {"cs": ["client"]}
     for language, code_types in generate.items():
         for code_type in code_types:
-            output = str(outputs[language] / f"messages.{language_to_extension[language]}")
-            config = base / outputs[language] / f"{code_type}_messages_generate_config.json"
+            output = str(outputs[language])
+            # config = base / outputs[language] / f"{code_type}_messages_generate_config.json"
 
-            sys.argv = ["json_schema_to_code", str(input), str(output), "-c", str(config), "-l", language]
+            config_file = (
+                base
+                / "edu/explayn_main/python/explayn-dh-agent/explayn_dh_agent/barbara/ui/ui_hierarchy_config.json"
+            )
+            sys.argv = [
+                "json_schema_to_code",
+                str(input),
+                str(output),
+                "-c",
+                str(config_file),
+                "-l",
+                language,
+            ]
+            # sys.argv = ["json_schema_to_code", str(input), str(output), "-l", language]
+
             json_schema_to_code()

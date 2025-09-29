@@ -1,3 +1,4 @@
-{% for import in required_imports %}
+{% if generation_comment %}{{ generation_comment }}
+{% endif %}{% for import in required_imports %}
 using {{ import }};
 {% endfor %}

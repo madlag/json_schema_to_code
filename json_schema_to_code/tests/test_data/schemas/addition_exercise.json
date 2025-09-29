@@ -1,0 +1,74 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "title": "Addition Schema",
+    "type": "object",
+    "description": "Schema representing the state of a column addition being computed by a human, so it may be incomplete or partially incorrect.",
+    "properties": {
+        "type": {
+            "type": "string",
+            "const": "exercise/maths/basic_operations/addition"
+        },
+        "problem": {
+            "type": "object",
+            "description": "The addition problem being solved",
+            "properties": {
+                "operands": {
+                    "type": "array",
+                    "description": "The numbers being added together",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "minItems": 2
+                }
+            },
+            "required": [
+                "operands"
+            ],
+            "unevaluatedProperties": false
+        },
+        "state": {
+            "type": "object",
+            "description": "Current state of the computation",
+            "properties": {
+                "carry_over_row": {
+                    "type": "array",
+                    "description": "Carry-over row. One digit for each column, even if it means that the digit is 0. For example for 143 + 72, the full carry row should be [0, 1]. Be careful, human do not write a zero when there is no carry, they just leave a blank space. The first element of the array is for the tens column, the second element is for the hundreds column, and so on (there is never a carry-over for the unit column, so we skip it).",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9
+                    }
+                },
+                "result_row": {
+                    "type": "array",
+                    "description": "Result row",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9
+                    }
+                }
+            },
+            "required": [
+                "carry_over_row",
+                "result_row"
+            ],
+            "unevaluatedProperties": false
+        },
+        "correct_answer": {
+            "type": "string"
+        },
+        "question_text": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "type",
+        "problem",
+        "state",
+        "correct_answer",
+        "question_text"
+    ],
+    "unevaluatedProperties": false
+}
