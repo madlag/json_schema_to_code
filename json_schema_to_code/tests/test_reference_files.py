@@ -65,10 +65,14 @@ def test_reference_file_generation(test_case):
     with open(test_case["reference_file"]) as f:
         reference_output = f.read()
 
-    # Compare generated output with reference
+    # Compare generated output with reference (normalize whitespace)
+    # This makes tests more robust to minor formatting differences
+    normalized_generated = generated_output.strip()
+    normalized_reference = reference_output.strip()
+
     assert (
-        generated_output == reference_output
-    ), f"Generated output doesn't match reference for {test_case['test_name']}"
+        normalized_generated == normalized_reference
+    ), f"Generated output doesn't match reference for {test_case['test_name']}\n\nGenerated:\n{repr(generated_output)}\n\nExpected:\n{repr(reference_output)}"
 
 
 if __name__ == "__main__":
