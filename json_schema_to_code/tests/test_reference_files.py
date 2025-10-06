@@ -15,10 +15,12 @@ def discover_schema_tests():
         schema_name = schema_file.stem
 
         # Create test cases for both languages
+        language_extensions = {"python": "py", "cs": "cs"}
         for language in ["python", "cs"]:
             # Check if reference file exists
+            extension = language_extensions[language]
             ref_file = (
-                Path(__file__).parent / "test_data" / "references" / f"{schema_name}.{language}"
+                Path(__file__).parent / "test_data" / "references" / f"{schema_name}.{extension}"
             )
             if ref_file.exists():
                 test_cases.append(
@@ -34,7 +36,7 @@ def discover_schema_tests():
     return test_cases
 
 
-@pytest.mark.parametrize("test_case", discover_schema_tests())
+@pytest.mark.parametrize("test_case", discover_schema_tests(), ids=lambda tc: tc["test_name"])
 def test_reference_file_generation(test_case):
     """Test code generation against reference files"""
     # Load schema
@@ -44,22 +46,28 @@ def test_reference_file_generation(test_case):
     # Use default config with inline unions disabled for compatibility
     config = CodeGeneratorConfig()
     config.use_inline_unions = False
+    config.add_generation_comment = True
+    config.use_future_annotations = True
 
-    # Determine class name from schema name (match existing reference files)
-    schema_name = test_case["schema_name"]
-    if schema_name == "dhclient":
-        class_name = "dh_client"  # Special case for dhclient
-    elif schema_name == "addition_exercise":
-        class_name = "AdditionExercise"  # PascalCase for addition exercise
-    elif schema_name == "geometry":
-        class_name = "geometry"  # Keep lowercase for geometry (matches reference)
-    else:
-        # Convert snake_case to PascalCase
-        class_name = "".join(word.capitalize() for word in schema_name.split("_"))
+    # Convert schema file stem to PascalCase for class name
+    class_name = "".join(word.capitalize() for word in test_case["schema_name"].split("_"))
 
     # Generate code
     generator = CodeGenerator(class_name, schema, config, test_case["language"])
     generated_output = generator.generate()
+
+    # Create test output directory and save generated file
+    test_output_dir = Path(__file__).parent / "test_output"
+    test_output_dir.mkdir(exist_ok=True)
+
+    language_extensions = {"python": "py", "cs": "cs"}
+    extension = language_extensions[test_case["language"]]
+    output_file = test_output_dir / f"{test_case['schema_name']}_generated.{extension}"
+
+    with open(output_file, "w") as f:
+        f.write(generated_output)
+
+    print(f"Generated file saved to: {output_file}")
 
     # Load reference file
     with open(test_case["reference_file"]) as f:

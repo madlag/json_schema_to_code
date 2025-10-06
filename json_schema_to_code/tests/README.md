@@ -112,7 +112,7 @@ config.use_inline_unions = False
 generator = CodeGenerator('MyClass', schema, config, 'python')
 output = generator.generate()
 
-with open('json_schema_to_code/tests/test_data/references/my_schema.python', 'w') as f:
+with open('json_schema_to_code/tests/test_data/references/my_schema.py', 'w') as f:
     f.write(output)
 "
 
@@ -210,13 +210,13 @@ test_data/
 │   ├── geometry.json
 │   └── ui_hierarchy_schema.json
 └── references/          # Expected output for reference tests
-    ├── addition_exercise.python
+    ├── addition_exercise.py
     ├── addition_exercise.cs
-    ├── dhclient.python
+    ├── dhclient.py
     ├── dhclient.cs
-    ├── geometry.python
+    ├── geometry.py
     ├── geometry.cs
-    ├── ui_hierarchy_schema.python
+    ├── ui_hierarchy_schema.py
     └── ui_hierarchy_schema.cs
 ```
 

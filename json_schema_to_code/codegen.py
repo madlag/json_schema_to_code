@@ -24,6 +24,8 @@ class ImportType(Enum):
     SUB_CLASSES = "sub_classes"
     COLLECTIONS_GENERIC = "collections_generic"
     FUTURE_ANNOTATIONS = "future_annotations"
+    FIELD = "field"  # dataclasses.field - only needed when using field() calls
+    CONFIG = "config"  # dataclasses_json.config - only needed when using config() calls
 
 
 class CodeGeneratorConfig:
@@ -56,10 +58,10 @@ class CodeGenerator:
         ImportType.TUPLE: None,
         ImportType.BASE: [
             ("dataclasses", "dataclass"),
-            ("dataclasses", "field"),
             ("dataclasses_json", "dataclass_json"),
-            ("dataclasses_json", "config"),
         ],
+        ImportType.FIELD: ("dataclasses", "field"),
+        ImportType.CONFIG: ("dataclasses_json", "config"),
         ImportType.SUB_CLASSES: ("abc", "ABC"),
         ImportType.ANY: ("typing", "Any"),
         ImportType.LITERAL: ("typing", "Literal"),
@@ -160,6 +162,10 @@ class CodeGenerator:
         if self.language == "python" and self.config.use_future_annotations:
             self.register_import_needed(ImportType.FUTURE_ANNOTATIONS)
 
+    def _get_comment_prefix(self) -> str:
+        """Get the appropriate comment prefix for the current language"""
+        return "//" if self.language == "cs" else "#"
+
     def register_import_needed(self, import_type: ImportType) -> None:
         """Register that a specific import type is needed.
 
@@ -218,7 +224,12 @@ class CodeGenerator:
             if is_empty:
                 base_pattern = patterns["empty_list"].format(type_name=type_name)
                 if self.config.exclude_default_value_from_json and self.language == "python":
+                    self.register_import_needed(ImportType.FIELD)
+                    self.register_import_needed(ImportType.CONFIG)
                     return "field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))"
+                # Register field import for the base pattern
+                if self.language == "python":
+                    self.register_import_needed(ImportType.FIELD)
                 return base_pattern
             else:
                 # Format list content
@@ -231,7 +242,11 @@ class CodeGenerator:
                 if self.language == "python":
                     content = "[" + ", ".join(formatted_items) + "]"
                     if self.config.exclude_default_value_from_json:
+                        self.register_import_needed(ImportType.FIELD)
+                        self.register_import_needed(ImportType.CONFIG)
                         return f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))"
+                    # Register field import for the base pattern
+                    self.register_import_needed(ImportType.FIELD)
                 else:  # C# and other languages
                     content = ", ".join(formatted_items)
                 return patterns["populated_list"].format(content=content, type_name=type_name)
@@ -240,7 +255,12 @@ class CodeGenerator:
             if is_empty:
                 base_pattern = patterns["empty_dict"].format(type_name=type_name)
                 if self.config.exclude_default_value_from_json and self.language == "python":
+                    self.register_import_needed(ImportType.FIELD)
+                    self.register_import_needed(ImportType.CONFIG)
                     return "field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))"
+                # Register field import for the base pattern
+                if self.language == "python":
+                    self.register_import_needed(ImportType.FIELD)
                 return base_pattern
             else:
                 # Format dict content
@@ -264,7 +284,11 @@ class CodeGenerator:
                 if self.language == "python":
                     content = "{" + ", ".join(formatted_items) + "}"
                     if self.config.exclude_default_value_from_json:
+                        self.register_import_needed(ImportType.FIELD)
+                        self.register_import_needed(ImportType.CONFIG)
                         return f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))"
+                    # Register field import for the base pattern
+                    self.register_import_needed(ImportType.FIELD)
                 else:
                     content = ", ".join(formatted_items)
 
@@ -283,6 +307,17 @@ class CodeGenerator:
         for module, name in self.python_import_tuples:
             import_groups[module].add(name)
 
+        # Define standard library modules
+        STDLIB_MODULES = {"abc", "collections", "dataclasses", "enum", "typing"}
+
+        # Separate stdlib and third-party imports
+        stdlib_groups = {m: import_groups[m] for m in import_groups if m in STDLIB_MODULES}
+        third_party_groups = {
+            m: import_groups[m]
+            for m in import_groups
+            if m not in STDLIB_MODULES and m != "__future__"
+        }
+
         # Assemble import statements - __future__ imports must come first
         assembled_imports = []
 
@@ -293,15 +328,30 @@ class CodeGenerator:
                 assembled_imports.append(f"from __future__ import {names[0]}")
             else:
                 assembled_imports.append(f"from __future__ import {', '.join(names)}")
-            del import_groups["__future__"]
+            # Add blank line after __future__ imports if there are other imports
+            if stdlib_groups or third_party_groups:
+                assembled_imports.append("")
 
-        # Handle other imports in sorted order
-        for module in sorted(import_groups.keys()):
-            names = sorted(import_groups[module])
-            if len(names) == 1:
-                assembled_imports.append(f"from {module} import {names[0]}")
-            else:
-                assembled_imports.append(f"from {module} import {', '.join(names)}")
+        # Handle standard library imports
+        if stdlib_groups:
+            for module in sorted(stdlib_groups.keys()):
+                names = sorted(stdlib_groups[module])
+                if len(names) == 1:
+                    assembled_imports.append(f"from {module} import {names[0]}")
+                else:
+                    assembled_imports.append(f"from {module} import {', '.join(names)}")
+            # Add blank line after stdlib imports if there are third-party imports
+            if third_party_groups:
+                assembled_imports.append("")
+
+        # Handle third-party imports
+        if third_party_groups:
+            for module in sorted(third_party_groups.keys()):
+                names = sorted(third_party_groups[module])
+                if len(names) == 1:
+                    assembled_imports.append(f"from {module} import {names[0]}")
+                else:
+                    assembled_imports.append(f"from {module} import {', '.join(names)}")
 
         return assembled_imports
 
@@ -311,7 +361,7 @@ class CodeGenerator:
             return ""
 
         # Use appropriate comment syntax for the language
-        comment_prefix = "//" if self.language == "cs" else "#"
+        comment_prefix = self._get_comment_prefix()
 
         # Reconstruct command line using CLI utilities
         try:
@@ -400,7 +450,8 @@ class CodeGenerator:
             case "python":
                 const = t["const"]
                 self.register_import_needed(ImportType.LITERAL)
-                return {"type": f'Literal["{const}"]', "init": f'"{const}"'}
+                formatted_const = self.format_default_value(const, "str")
+                return {"type": f'Literal["{const}"]', "init": formatted_const}
             case "cs":
                 # For C#, we need to infer the type from the const value if not provided
                 const_value = t["const"]
@@ -430,6 +481,10 @@ class CodeGenerator:
 
     def ref_type(self, ref: str) -> str:
         type_name = ref.split("/")[-1]
+
+        # Convert to PascalCase if this is a definition reference
+        if hasattr(self, "definition_name_mapping") and type_name in self.definition_name_mapping:
+            type_name = self.definition_name_mapping[type_name]
 
         # For Python, quote types that are in the quoted_types_for_python list
         type_name = self.quote_type(type_name)
@@ -495,7 +550,14 @@ class CodeGenerator:
         if isinstance(default_value, str):
             # Escape quotes in the string
             escaped_value = default_value.replace('"', '\\"')
-            return f'"{escaped_value}"'
+            formatted_string = f'"{escaped_value}"'
+
+            # For Python, wrap long strings across multiple lines
+            # Use a threshold of 40 characters for when to wrap to avoid long lines
+            if self.language == "python" and len(formatted_string) > 40:
+                return f"(\n        {formatted_string}\n    )"
+
+            return formatted_string
 
         if isinstance(default_value, (int, float)):
             return str(default_value)
@@ -536,6 +598,8 @@ class CodeGenerator:
 
         # For simple types, use field with default and metadata
         formatted_default = self.format_default_value(default_value, type_name)
+        self.register_import_needed(ImportType.FIELD)
+        self.register_import_needed(ImportType.CONFIG)
         return f"field(default={formatted_default}, metadata=config(exclude=lambda x: {exclude_condition}))"
 
     def translate_type(self, type_info, field_name, is_required=True):
@@ -547,7 +611,9 @@ class CodeGenerator:
             field_name: Name of the field being processed (used for inline object naming)
             is_required: Whether this property is required (affects nullability)
         """
-        if "type" in type_info:
+        if "$ref" in type_info:
+            type = self.ref_type(type_info["$ref"])
+        elif "type" in type_info:
             type = type_info["type"]
             list_type = self.type_map["list"]
             tuple_type = self.type_map["tuple"]
@@ -664,8 +730,6 @@ class CodeGenerator:
                     # Property is not required and has no default - make it nullable
                     return self.optional_type(t)
                 return result
-        elif "$ref" in type_info:
-            type = self.ref_type(type_info["$ref"])
         elif "const" in type_info:
             return self.const_type(type_info)
         elif "enum" in type_info:
@@ -682,7 +746,10 @@ class CodeGenerator:
             Warning(
                 f"We should have information about what values are allowed for enum {class_name}"
             )
-            comment = "// Allowed values: " + ", ".join([f'"{e}"' for e in type_info["enum"]])
+            comment_prefix = self._get_comment_prefix()
+            comment = f"  {comment_prefix} Allowed values: " + ", ".join(
+                [f'"{e}"' for e in type_info["enum"]]
+            )
             return {"type": self.type_map[class_name], "comment": comment}
         elif "oneOf" in type_info or "anyOf" in type_info:
             union_key = "oneOf" if "oneOf" in type_info else "anyOf"
@@ -729,6 +796,8 @@ class CodeGenerator:
             raise Exception(f"Error processing class '{class_name}': {str(e)}") from e
 
     def _prepare_class_info(self, class_name, info):
+        # Set the current parent context for inline object naming
+        self._current_parent_context = class_name
         p = copy.deepcopy(info)
 
         if "allOf" in p:
@@ -880,7 +949,7 @@ class CodeGenerator:
 
     def _handle_inline_object(self, type_info, field_name, is_required=True):
         """Handle inline object definitions by generating nested classes"""
-        # Generate a unique class name for this inline object based on the field name
+        # Generate a unique class name for this inline object based on the field name and parent context
         inline_class_name = self._generate_inline_class_name(field_name)
 
         # Store the inline object definition for later class generation
@@ -897,18 +966,98 @@ class CodeGenerator:
         return result
 
     def _generate_inline_class_name(self, field_name):
-        """Generate a meaningful class name for an inline object based on the field name"""
+        """Generate a meaningful class name for an inline object based on the field name and parent context"""
+        # Use the pre-determined unique name from the analysis phase only if there are collisions
+        if (
+            hasattr(self, "inline_class_name_mapping")
+            and hasattr(self, "_current_parent_context")
+            and len(self.inline_class_name_mapping) > 0
+        ):
+            key = (self._current_parent_context, field_name)
+            if key in self.inline_class_name_mapping:
+                return self.inline_class_name_mapping[key]
+
+        # Fallback to simple PascalCase conversion
         return self._to_pascal_case(field_name)
 
     def _to_pascal_case(self, text):
         """Convert text to PascalCase"""
-        # Remove non-alphanumeric characters and split
+        # If the text is already in PascalCase (starts with uppercase and contains no separators),
+        # return it as-is to preserve acronyms like DHMessage
         import re
 
-        words = re.findall(r"[a-zA-Z0-9]+", text)
+        # Check if text is already in PascalCase format (no separators, starts with uppercase)
+        if text and text[0].isupper() and re.match(r"^[a-zA-Z0-9]+$", text):
+            return text
+
+        # Split on camelCase boundaries and non-alphanumeric characters
+        # This handles cases like "buttonObject" -> ["button", "Object"]
+        words = re.findall(r"[a-z]+|[A-Z][a-z]*|[0-9]+", text)
         return "".join(word.capitalize() for word in words)
 
+    def _analyze_name_collisions(self):
+        """Phase 1: Analyze schema to detect name collisions and determine unique class names"""
+        # Initialize the name mapping dictionary
+        self.inline_class_name_mapping = {}
+
+        # Collect all potential inline class names from the schema
+        self._collect_inline_class_names(self.schema, self.class_name)
+
+        # Process definitions if they exist
+        definitions = self.schema.get("definitions") or self.schema.get("$defs")
+        if definitions:
+            for class_name, info in definitions.items():
+                if isinstance(info, str) or class_name.startswith("_comment"):
+                    continue
+                self._collect_inline_class_names(info, self._to_pascal_case(class_name))
+
+    def _collect_inline_class_names(self, schema_part, parent_context):
+        """Recursively collect inline class names from a schema part"""
+        if not isinstance(schema_part, dict):
+            return
+
+        # Check if this is an object with properties (potential inline class)
+        if "properties" in schema_part:
+            for field_name, field_info in schema_part["properties"].items():
+                if isinstance(field_info, dict) and "type" in field_info:
+                    if field_info["type"] == "object" and "properties" in field_info:
+                        # This is an inline object
+                        base_name = self._to_pascal_case(field_name)
+                        unique_name = self._get_unique_class_name(base_name, parent_context)
+                        self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
+
+                        # Recursively process nested inline objects
+                        self._collect_inline_class_names(field_info, unique_name)
+                    elif field_info["type"] == "array" and "items" in field_info:
+                        # Check if array items are inline objects
+                        items_info = field_info["items"]
+                        if isinstance(items_info, dict) and "type" in items_info:
+                            if items_info["type"] == "object" and "properties" in items_info:
+                                # Array of inline objects
+                                base_name = self._to_pascal_case(field_name)
+                                unique_name = self._get_unique_class_name(base_name, parent_context)
+                                self.inline_class_name_mapping[(parent_context, field_name)] = (
+                                    unique_name
+                                )
+
+                                # Recursively process nested inline objects
+                                self._collect_inline_class_names(items_info, unique_name)
+
+    def _get_unique_class_name(self, base_name, parent_context):
+        """Get a unique class name, using parent context to ensure uniqueness"""
+        # Always use parent context to create unique names for inline objects
+        # This ensures that inline objects are properly namespaced
+        unique_name = f"{parent_context}{base_name}"
+        return unique_name
+
     def generate(self):
+        # Phase 1: Analyze schema to detect name collisions and determine unique class names
+        self._analyze_name_collisions()
+
+        # Phase 2: Generate code using pre-determined unique class names
+        # Clear class_info to start fresh in Phase 2
+        self.class_info = {}
+
         definitions = self.schema.get("definitions") or self.schema.get("$defs")
         has_top_level_properties = "properties" in self.schema
 
@@ -916,13 +1065,17 @@ class CodeGenerator:
         if definitions is None and not has_top_level_properties:
             raise Exception("No definitions or top-level properties found in schema")
 
-        # Process definitions if they exist
+        # Create mapping from original definition keys to PascalCase class names
+        self.definition_name_mapping = {}
         if definitions is not None:
             for k, v in definitions.items():
                 # Skip comment fields which are strings, not schema objects
                 if isinstance(v, str) or k.startswith("_comment"):
                     continue
-                self.preprocess(k, v)
+                pascal_case_name = self._to_pascal_case(k)
+                self.definition_name_mapping[k] = pascal_case_name
+                # Store class info with PascalCase name
+                self.preprocess(pascal_case_name, v)
 
         # Prepare top-level class if it has properties
         top_level_class_info = None
@@ -944,7 +1097,11 @@ class CodeGenerator:
                 print(p)
             try:
                 s = self.class_model.render(p)
-                class_content += s + "\n"
+                # Python needs two blank lines between classes, C# needs none
+                if self.language == "python":
+                    class_content += s + "\n\n"
+                else:
+                    class_content += s + "\n"
             except Exception as e:
                 print(f"Error generating class {k}: {e}")
                 raise e from None
@@ -956,6 +1113,8 @@ class CodeGenerator:
             new_classes_found = False
             for class_name, class_info in list(self.class_info.items()):
                 if class_name not in processed_classes and "properties" in class_info:
+                    # Set the parent context for this class
+                    self._current_parent_context = class_name
                     required_fields = class_info.get("required", [])
                     for property_name, property_info in class_info["properties"].items():
                         if property_name not in self.config.global_ignore_fields:
@@ -976,20 +1135,24 @@ class CodeGenerator:
         if definitions is not None:
             for k in self.config.order_classes:
                 if k in definitions:
-                    run_class_generator(k, definitions[k])
+                    pascal_case_name = self.definition_name_mapping.get(k, k)
+                    run_class_generator(pascal_case_name, definitions[k])
 
             for k, v in definitions.items():
                 # Skip comment fields which are strings, not schema objects
                 if isinstance(v, str) or k.startswith("_comment"):
                     continue
                 if k not in self.config.order_classes:
-                    run_class_generator(k, v)
+                    pascal_case_name = self.definition_name_mapping.get(k, k)
+                    run_class_generator(pascal_case_name, v)
 
         # Generate inline classes that were discovered during type processing
         # Get all inline classes (those not in definitions but in class_info)
         inline_classes = set(self.class_info.keys())
         if definitions is not None:
-            inline_classes -= set(definitions.keys())
+            # Remove definition classes using their PascalCase names
+            pascal_case_definitions = set(self.definition_name_mapping.values())
+            inline_classes -= pascal_case_definitions
         # Remove the top-level class if it exists
         if top_level_class_info is not None:
             inline_classes.discard(self.class_name)
@@ -1015,14 +1178,17 @@ class CodeGenerator:
                     continue
                 if k not in self.config.ignore_classes:
                     # Check if this would generate a class (not just a type alias)
-                    test_info = self.prepare_class_info(k, v)
+                    pascal_case_name = self.definition_name_mapping.get(k, k)
+                    test_info = self.prepare_class_info(pascal_case_name, v)
                     if test_info is not None:  # This generates a class
-                        defined_classes.add(k)
+                        defined_classes.add(pascal_case_name)
 
         # Add inline classes
         inline_classes = set(self.class_info.keys())
         if definitions is not None:
-            inline_classes -= set(definitions.keys())
+            # Remove definition classes using their PascalCase names
+            pascal_case_definitions = set(self.definition_name_mapping.values())
+            inline_classes -= pascal_case_definitions
         if top_level_class_info is not None:
             inline_classes.discard(self.class_name)
         defined_classes.update(inline_classes)

@@ -1,0 +1,142 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "classify_state",
+    "type": "object",
+    "description": "Schema representing the state of a classification activity being completed by a human, so it may be incomplete or partially incorrect.",
+    "$defs": {
+        "object": {
+            "type": "object",
+            "description": "An object that can be classified into buckets",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "The type of object (e.g., 'primitive/text', 'primitive/image')"
+                },
+                "uuid": {
+                    "type": "string",
+                    "description": "Unique identifier for the object",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                }
+            },
+            "required": [
+                "type",
+                "uuid"
+            ]
+        },
+        "classifiable_object": {
+            "type": "object",
+            "description": "An object that can be classified with its associated bucket",
+            "properties": {
+                "object": {
+                    "$ref": "#/$defs/object",
+                    "description": "The object to be classified"
+                },
+                "bucket": {
+                    "type": "string",
+                    "description": "The correct bucket/category this object belongs to"
+                }
+            },
+            "required": [
+                "object",
+                "bucket"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "properties": {
+        "problem": {
+            "type": "object",
+            "description": "The classification problem being solved",
+            "properties": {
+                "buckets": {
+                    "type": "array",
+                    "description": "The categories or buckets that objects should be sorted into",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "The name/label of the classification bucket (e.g., 'mammal', 'reptile')"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Optional description of what belongs in this bucket"
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "description"
+                        ],
+                        "additionalProperties": false
+                    },
+                    "minItems": 2
+                },
+                "items": {
+                    "type": "array",
+                    "description": "The objects that need to be classified into buckets",
+                    "items": {
+                        "type": "object",
+                        "$ref": "#/$defs/classifiable_object"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "buckets",
+                "items"
+            ],
+            "additionalProperties": false
+        },
+        "state": {
+            "type": "object",
+            "description": "Current state of the student's classification work",
+            "properties": {
+                "buckets": {
+                    "type": "array",
+                    "description": "Current state of buckets with objects placed by the student",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "The name of the bucket (must match problem bucket names)"
+                            },
+                            "items": {
+                                "type": "array",
+                                "description": "Objects currently placed in this bucket by the student",
+                                "items": {
+                                    "type": "object",
+                                    "$ref": "#/$defs/classifiable_object"
+                                }
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "items"
+                        ],
+                        "additionalProperties": false
+                    },
+                    "minItems": 2
+                },
+                "items": {
+                    "type": "array",
+                    "description": "Objects not yet classified or remaining to be classified",
+                    "items": {
+                        "$ref": "#/$defs/classifiable_object"
+                    },
+                    "minItems": 0
+                }
+            },
+            "required": [
+                "buckets",
+                "items"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "required": [
+        "problem",
+        "state"
+    ],
+    "additionalProperties": false
+}
