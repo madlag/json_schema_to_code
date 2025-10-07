@@ -17,5 +17,12 @@ public class {{CLASS_NAME}}{% if EXTENDS %} : {{EXTENDS}}
         {% for property, info in properties.items() %}
         this.{{property}} = {{property}};
         {% endfor %}
+{%- if validation_code %}
+
+        // Validate fields
+{% for validation_line in validation_code %}
+        {{validation_line}}
+{% endfor -%}
+{%- endif %}
     }
 }

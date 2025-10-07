@@ -8,6 +8,7 @@ import jinja2
 
 from . import __version__
 from .cli_utils import reconstruct_command_line
+from .validator import ValidationGenerator
 
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
 
@@ -41,6 +42,7 @@ class CodeGeneratorConfig:
     quoted_types_for_python: list[str] = []
     use_future_annotations: bool = True
     exclude_default_value_from_json: bool = False
+    add_validation: bool = False
 
     @staticmethod
     def from_dict(d):
@@ -114,6 +116,10 @@ class CodeGenerator:
         self.suffix = self.jinja_env.from_string(
             open(CURRENT_DIR / f"templates/{language}/suffix.{extension}.jinja2").read()
         )
+
+        # Initialize validation generator if validation is enabled
+        self.validator = ValidationGenerator(language) if config.add_validation else None
+        self.needs_re_import = False  # Track if we need 're' module for Python
 
         self.language_type_maps: dict[str, dict[str, str]] = {
             "cs": {
@@ -308,7 +314,7 @@ class CodeGenerator:
             import_groups[module].add(name)
 
         # Define standard library modules
-        STDLIB_MODULES = {"abc", "collections", "dataclasses", "enum", "typing"}
+        STDLIB_MODULES = {"abc", "collections", "dataclasses", "enum", "typing", "re"}
 
         # Separate stdlib and third-party imports
         stdlib_groups = {m: import_groups[m] for m in import_groups if m in STDLIB_MODULES}
@@ -333,7 +339,11 @@ class CodeGenerator:
                 assembled_imports.append("")
 
         # Handle standard library imports
-        if stdlib_groups:
+        if stdlib_groups or self.needs_re_import:
+            # Add 're' module import if needed (as module import, not from import)
+            if self.needs_re_import:
+                assembled_imports.append("import re")
+
             for module in sorted(stdlib_groups.keys()):
                 names = sorted(stdlib_groups[module])
                 if len(names) == 1:
@@ -945,7 +955,43 @@ class CodeGenerator:
                 if k not in self.config.global_ignore_fields
             }
 
+        # Generate validation code if enabled
+        if self.config.add_validation and self.validator:
+            validation_code = self._generate_validation_code(p, class_name)
+            p["validation_code"] = validation_code
+
         return p
+
+    def _generate_validation_code(self, class_info: Dict[str, Any], class_name: str) -> list[str]:
+        """Generate validation code for all fields in a class"""
+        if not self.validator:
+            return []
+
+        validations = []
+        properties = class_info.get("constructor_properties", {})
+        required_fields = class_info.get("required", [])
+
+        for field_name, field_info in properties.items():
+            if field_name in self.config.global_ignore_fields:
+                continue
+
+            is_required = field_name in required_fields
+
+            # Get the translated type from the processed field info
+            field_type = field_info.get("TYPE", {}).get("type", "")
+
+            # Generate validation for this field
+            field_validations = self.validator.generate_field_validation(
+                field_name, field_info, field_type, is_required
+            )
+
+            # Check if we need 're' import for pattern validation
+            if self.validator.needs_re_import(field_info):
+                self.needs_re_import = True
+
+            validations.extend(field_validations)
+
+        return validations
 
     def _handle_inline_object(self, type_info, field_name, is_required=True):
         """Handle inline object definitions by generating nested classes"""

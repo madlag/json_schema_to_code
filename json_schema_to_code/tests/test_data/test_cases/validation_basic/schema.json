@@ -1,0 +1,52 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "validation_basic",
+    "type": "object",
+    "description": "Schema for testing basic validation rules",
+    "$defs": {
+        "address": {
+            "type": "object",
+            "properties": {
+                "street": {
+                    "type": "string",
+                    "description": "Street address"
+                },
+                "city": {
+                    "type": "string",
+                    "description": "City name"
+                },
+                "zipcode": {
+                    "type": "string",
+                    "description": "Postal code"
+                }
+            },
+            "required": ["street", "city", "zipcode"]
+        }
+    },
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Person's full name"
+        },
+        "age": {
+            "type": "integer",
+            "description": "Person's age"
+        },
+        "email": {
+            "type": "string",
+            "description": "Email address"
+        },
+        "address": {
+            "$ref": "#/$defs/address",
+            "description": "Home address"
+        },
+        "tags": {
+            "type": "array",
+            "description": "Tags or categories",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
+    "required": ["name", "age", "email", "address"]
+}

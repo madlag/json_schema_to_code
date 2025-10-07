@@ -1,0 +1,31 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "validation_patterns",
+    "type": "object",
+    "description": "Schema for testing pattern validation",
+    "properties": {
+        "email": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "description": "Email address with validation"
+        },
+        "phone": {
+            "type": "string",
+            "pattern": "^\\+?[1-9]\\d{1,14}$",
+            "description": "International phone number"
+        },
+        "username": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_]{3,20}$",
+            "minLength": 3,
+            "maxLength": 20,
+            "description": "Username with length and pattern constraints"
+        },
+        "website": {
+            "type": "string",
+            "pattern": "^https?://[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+            "description": "Website URL"
+        }
+    },
+    "required": ["email", "username"]
+}

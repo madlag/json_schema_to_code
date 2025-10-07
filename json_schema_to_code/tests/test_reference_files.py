@@ -6,82 +6,113 @@ import pytest
 from json_schema_to_code.codegen import CodeGenerator, CodeGeneratorConfig
 
 
-def discover_schema_tests():
-    """Automatically discover all schemas and create test cases for both languages"""
-    schemas_dir = Path(__file__).parent / "test_data" / "schemas"
+def discover_test_cases():
+    """Automatically discover all test cases from test_cases directory"""
+    test_cases_dir = Path(__file__).parent / "test_data" / "test_cases"
     test_cases = []
 
-    for schema_file in schemas_dir.glob("*.json"):
-        schema_name = schema_file.stem
+    # Iterate through each test case directory
+    for test_dir in sorted(test_cases_dir.iterdir()):
+        if not test_dir.is_dir() or test_dir.name.startswith("."):
+            continue
 
-        # Create test cases for both languages
-        language_extensions = {"python": "py", "cs": "cs"}
-        for language in ["python", "cs"]:
-            # Check if reference file exists
-            extension = language_extensions[language]
-            ref_file = (
-                Path(__file__).parent / "test_data" / "references" / f"{schema_name}.{extension}"
+        schema_file = test_dir / "schema.json"
+        config_file = test_dir / "config.json"
+
+        # Skip if schema doesn't exist
+        if not schema_file.exists():
+            continue
+
+        test_case_name = test_dir.name
+
+        # Check for Python reference
+        py_ref_file = test_dir / "reference.py"
+        if py_ref_file.exists():
+            test_cases.append(
+                {
+                    "test_name": f"{test_case_name}_python",
+                    "test_dir": test_dir,
+                    "schema_file": schema_file,
+                    "config_file": config_file,
+                    "test_case_name": test_case_name,
+                    "language": "python",
+                    "reference_file": py_ref_file,
+                }
             )
-            if ref_file.exists():
-                test_cases.append(
-                    {
-                        "test_name": f"{schema_name}_{language}",
-                        "schema_file": schema_file,
-                        "schema_name": schema_name,
-                        "language": language,
-                        "reference_file": ref_file,
-                    }
-                )
+
+        # Check for C# reference
+        cs_ref_file = test_dir / "reference.cs"
+        if cs_ref_file.exists():
+            test_cases.append(
+                {
+                    "test_name": f"{test_case_name}_cs",
+                    "test_dir": test_dir,
+                    "schema_file": schema_file,
+                    "config_file": config_file,
+                    "test_case_name": test_case_name,
+                    "language": "cs",
+                    "reference_file": cs_ref_file,
+                }
+            )
 
     return test_cases
 
 
-@pytest.mark.parametrize("test_case", discover_schema_tests(), ids=lambda tc: tc["test_name"])
+@pytest.mark.parametrize("test_case", discover_test_cases(), ids=lambda tc: tc["test_name"])
 def test_reference_file_generation(test_case):
     """Test code generation against reference files"""
     # Load schema
     with open(test_case["schema_file"]) as f:
         schema = json.load(f)
 
-    # Use default config with inline unions disabled for compatibility
-    config = CodeGeneratorConfig()
-    config.use_inline_unions = False
-    config.add_generation_comment = True
-    config.use_future_annotations = True
+    # Load config if it exists, otherwise use defaults
+    if test_case["config_file"].exists():
+        with open(test_case["config_file"]) as f:
+            config_dict = json.load(f)
+            config = CodeGeneratorConfig.from_dict(config_dict)
+    else:
+        config = CodeGeneratorConfig()
+        config.use_inline_unions = False
+        config.add_generation_comment = True
+        config.use_future_annotations = True
 
-    # Convert schema file stem to PascalCase for class name
-    class_name = "".join(word.capitalize() for word in test_case["schema_name"].split("_"))
+    # Generate class name from test case name (convert to PascalCase)
+    class_name = "".join(word.capitalize() for word in test_case["test_case_name"].split("_"))
 
     # Generate code
-    generator = CodeGenerator(class_name, schema, config, test_case["language"])
-    generated_output = generator.generate()
-
-    # Create test output directory and save generated file
-    test_output_dir = Path(__file__).parent / "test_output"
-    test_output_dir.mkdir(exist_ok=True)
-
-    language_extensions = {"python": "py", "cs": "cs"}
-    extension = language_extensions[test_case["language"]]
-    output_file = test_output_dir / f"{test_case['schema_name']}_generated.{extension}"
-
-    with open(output_file, "w") as f:
-        f.write(generated_output)
-
-    print(f"Generated file saved to: {output_file}")
+    codegen = CodeGenerator(class_name, schema, config, test_case["language"])
+    generated_code = codegen.generate()
 
     # Load reference file
     with open(test_case["reference_file"]) as f:
-        reference_output = f.read()
+        reference_code = f.read()
 
-    # Compare generated output with reference (normalize whitespace)
-    # This makes tests more robust to minor formatting differences
-    normalized_generated = generated_output.strip()
-    normalized_reference = reference_output.strip()
+    # Compare generated code with reference
+    # Normalize line endings for cross-platform compatibility
+    generated_normalized = generated_code.replace("\r\n", "\n").strip()
+    reference_normalized = reference_code.replace("\r\n", "\n").strip()
 
-    assert (
-        normalized_generated == normalized_reference
-    ), f"Generated output doesn't match reference for {test_case['test_name']}\n\nGenerated:\n{repr(generated_output)}\n\nExpected:\n{repr(reference_output)}"
+    if generated_normalized != reference_normalized:
+        # Generate diff for better error messages
+        import difflib
+
+        diff = difflib.unified_diff(
+            reference_normalized.splitlines(keepends=True),
+            generated_normalized.splitlines(keepends=True),
+            fromfile="reference",
+            tofile="generated",
+            lineterm="",
+        )
+        diff_text = "".join(diff)
+
+        pytest.fail(
+            f"Generated code does not match reference for {test_case['test_name']}\n\nDiff:\n{diff_text}"
+        )
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    # For manual testing - print discovered test cases
+    test_cases = discover_test_cases()
+    print(f"Discovered {len(test_cases)} test cases:")
+    for tc in test_cases:
+        print(f"  - {tc['test_name']}")

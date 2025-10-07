@@ -1,0 +1,46 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "validation_numeric",
+    "type": "object",
+    "description": "Schema for testing numeric validation rules",
+    "properties": {
+        "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150,
+            "description": "Age with range validation"
+        },
+        "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Score between 0 and 100"
+        },
+        "temperature": {
+            "type": "number",
+            "exclusiveMinimum": -273.15,
+            "description": "Temperature above absolute zero"
+        },
+        "percentage": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 100,
+            "description": "Percentage from 0 to <100"
+        },
+        "even_number": {
+            "type": "integer",
+            "multipleOf": 2,
+            "description": "Must be even"
+        },
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "integer"
+            },
+            "minItems": 1,
+            "maxItems": 10,
+            "description": "Array with size constraints"
+        }
+    },
+    "required": ["age", "score"]
+}
