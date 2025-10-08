@@ -257,6 +257,20 @@ class ValidationRule(ABC):
         return "".join(word.capitalize() for word in words)
 
 
+class OptionalFieldValidationRule(ValidationRule):
+    """
+    Base class for validation rules that need to handle optional fields.
+    Automatically applies None checks for optional (non-required) fields.
+    """
+
+    def __init__(self, field_name: str, language: str, is_required: bool = True):
+        super().__init__(field_name, language, is_required)
+
+    def apply_none_check(self) -> bool:
+        """Apply None check if field is not required."""
+        return not self.is_required
+
+
 class TypeCheckRule(ValidationRule):
     """Validates that a field has the correct type"""
 
@@ -293,15 +307,12 @@ class NonEmptyStringRule(ValidationRule):
         return {}
 
 
-class PatternRule(ValidationRule):
+class PatternRule(OptionalFieldValidationRule):
     """Validates that a string matches a regex pattern"""
 
     def __init__(self, field_name: str, language: str, pattern: str, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.pattern = pattern
-
-    def apply_none_check(self) -> bool:
-        return not self.is_required
 
     def use_raw_string(self) -> bool:
         return True
@@ -348,99 +359,78 @@ class MaxLengthRule(ValidationRule):
         return {"max_length": self.max_length}
 
 
-class MinimumRule(ValidationRule):
+class MinimumRule(OptionalFieldValidationRule):
     """Validates minimum numeric value"""
 
     def __init__(self, field_name: str, language: str, minimum: float, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.minimum = minimum
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"minimum": self.minimum}
 
 
-class MaximumRule(ValidationRule):
+class MaximumRule(OptionalFieldValidationRule):
     """Validates maximum numeric value"""
 
     def __init__(self, field_name: str, language: str, maximum: float, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.maximum = maximum
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"maximum": self.maximum}
 
 
-class ExclusiveMinimumRule(ValidationRule):
+class ExclusiveMinimumRule(OptionalFieldValidationRule):
     """Validates minimum numeric value"""
 
     def __init__(self, field_name: str, language: str, exclusive_minimum: float, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.exclusive_minimum = exclusive_minimum
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"exclusive_minimum": self.exclusive_minimum}
 
 
-class ExclusiveMaximumRule(ValidationRule):
+class ExclusiveMaximumRule(OptionalFieldValidationRule):
     """Validates maximum numeric value"""
 
     def __init__(self, field_name: str, language: str, exclusive_maximum: float, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.exclusive_maximum = exclusive_maximum
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"exclusive_maximum": self.exclusive_maximum}
 
 
-class MultipleOfRule(ValidationRule):
-    """Validates maximum numeric value"""
+class MultipleOfRule(OptionalFieldValidationRule):
+    """Validates multiple of a number"""
 
     def __init__(self, field_name: str, language: str, multiple: float, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.multiple = multiple
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"multiple": self.multiple}
 
 
-class MinItemsRule(ValidationRule):
+class MinItemsRule(OptionalFieldValidationRule):
     """Validates minimum array length"""
 
     def __init__(self, field_name: str, language: str, min_items: int, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.min_items = min_items
 
-    def apply_none_check(self) -> bool:
-        return not self.is_required
-
     def get_template_params(self) -> Dict[str, Any]:
         return {"min_items": self.min_items}
 
 
-class MaxItemsRule(ValidationRule):
+class MaxItemsRule(OptionalFieldValidationRule):
     """Validates maximum array length"""
 
     def __init__(self, field_name: str, language: str, max_items: int, is_required: bool = True):
         super().__init__(field_name, language, is_required)
         self.max_items = max_items
-
-    def apply_none_check(self) -> bool:
-        return not self.is_required
 
     def get_template_params(self) -> Dict[str, Any]:
         return {"max_items": self.max_items}
