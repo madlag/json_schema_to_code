@@ -1,0 +1,73 @@
+{
+  "_template": {
+    "if_line": "if ({condition})",
+    "throw_line_null": "    throw new ArgumentNullException(nameof({prop_name}), \"{error_message}\");",
+    "throw_line_arg": "    throw new ArgumentException(\"{error_message}\", nameof({prop_name}));",
+    "throw_line_arg_dollar": "    throw new ArgumentException($\"{error_message}\", nameof({prop_name}));"
+  },
+  "TypeCheckRule": {
+    "condition": "{prop_name} == null",
+    "error_message": "{prop_name} is required",
+    "exception_type": "ArgumentNullException"
+  },
+  "ReferenceTypeCheckRule": {
+    "condition": "{prop_name} == null",
+    "error_message": "{prop_name} is required"
+  },
+  "NonEmptyStringRule": {
+    "condition": "string.IsNullOrEmpty({prop_name})",
+    "error_message": "{prop_name} is required and cannot be empty"
+  },
+  "PatternRule": {
+    "condition": "!System.Text.RegularExpressions.Regex.IsMatch({prop_name}, @\"{pattern}\")",
+    "error_message": "{prop_name} must match pattern '{pattern}'"
+  },
+  "MinLengthRule": {
+    "condition": "{prop_name}.Length < {min_length}",
+    "error_message": "{prop_name} must be at least {min_length} characters"
+  },
+  "MaxLengthRule": {
+    "condition": "{prop_name}.Length > {max_length}",
+    "error_message": "{prop_name} must be at most {max_length} characters"
+  },
+  "MinimumRule": {
+    "condition": "{prop_name} < {minimum}",
+    "error_message": "{prop_name} must be >= {minimum}"
+  },
+  "MaximumRule": {
+    "condition": "{prop_name} > {maximum}",
+    "error_message": "{prop_name} must be <= {maximum}"
+  },
+  "ExclusiveMinimumRule": {
+    "condition": "{prop_name} <= {exclusive_minimum}",
+    "error_message": "{prop_name} must be > {exclusive_minimum}"
+  },
+  "ExclusiveMaximumRule": {
+    "condition": "{prop_name} >= {exclusive_maximum}",
+    "error_message": "{prop_name} must be < {exclusive_maximum}"
+  },
+  "MultipleOfRule": {
+    "condition": "{prop_name} % {multiple} != 0",
+    "error_message": "{prop_name} must be a multiple of {multiple}"
+  },
+  "MinItemsRule": {
+    "condition": "{prop_name}.Count < {min_items}",
+    "error_message": "{prop_name} must have at least {min_items} items"
+  },
+  "MaxItemsRule": {
+    "condition": "{prop_name}.Count > {max_items}",
+    "error_message": "{prop_name} must have at most {max_items} items"
+  },
+  "ArrayItemTypeRule": {
+    "condition": "!{prop_name}.All(item => item is {item_class_name})",
+    "error_message": "All items in {prop_name} must be {item_class_name} instances"
+  },
+  "EnumRule": {
+    "condition": "!new[] {{{enum_values_cs}}}.Contains({prop_name})",
+    "error_message": "{prop_name} must be one of the allowed values"
+  },
+  "ConstRule": {
+    "condition": "{prop_name} != {const_value}",
+    "error_message": "{prop_name} must be {const_value}"
+  }
+}

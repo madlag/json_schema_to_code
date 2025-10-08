@@ -28,9 +28,7 @@ class ValidationBasic:
         if not self.email:
             raise ValueError("email field is required and cannot be empty")
         if not isinstance(self.address, Address):
-            raise ValueError(
-                f"address must be a Address instance, got {type(self.address).__name__}"
-            )
+            raise ValueError(f"address must be a Address instance, got {type(self.address).__name__}")
 
 
 @dataclass_json

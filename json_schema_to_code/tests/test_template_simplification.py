@@ -116,11 +116,7 @@ class TestTemplateSimplification:
         # Test various scenarios that previously worked
         test_schemas = [
             # Basic schema
-            {
-                "definitions": {
-                    "Simple": {"type": "object", "properties": {"name": {"type": "string"}}}
-                }
-            },
+            {"definitions": {"Simple": {"type": "object", "properties": {"name": {"type": "string"}}}}},
             # Schema with arrays
             {
                 "definitions": {
@@ -151,8 +147,8 @@ class TestTemplateSimplification:
             code = generator.generate()
 
             # All should generate valid code with proper imports
-            assert "from dataclasses import dataclass, field" in code
-            assert "from dataclasses_json import config, dataclass_json" in code
+            assert "from dataclasses import dataclass" in code
+            assert "from dataclasses_json import dataclass_json" in code
             assert "@dataclass_json" in code
             assert "@dataclass(kw_only=True)" in code
 

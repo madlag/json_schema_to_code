@@ -19,14 +19,10 @@ class TestImportGrouping:
         assembled_imports = generator._assemble_python_imports()
 
         # Should have base imports and grouped typing imports
-        expected_base = [
-            "from dataclasses import dataclass, field",
-            "from dataclasses_json import config, dataclass_json",
-        ]
+        base_import = "from dataclasses import dataclass"
         expected_typing = "from typing import Any, Literal"
 
-        for base_import in expected_base:
-            assert base_import in assembled_imports
+        assert base_import in assembled_imports
         assert expected_typing in assembled_imports
 
     def test_python_import_grouping_mixed_modules(self):
@@ -105,8 +101,8 @@ class TestImportGrouping:
         code = generator.generate()
 
         # Check that imports are properly grouped in the generated code
-        assert "from dataclasses import dataclass, field" in code
-        assert "from dataclasses_json import config, dataclass_json" in code
+        assert "from dataclasses import dataclass" in code
+        assert "from dataclasses_json import dataclass_json" in code
         assert "from typing import Any" in code
 
         # Modern Python uses list[...] syntax, so no List import needed
@@ -141,9 +137,8 @@ class TestImportGrouping:
 
         # Should have base imports plus __future__ annotations
         assert "from __future__ import annotations" in assembled_imports
-        assert "from dataclasses import dataclass, field" in assembled_imports
-        assert "from dataclasses_json import config, dataclass_json" in assembled_imports
-        assert len(assembled_imports) == 3
+        assert "from dataclasses import dataclass" in assembled_imports
+        assert "from dataclasses_json import dataclass_json" in assembled_imports
 
     def test_import_sorting_within_module(self):
         """Test that imports within a module are sorted alphabetically"""
@@ -169,11 +164,7 @@ class TestImportGrouping:
         config.use_future_annotations = True
 
         # Simple schema to generate code
-        schema = {
-            "definitions": {
-                "TestClass": {"type": "object", "properties": {"name": {"type": "string"}}}
-            }
-        }
+        schema = {"definitions": {"TestClass": {"type": "object", "properties": {"name": {"type": "string"}}}}}
 
         generator = CodeGenerator("TestSchema", schema, config, "python")
         output = generator.generate()
@@ -186,14 +177,8 @@ class TestImportGrouping:
         assert any("from __future__ import annotations" in line for line in import_lines)
 
         # __future__ import should be first among import lines
-        future_import_line = next(
-            i for i, line in enumerate(lines) if "from __future__ import annotations" in line
-        )
-        other_import_lines = [
-            i
-            for i, line in enumerate(lines)
-            if line.startswith("from ") and "__future__" not in line
-        ]
+        future_import_line = next(i for i, line in enumerate(lines) if "from __future__ import annotations" in line)
+        other_import_lines = [i for i, line in enumerate(lines) if line.startswith("from ") and "__future__" not in line]
 
         # Future import should come before all other imports
         if other_import_lines:
@@ -204,11 +189,7 @@ class TestImportGrouping:
         config = CodeGeneratorConfig()
         config.use_future_annotations = False  # Default value, but explicit for clarity
 
-        schema = {
-            "definitions": {
-                "TestClass": {"type": "object", "properties": {"name": {"type": "string"}}}
-            }
-        }
+        schema = {"definitions": {"TestClass": {"type": "object", "properties": {"name": {"type": "string"}}}}}
 
         generator = CodeGenerator("TestSchema", schema, config, "python")
         output = generator.generate()

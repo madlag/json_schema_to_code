@@ -22,28 +22,18 @@ class ValidationPatterns:
         if not self.email:
             raise ValueError("email field is required and cannot be empty")
         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", self.email):
-            raise ValueError(
-                rf"email must match pattern '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{{2,}}$', got {self.email!r}"
-            )
+            raise ValueError(rf"email must match pattern '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{{2,}}$', got {self.email!r}")
         if self.phone is not None and not re.match(r"^\+?[1-9]\d{1,14}$", self.phone):
-            raise ValueError(
-                rf"phone must match pattern '^\+?[1-9]\d{{1,14}}$', got {self.phone!r}"
-            )
+            raise ValueError(rf"phone must match pattern '^\+?[1-9]\d{{1,14}}$', got {self.phone!r}")
         if not isinstance(self.username, str):
             raise ValueError(f"username must be a str, got {type(self.username).__name__}")
         if not self.username:
             raise ValueError("username field is required and cannot be empty")
         if not re.match(r"^[a-zA-Z0-9_]{3,20}$", self.username):
-            raise ValueError(
-                rf"username must match pattern '^[a-zA-Z0-9_]{{3,20}}$', got {self.username!r}"
-            )
+            raise ValueError(rf"username must match pattern '^[a-zA-Z0-9_]{{3,20}}$', got {self.username!r}")
         if len(self.username) < 3:
             raise ValueError(f"username must be at least 3 characters, got {len(self.username)}")
         if len(self.username) > 20:
             raise ValueError(f"username must be at most 20 characters, got {len(self.username)}")
-        if self.website is not None and not re.match(
-            r"^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", self.website
-        ):
-            raise ValueError(
-                rf"website must match pattern '^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{{2,}}', got {self.website!r}"
-            )
+        if self.website is not None and not re.match(r"^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", self.website):
+            raise ValueError(rf"website must match pattern '^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{{2,}}', got {self.website!r}")

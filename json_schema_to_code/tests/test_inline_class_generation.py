@@ -24,8 +24,8 @@ def test_classification_generator_textobject_generation():
     # Generate code
     out = codegen.generate()
 
-    # Verify that Items class is generated (named from the 'items' field)
-    assert "class Items:" in out, "Items class should be generated"
+    # Verify that Items class is generated (with prefixed name from parent classes)
+    assert "class ClassificationGeneratorGeneratorItems:" in out, "Items class should be generated with proper prefix"
 
     # Verify that Items has the expected properties
     expected_properties = [
@@ -41,10 +41,10 @@ def test_classification_generator_textobject_generation():
 
     # Verify that the main classes are generated
     assert "class ClassificationGenerator:" in out
-    assert "class Generator:" in out  # Named from the 'generator' field
+    assert "class ClassificationGeneratorGenerator:" in out  # Named from the 'generator' field with prefix
 
-    # Verify that the generator property references Items
-    assert "items: list[Items]" in out
+    # Verify that the generator property references Items with full name
+    assert "items: list[ClassificationGeneratorGeneratorItems]" in out
 
 
 if __name__ == "__main__":

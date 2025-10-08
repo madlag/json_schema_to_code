@@ -1,0 +1,72 @@
+{
+  "_template": {
+    "if_line": "if {condition}:",
+    "raise_line": "    raise ValueError(f\"{error_message}\")",
+    "raise_line_raw": "    raise ValueError(rf\"{error_message}\")",
+    "raise_line_plain": "    raise ValueError(\"{error_message}\")"
+  },
+  "TypeCheckRule": {
+    "condition": "not isinstance(self.{field_name}, {expected_type})",
+    "error_message": "{field_name} must be a {expected_type}, got {{type(self.{field_name}).__name__}}"
+  },
+  "ReferenceTypeCheckRule": {
+    "condition": "not isinstance(self.{field_name}, {class_name})",
+    "error_message": "{field_name} must be a {class_name} instance, got {{type(self.{field_name}).__name__}}"
+  },
+  "NonEmptyStringRule": {
+    "condition": "not self.{field_name}",
+    "error_message": "{field_name} field is required and cannot be empty"
+  },
+  "PatternRule": {
+    "condition": "not re.match(r\"{pattern}\", self.{field_name})",
+    "error_message": "{field_name} must match pattern '{pattern}', got {{self.{field_name}!r}}"
+  },
+  "MinLengthRule": {
+    "condition": "len(self.{field_name}) < {min_length}",
+    "error_message": "{field_name} must be at least {min_length} characters, got {{len(self.{field_name})}}"
+  },
+  "MaxLengthRule": {
+    "condition": "len(self.{field_name}) > {max_length}",
+    "error_message": "{field_name} must be at most {max_length} characters, got {{len(self.{field_name})}}"
+  },
+  "MinimumRule": {
+    "condition": "self.{field_name} < {minimum}",
+    "error_message": "{field_name} must be >= {minimum}, got {{self.{field_name}}}"
+  },
+  "MaximumRule": {
+    "condition": "self.{field_name} > {maximum}",
+    "error_message": "{field_name} must be <= {maximum}, got {{self.{field_name}}}"
+  },
+  "ExclusiveMinimumRule": {
+    "condition": "self.{field_name} <= {exclusive_minimum}",
+    "error_message": "{field_name} must be > {exclusive_minimum}, got {{self.{field_name}}}"
+  },
+  "ExclusiveMaximumRule": {
+    "condition": "self.{field_name} >= {exclusive_maximum}",
+    "error_message": "{field_name} must be < {exclusive_maximum}, got {{self.{field_name}}}"
+  },
+  "MultipleOfRule": {
+    "condition": "self.{field_name} % {multiple} != 0",
+    "error_message": "{field_name} must be a multiple of {multiple}, got {{self.{field_name}}}"
+  },
+  "MinItemsRule": {
+    "condition": "len(self.{field_name}) < {min_items}",
+    "error_message": "{field_name} must have at least {min_items} items, got {{len(self.{field_name})}}"
+  },
+  "MaxItemsRule": {
+    "condition": "len(self.{field_name}) > {max_items}",
+    "error_message": "{field_name} must have at most {max_items} items, got {{len(self.{field_name})}}"
+  },
+  "ArrayItemTypeRule": {
+    "condition": "not all(isinstance(item, {item_class_name}) for item in self.{field_name})",
+    "error_message": "All items in {field_name} must be {item_class_name} instances"
+  },
+  "EnumRule": {
+    "condition": "self.{field_name} not in {enum_values}",
+    "error_message": "{field_name} must be one of {enum_values}, got {{self.{field_name}!r}}"
+  },
+  "ConstRule": {
+    "condition": "self.{field_name} != {const_value!r}",
+    "error_message": "{field_name} must be {const_value!r}, got {{self.{field_name}!r}}"
+  }
+}
