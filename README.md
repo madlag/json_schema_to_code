@@ -93,6 +93,38 @@ Create a JSON configuration file to customize code generation:
 - **Union types**: Multiple type options (`oneOf`)
 - **Const values**: Fixed literal values
 - **Optional properties**: Nullable type generation
+- **Custom enum member names**: Use `x-enum-members` to specify custom Python enum member names
+
+### Custom Enum Member Names
+
+By default, when generating Python enum classes, the generator uses the enum values directly as member names (e.g., `"N"` becomes `N = "N"`). To use more descriptive member names, you can use the `x-enum-members` extension:
+
+```json
+{
+  "$defs": {
+    "ElementState": {
+      "type": "string",
+      "enum": ["N", "H", "C"],
+      "x-enum-members": {
+        "N": "NORMAL",
+        "H": "HIDDEN",
+        "C": "CORRECT_ANSWER"
+      }
+    }
+  }
+}
+```
+
+When preprocessing the schema (before passing it to `CodeGenerator`), transform the enum array into a dict mapping member names to values. The generator will then use this dict to create enum classes with custom member names:
+
+```python
+class ElementState(str, Enum):
+    NORMAL = "N"
+    HIDDEN = "H"
+    CORRECT_ANSWER = "C"
+```
+
+**Note**: The `x-enum-members` extension maps enum values (the keys) to Python enum member names (the values). This requires preprocessing the schema to transform `enum` arrays into dicts before code generation. This feature is currently only supported for Python code generation.
 
 ## Output Examples
 

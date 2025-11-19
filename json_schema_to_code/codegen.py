@@ -97,25 +97,18 @@ class CodeGenerator:
         },
     }
 
-    def __init__(
-        self, class_name: str, schema: Dict[str, Any], config: CodeGeneratorConfig, language: str
-    ):
+    def __init__(self, class_name: str, schema: Dict[str, Any], config: CodeGeneratorConfig, language: str):
         self.class_name = class_name
-        self.schema = schema
+        # Preprocess schema to handle x-enum-members extension
+        self.schema = self._preprocess_schema_for_enum_members(schema)
         self.config = config
         self.language = language
         self.jinja_env = jinja2.Environment(lstrip_blocks=True, trim_blocks=True)
         language_to_extension = {"cs": "cs", "python": "py"}
         extension = language_to_extension[language]
-        self.prefix = self.jinja_env.from_string(
-            open(CURRENT_DIR / f"templates/{language}/prefix.{extension}.jinja2").read()
-        )
-        self.class_model = self.jinja_env.from_string(
-            open(CURRENT_DIR / f"templates/{language}/class.{extension}.jinja2").read()
-        )
-        self.suffix = self.jinja_env.from_string(
-            open(CURRENT_DIR / f"templates/{language}/suffix.{extension}.jinja2").read()
-        )
+        self.prefix = self.jinja_env.from_string(open(CURRENT_DIR / f"templates/{language}/prefix.{extension}.jinja2").read())
+        self.class_model = self.jinja_env.from_string(open(CURRENT_DIR / f"templates/{language}/class.{extension}.jinja2").read())
+        self.suffix = self.jinja_env.from_string(open(CURRENT_DIR / f"templates/{language}/suffix.{extension}.jinja2").read())
 
         # Initialize validation generator if validation is enabled
         self.validator = ValidationGenerator(language) if config.add_validation else None
@@ -206,9 +199,7 @@ class CodeGenerator:
         else:
             raise ValueError(f"Language '{self.language}' is not supported")
 
-    def _create_default_factory_value(
-        self, container_type: str, default_value, type_name: str | None = None
-    ) -> str:
+    def _create_default_factory_value(self, container_type: str, default_value, type_name: str | None = None) -> str:
         """
         Create a language-appropriate default factory value for mutable containers.
 
@@ -318,11 +309,7 @@ class CodeGenerator:
 
         # Separate stdlib and third-party imports
         stdlib_groups = {m: import_groups[m] for m in import_groups if m in STDLIB_MODULES}
-        third_party_groups = {
-            m: import_groups[m]
-            for m in import_groups
-            if m not in STDLIB_MODULES and m != "__future__"
-        }
+        third_party_groups = {m: import_groups[m] for m in import_groups if m not in STDLIB_MODULES and m != "__future__"}
 
         # Assemble import statements - __future__ imports must come first
         assembled_imports = []
@@ -410,10 +397,7 @@ class CodeGenerator:
 
                 if has_quoted_types:
                     # Unquote all types, create union, then quote the entire union
-                    unquoted_types = [
-                        t.strip('"') if t.startswith('"') and t.endswith('"') else t
-                        for t in sorted_types
-                    ]
+                    unquoted_types = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in sorted_types]
                     union_type_string = " | ".join(unquoted_types)
                     quoted_union = f'"{union_type_string}"'
                 else:
@@ -426,10 +410,7 @@ class CodeGenerator:
                     return quoted_union
                 else:
                     # Generate and return type alias like "IntOrStr"
-                    unquoted_for_alias = [
-                        t.strip('"') if t.startswith('"') and t.endswith('"') else t
-                        for t in sorted_types
-                    ]
+                    unquoted_for_alias = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in sorted_types]
                     capitalized_types = [t.capitalize() for t in unquoted_for_alias]
                     type_alias_name = "Or".join(capitalized_types)
 
@@ -441,7 +422,25 @@ class CodeGenerator:
             case "cs":
                 if self.config.use_inline_unions:
                     # C# doesn't support inline unions, use object as fallback
-                    raise Exception("Fix Union type for cs")
+                    union_types_str = " | ".join(sorted_types)
+                    raise Exception(
+                        f"C# code generation failed: Union types are not supported when 'use_inline_unions' is enabled.\n"
+                        f"\n"
+                        f"Union type encountered: {union_types_str}\n"
+                        f"\n"
+                        f"C# does not natively support inline union types (like Python's 'str | int').\n"
+                        f"\n"
+                        f"To fix this, you have two options:\n"
+                        f"  1. Set 'use_inline_unions=False' in CodeGeneratorConfig - this will generate type aliases\n"
+                        f"     (though they still resolve to 'object' in C#)\n"
+                        f"  2. Refactor your JSON schema to avoid union types:\n"
+                        f"     - Use discriminated unions with a 'type' discriminator field\n"
+                        f"     - Split union properties into separate optional properties\n"
+                        f"     - Use a base class with subclasses for different variants\n"
+                        f"\n"
+                        f"Note: Python dataclass generation fully supports union types, so this limitation\n"
+                        f"only affects C# code generation."
+                    )
                 else:
                     # Generate type alias for C# (even though it's still object, keep the naming)
                     capitalized_types = [t.capitalize() for t in sorted_types]
@@ -453,7 +452,17 @@ class CodeGenerator:
 
                     return type_alias_name
             case _:
-                raise Exception("Fix Union type for " + self.language)
+                union_types_str = " | ".join(sorted_types)
+                raise Exception(
+                    f"Union types are not supported for language '{self.language}'.\n"
+                    f"\n"
+                    f"Union type encountered: {union_types_str}\n"
+                    f"\n"
+                    f"To fix this, refactor your JSON schema to avoid union types:\n"
+                    f"  - Use discriminated unions with a 'type' discriminator field\n"
+                    f"  - Split union properties into separate optional properties\n"
+                    f"  - Use a base class with subclasses for different variants"
+                )
 
     def const_type(self, t: Dict[str, Any]) -> Dict[str, Any]:
         match self.language:
@@ -492,6 +501,12 @@ class CodeGenerator:
     def ref_type(self, ref: str) -> str:
         type_name = ref.split("/")[-1]
 
+        # Check for x-ref-class-name mapping in schema (for external $ref)
+        # This allows mapping schema definition names to Python class names
+        # e.g., "Action" -> "UIAction" when referenced from external schema
+        if hasattr(self, "ref_class_name_mapping") and type_name in self.ref_class_name_mapping:
+            type_name = self.ref_class_name_mapping[type_name]
+
         # Convert to PascalCase if this is a definition reference
         if hasattr(self, "definition_name_mapping") and type_name in self.definition_name_mapping:
             type_name = self.definition_name_mapping[type_name]
@@ -516,14 +531,9 @@ class CodeGenerator:
         types.sort()
         return {"type": types}
 
-    def _handle_union_type_with_defaults(
-        self, type_info, union_key: str, field_name: str, is_required: bool
-    ) -> dict:
+    def _handle_union_type_with_defaults(self, type_info, union_key: str, field_name: str, is_required: bool) -> dict:
         """Helper method to handle oneOf/anyOf types with proper default value handling"""
-        types = [
-            self.translate_type(t, f"{field_name}_union", is_required=True)["type"]
-            for t in type_info[union_key]
-        ]
+        types = [self.translate_type(t, f"{field_name}_union", is_required=True)["type"] for t in type_info[union_key]]
         result = {"type": self.union_type(types)}
 
         # Handle default values for union types
@@ -623,15 +633,39 @@ class CodeGenerator:
         """
         if "$ref" in type_info:
             type = self.ref_type(type_info["$ref"])
+
+            # Handle defaults and optional fields for $ref types
+            result = {"type": type}
+            if "default" in type_info:
+                # Special case: null default on $ref means auto-initialize with default_factory
+                if type_info["default"] is None and self.language == "python":
+                    clean_type = type.strip('"')
+                    self.register_import_needed(ImportType.FIELD)
+                    # Use lambda to avoid type checker issues with forward references
+                    result["init"] = f"field(default_factory=lambda: {clean_type}())"
+                else:
+                    # If there's an explicit non-null default value, use it
+                    result["init"] = self.format_field_with_metadata(type_info["default"], type)
+            elif not is_required:
+                # For optional $ref fields, use field(default_factory=lambda: ClassName())
+                # This allows the field to be omitted and auto-initialized
+                # Use lambda to avoid type checker issues with forward references
+                if self.language == "python":
+                    # Remove quotes from type name for default_factory
+                    clean_type = type.strip('"')
+                    self.register_import_needed(ImportType.FIELD)
+                    result["init"] = f"field(default_factory=lambda: {clean_type}())"
+                else:
+                    # For other languages, make it nullable
+                    return self.optional_type(type)
+            return result
         elif "type" in type_info:
             type = type_info["type"]
             list_type = self.type_map["list"]
             tuple_type = self.type_map["tuple"]
             if type == "array":
                 if isinstance(type_info["items"], dict):
-                    item_type_info = self.translate_type(
-                        type_info["items"], field_name, is_required=True
-                    )  # Array items are always considered required
+                    item_type_info = self.translate_type(type_info["items"], field_name, is_required=True)  # Array items are always considered required
                     item_type = item_type_info["type"]
                     item_type = self.quote_type(item_type)
                     self.register_import_needed(ImportType.LIST)
@@ -650,32 +684,21 @@ class CodeGenerator:
                         if not self.config.drop_min_max_items:
                             raise Exception("Variable length tuple is not supported")
 
-                    if (
-                        type_info.get("minItems") != type_info.get("maxItems")
-                        or not self.config.use_tuples
-                    ):
+                    if type_info.get("minItems") != type_info.get("maxItems") or not self.config.use_tuples:
                         if not self.config.use_array_of_super_type_for_variable_length_tuple:
                             # Check if all items are of the same type
-                            item_types = [
-                                self.translate_type(t, field_name, is_required=True)["type"]
-                                for t in type_info["items"]
-                            ]
+                            item_types = [self.translate_type(t, field_name, is_required=True)["type"] for t in type_info["items"]]
 
                             for item_type in item_types[1:]:
                                 # Items are not of the same type
                                 if item_type != item_types[0]:
-                                    raise Exception(
-                                        "The items are not of the same type: " + str(item_types)
-                                    )
+                                    raise Exception("The items are not of the same type: " + str(item_types))
                         item_type = self.super_type(type_info["items"])
                         item_type = self.translate_type(item_type, field_name, is_required=True)
                         self.register_import_needed(ImportType.LIST)
                         type = f"{list_type}{self.type_brackets[0]}{item_type['type']}{self.type_brackets[1]}"
                     elif self.config.use_tuples:
-                        item_types = [
-                            self.translate_type(t, field_name, is_required=True)["type"]
-                            for t in type_info["items"]
-                        ]
+                        item_types = [self.translate_type(t, field_name, is_required=True)["type"] for t in type_info["items"]]
                         self.register_import_needed(ImportType.TUPLE)
                         type = f"{tuple_type}{self.type_brackets[0]}{', '.join(item_types)}{self.type_brackets[1]}"
 
@@ -688,35 +711,24 @@ class CodeGenerator:
                     type.remove("null")
 
                 if len(type) == 1:
-                    base_type = self.translate_type(
-                        {"type": type[0]}, f"{field_name}_union", is_required=True
-                    )["type"]
+                    base_type = self.translate_type({"type": type[0]}, f"{field_name}_union", is_required=True)["type"]
                     if nullable:
                         result = self.optional_type(base_type)
                         # Handle default values for nullable types
                         if "default" in type_info:
-                            result["init"] = self.format_field_with_metadata(
-                                type_info["default"], result["type"]
-                            )
+                            result["init"] = self.format_field_with_metadata(type_info["default"], result["type"])
                         return result
                     else:
                         result = {"type": base_type}
                         if "default" in type_info:
-                            result["init"] = self.format_field_with_metadata(
-                                type_info["default"], base_type
-                            )
+                            result["init"] = self.format_field_with_metadata(type_info["default"], base_type)
                         elif not is_required:
                             # Property is not required and has no default - make it nullable
                             return self.optional_type(base_type)
                         return result
                 else:
                     # Use union_type for consistent logic
-                    typeNames = [
-                        self.translate_type({"type": t}, f"{field_name}_union", is_required=True)[
-                            "type"
-                        ]
-                        for t in type
-                    ]
+                    typeNames = [self.translate_type({"type": t}, f"{field_name}_union", is_required=True)["type"] for t in type]
                     type = self.union_type(typeNames)
             else:
                 # Handle inline objects with properties
@@ -753,19 +765,13 @@ class CodeGenerator:
                     raise Exception("Enums with different types are not supported")
             mapping = {"str": "string", "int": "integer", "float": "float"}
             class_name = mapping.get(class_name, class_name)  # type: ignore
-            Warning(
-                f"We should have information about what values are allowed for enum {class_name}"
-            )
+            Warning(f"We should have information about what values are allowed for enum {class_name}")
             comment_prefix = self._get_comment_prefix()
-            comment = f"  {comment_prefix} Allowed values: " + ", ".join(
-                [f'"{e}"' for e in type_info["enum"]]
-            )
+            comment = f"  {comment_prefix} Allowed values: " + ", ".join([f'"{e}"' for e in type_info["enum"]])
             return {"type": self.type_map[class_name], "comment": comment}
         elif "oneOf" in type_info or "anyOf" in type_info:
             union_key = "oneOf" if "oneOf" in type_info else "anyOf"
-            return self._handle_union_type_with_defaults(
-                type_info, union_key, field_name, is_required
-            )
+            return self._handle_union_type_with_defaults(type_info, union_key, field_name, is_required)
         else:
             raise Exception("Unknown type " + str(type_info))
 
@@ -784,15 +790,54 @@ class CodeGenerator:
                 return properties["type"]["const"]
         return class_name
 
+    def _preprocess_schema_for_enum_members(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Preprocess schema to transform enum arrays with x-enum-members into dicts.
+
+        If a schema definition has both "enum" (array) and "x-enum-members" (dict mapping
+        values to member names), transform the enum into a dict that will be used to generate
+        enum classes with custom member names.
+
+        Args:
+            schema: The JSON schema dict
+
+        Returns:
+            Preprocessed schema with enum transformations applied
+        """
+
+        def process_dict(obj: Dict[str, Any]) -> Dict[str, Any]:
+            """Recursively process dicts in the schema."""
+            # Check if this dict has enum + x-enum-members
+            if "enum" in obj and isinstance(obj["enum"], list) and "x-enum-members" in obj:
+                enum_array = obj["enum"]
+                enum_members = obj["x-enum-members"]
+
+                # Transform enum array into dict: {member_name: value}
+                enum_dict = {}
+                for enum_value in enum_array:
+                    member_name = enum_members.get(enum_value, enum_value)
+                    enum_dict[member_name] = enum_value
+
+                # Replace enum array with dict and remove x-enum-members
+                result = obj.copy()
+                result["enum"] = enum_dict
+                result.pop("x-enum-members", None)
+                # Continue processing recursively
+                return {
+                    k: process_dict(v) if isinstance(v, dict) else ([process_dict(item) if isinstance(item, dict) else item for item in v] if isinstance(v, list) else v) for k, v in result.items()
+                }
+
+            # Otherwise process normally
+            return {k: process_dict(v) if isinstance(v, dict) else ([process_dict(item) if isinstance(item, dict) else item for item in v] if isinstance(v, list) else v) for k, v in obj.items()}
+
+        return process_dict(schema)
+
     def preprocess(self, class_name, info):
         p = copy.deepcopy(info)
         if "allOf" in p:
             allOf = p["allOf"]
             base_class = self.ref_type(allOf[0]["$ref"])
             # Change class_name camelcase to snake_case
-            json_name = self.convert_message_class_to_json_name(
-                allOf[1].get("properties", {}), class_name
-            )
+            json_name = self.convert_message_class_to_json_name(allOf[1].get("properties", {}), class_name)
             if class_name not in self.config.ignore_classes:
                 self.subclasses[base_class].append([class_name, json_name])
             self.base_class[class_name] = base_class
@@ -826,10 +871,7 @@ class CodeGenerator:
                 # Handle quoted types properly
                 has_quoted_types = any(t.startswith('"') and t.endswith('"') for t in union_types)
                 if has_quoted_types:
-                    unquoted_types = [
-                        t.strip('"') if t.startswith('"') and t.endswith('"') else t
-                        for t in union_types
-                    ]
+                    unquoted_types = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
                     union_string = " | ".join(sorted(unquoted_types))
                     union_string = f'"{union_string}"'
 
@@ -856,10 +898,14 @@ class CodeGenerator:
 
         if ("anyOf" in p or "oneOf" in p) or ("type" in p and p["type"] != "object"):
             # Handle anyOf/oneOf at class level or non-object types - treat as union/base type
+            # Skip if this is an enum (enums extend their base type but don't need a class_info entry)
             base_type = self.translate_type(p, f"{class_name}_base", is_required=True)["type"]
             p["EXTENDS"] = base_type
             self.base_class[class_name] = base_type
-            if base_type not in self.class_info:
+            # Only add base_type to class_info if it's not a built-in type (str, int, etc.)
+            # Built-in types shouldn't have class definitions generated
+            builtin_types = {"str", "int", "float", "bool", "None", "Any", "object"}
+            if base_type not in self.class_info and base_type not in builtin_types:
                 self.class_info[base_type] = {"properties": {}}
 
         p["CLASS_NAME"] = class_name
@@ -877,17 +923,23 @@ class CodeGenerator:
             p["BASE_PROPERTIES"] = dict()
 
             bc = self.base_class[class_name]
+            # Built-in types (str, int, etc.) don't need to be in class_info
+            # This happens when enums extend built-in types
+            builtin_types = {"str", "int", "float", "bool", "None", "Any", "object"}
             if bc not in self.class_info:
-                raise Exception(f"Base class {bc} not found for class {class_name}")
-            p_base = self.class_info.get(bc)
+                if bc in builtin_types:
+                    # For built-in types, just use empty properties
+                    p_base = {"properties": {}}
+                else:
+                    raise Exception(f"Base class {bc} not found for class {class_name}")
+            else:
+                p_base = self.class_info.get(bc)
             constructor_properties = dict()
             for property, property_info in p_base["properties"].items():  # type: ignore
                 # For base class properties, we need to check if they're required in the base class
                 base_required = p_base.get("required", [])  # type: ignore
                 is_property_required = property in base_required
-                TYPE = self.translate_type(
-                    property_info, property, is_required=is_property_required
-                )
+                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
@@ -907,9 +959,7 @@ class CodeGenerator:
                     continue
 
                 is_property_required = property in required_fields
-                TYPE = self.translate_type(
-                    property_info, property, is_required=is_property_required
-                )
+                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
@@ -928,32 +978,27 @@ class CodeGenerator:
 
             for property, property_info in properties.items():
                 is_property_required = property in required_fields
-                TYPE = self.translate_type(
-                    property_info, property, is_required=is_property_required
-                )
+                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
                 if "TYPE" not in property_info:
                     property_info["TYPE"] = {}
                 property_info["TYPE"].update(TYPE)
 
         if "enum" in p:
-            p["enum"] = {k.upper(): k for k in p["enum"]}
+            # If enum is already a dict, use it as-is (allows custom member names via x-enum-members)
+            # Otherwise, convert array to dict with uppercase keys
+            if isinstance(p["enum"], dict):
+                p["enum"] = p["enum"]
+            else:
+                p["enum"] = {k.upper(): k for k in p["enum"]}
         else:
             p["enum"] = {}
 
         if "properties" in p:
-            p["properties"] = {
-                k: v
-                for k, v in p["properties"].items()
-                if k not in self.config.global_ignore_fields
-            }
+            p["properties"] = {k: v for k, v in p["properties"].items() if k not in self.config.global_ignore_fields}
         else:
             p["properties"] = {}
         if "constructor_properties" in p:
-            p["constructor_properties"] = {
-                k: v
-                for k, v in p["constructor_properties"].items()
-                if k not in self.config.global_ignore_fields
-            }
+            p["constructor_properties"] = {k: v for k, v in p["constructor_properties"].items() if k not in self.config.global_ignore_fields}
 
         # Generate validation code if enabled
         if self.config.add_validation and self.validator:
@@ -981,9 +1026,7 @@ class CodeGenerator:
             field_type = field_info.get("TYPE", {}).get("type", "")
 
             # Generate validation for this field
-            field_validations = self.validator.generate_field_validation(
-                field_name, field_info, field_type, is_required
-            )
+            field_validations = self.validator.generate_field_validation(field_name, field_info, field_type, is_required)
 
             # Check if we need 're' import for pattern validation
             if self.validator.needs_re_import(field_info):
@@ -1004,9 +1047,7 @@ class CodeGenerator:
         # Return the class name as the type
         result = {"type": inline_class_name}
         if "default" in type_info:
-            result["init"] = self.format_field_with_metadata(
-                type_info["default"], inline_class_name
-            )
+            result["init"] = self.format_field_with_metadata(type_info["default"], inline_class_name)
         elif not is_required:
             return self.optional_type(inline_class_name)
         return result
@@ -1014,11 +1055,7 @@ class CodeGenerator:
     def _generate_inline_class_name(self, field_name):
         """Generate a meaningful class name for an inline object based on the field name and parent context"""
         # Use the pre-determined unique name from the analysis phase only if there are collisions
-        if (
-            hasattr(self, "inline_class_name_mapping")
-            and hasattr(self, "_current_parent_context")
-            and len(self.inline_class_name_mapping) > 0
-        ):
+        if hasattr(self, "inline_class_name_mapping") and hasattr(self, "_current_parent_context") and len(self.inline_class_name_mapping) > 0:
             key = (self._current_parent_context, field_name)
             if key in self.inline_class_name_mapping:
                 return self.inline_class_name_mapping[key]
@@ -1082,9 +1119,7 @@ class CodeGenerator:
                                 # Array of inline objects
                                 base_name = self._to_pascal_case(field_name)
                                 unique_name = self._get_unique_class_name(base_name, parent_context)
-                                self.inline_class_name_mapping[(parent_context, field_name)] = (
-                                    unique_name
-                                )
+                                self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
 
                                 # Recursively process nested inline objects
                                 self._collect_inline_class_names(items_info, unique_name)
@@ -1105,6 +1140,11 @@ class CodeGenerator:
         self.class_info = {}
 
         definitions = self.schema.get("definitions") or self.schema.get("$defs")
+
+        # Default to using definitions order if no explicit order is provided
+        if not self.config.order_classes and definitions:
+            self.config.order_classes = list(definitions.keys())
+
         has_top_level_properties = "properties" in self.schema
 
         # Allow schemas with either definitions OR top-level properties
@@ -1165,9 +1205,7 @@ class CodeGenerator:
                     for property_name, property_info in class_info["properties"].items():
                         if property_name not in self.config.global_ignore_fields:
                             is_property_required = property_name in required_fields
-                            self.translate_type(
-                                property_info, property_name, is_required=is_property_required
-                            )
+                            self.translate_type(property_info, property_name, is_required=is_property_required)
                     processed_classes.add(class_name)
                     new_classes_found = True
             if not new_classes_found:
