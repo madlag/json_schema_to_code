@@ -13,6 +13,28 @@ from .validator import ValidationGenerator
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
 
 
+def snake_to_pascal_case(text: str) -> str:
+    """Convert snake_case or space-separated text to PascalCase.
+
+    Examples:
+        "first_name" -> "FirstName"
+        "FIRST_NAME" -> "FirstName"
+        "first 3 rows" -> "First3Rows"
+        "ABC" -> "Abc"
+        "Full" -> "Full"
+
+    Args:
+        text: The text to convert (snake_case, UPPER_SNAKE_CASE, or space-separated)
+
+    Returns:
+        PascalCase string
+    """
+    if not text:
+        return ""
+    # Split on underscores or spaces, capitalize each word, and join
+    return "".join(word.capitalize() for word in text.replace("_", " ").split())
+
+
 class ImportType(Enum):
     """Abstract import types that map to language-specific imports"""
 
@@ -53,6 +75,87 @@ class CodeGeneratorConfig:
 
 
 class CodeGenerator:
+    # C# reserved keywords that need escaping
+    CS_RESERVED_KEYWORDS = {
+        "abstract",
+        "as",
+        "base",
+        "bool",
+        "break",
+        "byte",
+        "case",
+        "catch",
+        "char",
+        "checked",
+        "class",
+        "const",
+        "continue",
+        "decimal",
+        "default",
+        "delegate",
+        "do",
+        "double",
+        "else",
+        "enum",
+        "event",
+        "explicit",
+        "extern",
+        "false",
+        "finally",
+        "fixed",
+        "float",
+        "for",
+        "foreach",
+        "goto",
+        "if",
+        "implicit",
+        "in",
+        "int",
+        "interface",
+        "internal",
+        "is",
+        "lock",
+        "long",
+        "namespace",
+        "new",
+        "null",
+        "object",
+        "operator",
+        "out",
+        "override",
+        "params",
+        "private",
+        "protected",
+        "public",
+        "readonly",
+        "ref",
+        "return",
+        "sbyte",
+        "sealed",
+        "short",
+        "sizeof",
+        "stackalloc",
+        "static",
+        "string",
+        "struct",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "uint",
+        "ulong",
+        "unchecked",
+        "unsafe",
+        "ushort",
+        "using",
+        "virtual",
+        "void",
+        "volatile",
+        "while",
+    }
+
     # Language-specific import mappings
     # None means the feature exists but requires no import
     PYTHON_IMPORT_MAP = {
@@ -99,10 +202,12 @@ class CodeGenerator:
 
     def __init__(self, class_name: str, schema: Dict[str, Any], config: CodeGeneratorConfig, language: str):
         self.class_name = class_name
-        # Preprocess schema to handle x-enum-members extension
-        self.schema = self._preprocess_schema_for_enum_members(schema)
         self.config = config
         self.language = language
+        # Preprocess schema to handle enum member names (x-enum-members or auto-generate for C#)
+        self.schema = self._preprocess_schema_for_enum_members(schema)
+        # Build ref_class_name_mapping from x-ref-class-name annotations
+        self.ref_class_name_mapping = self._build_ref_class_name_mapping(self.schema)
         self.jinja_env = jinja2.Environment(lstrip_blocks=True, trim_blocks=True)
         language_to_extension = {"cs": "cs", "python": "py"}
         extension = language_to_extension[language]
@@ -411,7 +516,7 @@ class CodeGenerator:
                 else:
                     # Generate and return type alias like "IntOrStr"
                     unquoted_for_alias = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in sorted_types]
-                    capitalized_types = [t.capitalize() for t in unquoted_for_alias]
+                    capitalized_types = [snake_to_pascal_case(t) for t in unquoted_for_alias]
                     type_alias_name = "Or".join(capitalized_types)
 
                     # Generate the type alias definition
@@ -420,6 +525,16 @@ class CodeGenerator:
 
                     return type_alias_name
             case "cs":
+                # Special case: T | null unions should be converted to nullable types T?
+                null_type = self.type_map["null"]  # "null" for C#
+                if len(sorted_types) == 2 and null_type in sorted_types:
+                    # Extract the non-null type
+                    non_null_types = [t for t in sorted_types if t != null_type]
+                    if len(non_null_types) == 1:
+                        # This is a T | null union, convert to nullable type T?
+                        base_type = non_null_types[0]
+                        return self.optional_type(base_type)["type"]
+
                 if self.config.use_inline_unions:
                     # C# doesn't support inline unions, use object as fallback
                     union_types_str = " | ".join(sorted_types)
@@ -443,7 +558,7 @@ class CodeGenerator:
                     )
                 else:
                     # Generate type alias for C# (even though it's still object, keep the naming)
-                    capitalized_types = [t.capitalize() for t in sorted_types]
+                    capitalized_types = [snake_to_pascal_case(t) for t in sorted_types]
                     type_alias_name = "Or".join(capitalized_types)
 
                     # For C#, type aliases still resolve to object but keep the naming
@@ -498,18 +613,115 @@ class CodeGenerator:
             return f'"{type}"'
         return type
 
+    def _find_definition(self, name: str) -> tuple[str, dict] | None:
+        """Find a definition by name, handling PascalCase mapping.
+
+        Returns:
+            Tuple of (original_name, definition_dict) or None if not found
+        """
+        definitions = self.schema.get("definitions") or self.schema.get("$defs")
+        if not definitions:
+            return None
+
+        # Try original name first
+        if name in definitions:
+            return (name, definitions[name])
+
+        # Try PascalCase name
+        if hasattr(self, "definition_name_mapping"):
+            # Reverse lookup: find original name from PascalCase name
+            for orig_name, pascal_name in self.definition_name_mapping.items():
+                if pascal_name == name and orig_name in definitions:
+                    return (orig_name, definitions[orig_name])
+
+        return None
+
+    def _is_csharp_enum(self, def_info: dict) -> bool:
+        """Check if a definition will be generated as a C# enum.
+
+        A definition becomes a C# enum if:
+        1. It has x-enum-members (custom member names), OR
+        2. It has enum as a dict (preprocessed from x-enum-members) and type is "string"
+        """
+        if "x-enum-members" in def_info:
+            return True
+        enum_val = def_info.get("enum")
+        return isinstance(enum_val, dict) and def_info.get("type") == "string"
+
+    def _get_enum_type_name(self, enum_values: list) -> str:
+        """Determine the type name for enum values.
+
+        Raises:
+            Exception: If enum values have mixed types
+        """
+        type_names = {type(e).__name__ for e in enum_values}
+        if len(type_names) > 1:
+            raise Exception("Enums with different types are not supported")
+
+        type_name = type_names.pop()
+        type_mapping = {"str": "string", "int": "integer", "float": "float"}
+        return type_mapping.get(type_name, type_name)
+
+    def _generate_enum_comment(self, enum_values: list) -> str:
+        """Generate a comment listing allowed enum values."""
+        comment_prefix = self._get_comment_prefix()
+        values_str = ", ".join([f'"{e}"' for e in enum_values])
+        return f"  {comment_prefix} Allowed values: {values_str}"
+
+    def _handle_enum_type(self, type_info: dict) -> dict:
+        """Handle enum type in translate_type."""
+        enum_values = type_info["enum"]
+        if isinstance(enum_values, dict):
+            # Already preprocessed - get values from dict
+            enum_values = list(enum_values.values())
+
+        type_name = self._get_enum_type_name(enum_values)
+
+        # For C# string enums, use string type directly (don't create a class)
+        if self.language == "cs" and type_name == "string":
+            return {"type": "string", "comment": self._generate_enum_comment(enum_values)}
+
+        Warning(f"We should have information about what values are allowed for enum {type_name}")
+        return {"type": self.type_map[type_name], "comment": self._generate_enum_comment(enum_values)}
+
     def ref_type(self, ref: str) -> str:
+        """Resolve a $ref to its class name.
+
+        PRIORITY: Always use the $def key name from definition_name_mapping.
+        Never use inline class names or field-name-based naming for $ref items.
+        """
         type_name = ref.split("/")[-1]
 
         # Check for x-ref-class-name mapping in schema (for external $ref)
-        # This allows mapping schema definition names to Python class names
-        # e.g., "Action" -> "UIAction" when referenced from external schema
-        if hasattr(self, "ref_class_name_mapping") and type_name in self.ref_class_name_mapping:
-            type_name = self.ref_class_name_mapping[type_name]
+        if hasattr(self, "ref_class_name_mapping"):
+            if type_name in self.ref_class_name_mapping:
+                type_name = self.ref_class_name_mapping[type_name]
+            elif type_name.endswith(".json") and type_name[:-5] in self.ref_class_name_mapping:
+                type_name = self.ref_class_name_mapping[type_name[:-5]]
 
-        # Convert to PascalCase if this is a definition reference
+        # PRIORITY: Convert to PascalCase using definition_name_mapping (the $def key name)
+        # This ensures $def keys are always used, never field-name-based names
+        original_type_name = type_name
         if hasattr(self, "definition_name_mapping") and type_name in self.definition_name_mapping:
             type_name = self.definition_name_mapping[type_name]
+            # $def name found - use it and continue processing (enums, quoting, etc.)
+        else:
+            # Not a $def reference - might be external $ref or enum
+            # Still process it but don't use inline class names
+            pass
+
+        # For C#, check if this is a string enum
+        if self.language == "cs":
+            def_result = self._find_definition(original_type_name)
+            if def_result:
+                _, def_info = def_result
+                if isinstance(def_info, dict):
+                    if self._is_csharp_enum(def_info):
+                        # Return the enum class name (PascalCase version)
+                        return type_name
+                    # String enum without x-enum-members -> use "string" type
+                    if def_info.get("type") == "string" and "enum" in def_info:
+                        return "string"
 
         # For Python, quote types that are in the quoted_types_for_python list
         type_name = self.quote_type(type_name)
@@ -632,6 +844,8 @@ class CodeGenerator:
             is_required: Whether this property is required (affects nullability)
         """
         if "$ref" in type_info:
+            # Always use $def name for $ref items - never use inline class names
+            # This ensures $def keys are prioritized over any field-name-based naming
             type = self.ref_type(type_info["$ref"])
 
             # Handle defaults and optional fields for $ref types
@@ -645,7 +859,32 @@ class CodeGenerator:
                     result["init"] = f"field(default_factory=lambda: {clean_type}())"
                 else:
                     # If there's an explicit non-null default value, use it
-                    result["init"] = self.format_field_with_metadata(type_info["default"], type)
+                    # For C# enums, convert string defaults to enum values
+                    default_value = type_info["default"]
+                    if self.language == "cs" and isinstance(default_value, str):
+                        type_name = type.strip('"')
+                        ref_name = type_info["$ref"].split("/")[-1]
+                        def_result = self._find_definition(ref_name)
+                        if def_result:
+                            _, def_info = def_result
+                            if self._is_csharp_enum(def_info):
+                                # Find the enum member name for this JSON value
+                                enum_dict = def_info.get("enum")
+                                if isinstance(enum_dict, dict):
+                                    # Preprocessed enum dict: {member_name: json_value}
+                                    for member_name, json_value in enum_dict.items():
+                                        if json_value == default_value:
+                                            result["init"] = f"{type_name}.{member_name}"
+                                            return result
+                                elif "x-enum-members" in def_info:
+                                    # Not yet preprocessed: {json_value: member_name}
+                                    enum_members = def_info["x-enum-members"]
+                                    member_name = enum_members.get(default_value)
+                                    if member_name:
+                                        result["init"] = f"{type_name}.{member_name}"
+                                        return result
+
+                    result["init"] = self.format_field_with_metadata(default_value, type)
             elif not is_required:
                 # For optional $ref fields, use field(default_factory=lambda: ClassName())
                 # This allows the field to be omitted and auto-initialized
@@ -755,20 +994,7 @@ class CodeGenerator:
         elif "const" in type_info:
             return self.const_type(type_info)
         elif "enum" in type_info:
-            # TODO deduplicate code handling enums here and lower
-            class_name = None
-            for e in type_info["enum"]:
-                c = e.__class__.__name__
-                if class_name is None or c == class_name:
-                    class_name = c
-                else:
-                    raise Exception("Enums with different types are not supported")
-            mapping = {"str": "string", "int": "integer", "float": "float"}
-            class_name = mapping.get(class_name, class_name)  # type: ignore
-            Warning(f"We should have information about what values are allowed for enum {class_name}")
-            comment_prefix = self._get_comment_prefix()
-            comment = f"  {comment_prefix} Allowed values: " + ", ".join([f'"{e}"' for e in type_info["enum"]])
-            return {"type": self.type_map[class_name], "comment": comment}
+            return self._handle_enum_type(type_info)
         elif "oneOf" in type_info or "anyOf" in type_info:
             union_key = "oneOf" if "oneOf" in type_info else "anyOf"
             return self._handle_union_type_with_defaults(type_info, union_key, field_name, is_required)
@@ -790,12 +1016,33 @@ class CodeGenerator:
                 return properties["type"]["const"]
         return class_name
 
-    def _preprocess_schema_for_enum_members(self, schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Preprocess schema to transform enum arrays with x-enum-members into dicts.
+    def _to_csharp_enum_member_name(self, name: str) -> str:
+        """Convert a name to PascalCase C# enum member name.
 
-        If a schema definition has both "enum" (array) and "x-enum-members" (dict mapping
-        values to member names), transform the enum into a dict that will be used to generate
-        enum classes with custom member names.
+        Examples:
+            "FULL" -> "Full"
+            "FIRST_3_ROWS" -> "First3Rows"
+            "NORMAL" -> "Normal"
+            "Full" -> "Full" (already PascalCase)
+
+        Args:
+            name: The name to convert (from x-enum-members or enum value)
+
+        Returns:
+            PascalCase C# identifier
+        """
+        if not name:
+            return "Value"
+        return snake_to_pascal_case(name)
+
+    def _preprocess_schema_for_enum_members(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Preprocess schema to transform enum arrays into dicts with PascalCase member names.
+
+        For C#: If a schema definition has "enum" (array), transform it into a dict mapping
+        PascalCase member names to JSON values. If x-enum-members is present, use those
+        names; otherwise, auto-generate PascalCase names from the enum values.
+
+        For Python: Only transform if x-enum-members is present (keep original behavior).
 
         Args:
             schema: The JSON schema dict
@@ -804,32 +1051,88 @@ class CodeGenerator:
             Preprocessed schema with enum transformations applied
         """
 
+        def process_value(value: Any) -> Any:
+            """Recursively process values in the schema."""
+            if isinstance(value, dict):
+                return process_dict(value)
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            else:
+                return value
+
         def process_dict(obj: Dict[str, Any]) -> Dict[str, Any]:
             """Recursively process dicts in the schema."""
-            # Check if this dict has enum + x-enum-members
-            if "enum" in obj and isinstance(obj["enum"], list) and "x-enum-members" in obj:
-                enum_array = obj["enum"]
-                enum_members = obj["x-enum-members"]
+            result = {}
+            for key, value in obj.items():
+                # Check if this dict has enum array
+                if key == "enum" and isinstance(value, list):
+                    enum_array = value
+                    enum_dict = {}
 
-                # Transform enum array into dict: {member_name: value}
-                enum_dict = {}
-                for enum_value in enum_array:
-                    member_name = enum_members.get(enum_value, enum_value)
-                    enum_dict[member_name] = enum_value
+                    if "x-enum-members" in obj:
+                        # Use x-enum-members values, convert to PascalCase for C#
+                        enum_members = obj["x-enum-members"]
+                        for enum_value in enum_array:
+                            member_name = enum_members.get(enum_value, str(enum_value))
+                            if self.language == "cs":
+                                member_name = self._to_csharp_enum_member_name(member_name)
+                            enum_dict[member_name] = enum_value
+                    elif self.language == "cs":
+                        # For C# without x-enum-members, auto-generate PascalCase from enum values
+                        for enum_value in enum_array:
+                            member_name = self._to_csharp_enum_member_name(str(enum_value))
+                            enum_dict[member_name] = enum_value
+                    else:
+                        # For Python and other languages, keep enum as array
+                        result[key] = value
+                        continue
 
-                # Replace enum array with dict and remove x-enum-members
-                result = obj.copy()
-                result["enum"] = enum_dict
-                result.pop("x-enum-members", None)
-                # Continue processing recursively
-                return {
-                    k: process_dict(v) if isinstance(v, dict) else ([process_dict(item) if isinstance(item, dict) else item for item in v] if isinstance(v, list) else v) for k, v in result.items()
-                }
-
-            # Otherwise process normally
-            return {k: process_dict(v) if isinstance(v, dict) else ([process_dict(item) if isinstance(item, dict) else item for item in v] if isinstance(v, list) else v) for k, v in obj.items()}
+                    result[key] = enum_dict
+                elif key == "x-enum-members":
+                    # Remove x-enum-members after processing enum (if we used it)
+                    # Only remove if enum was also present and processed
+                    if "enum" not in obj or not isinstance(obj["enum"], list):
+                        result[key] = process_value(value)
+                    # Otherwise, skip it (already processed with enum)
+                else:
+                    result[key] = process_value(value)
+            return result
 
         return process_dict(schema)
+
+    def _build_ref_class_name_mapping(self, schema: Dict[str, Any]) -> Dict[str, str]:
+        """Build mapping from $ref type names to class names using x-ref-class-name annotations.
+
+        Recursively searches the schema for properties with $ref and x-ref-class-name,
+        and builds a mapping from the $ref filename/type to the class name.
+        """
+        mapping = {}
+
+        def process_dict(obj: Dict[str, Any]) -> None:
+            """Recursively process dicts to find x-ref-class-name annotations."""
+            if isinstance(obj, dict):
+                # Check if this is a property with $ref and x-ref-class-name
+                if "$ref" in obj and "x-ref-class-name" in obj:
+                    ref_path = obj["$ref"]
+                    # Extract the type name from the $ref (last part of path)
+                    type_name = ref_path.split("/")[-1]
+                    # Remove .json extension if present
+                    if type_name.endswith(".json"):
+                        type_name = type_name[:-5]
+                    class_name = obj["x-ref-class-name"]
+                    mapping[type_name] = class_name
+
+                # Recursively process all values
+                for value in obj.values():
+                    if isinstance(value, dict):
+                        process_dict(value)
+                    elif isinstance(value, list):
+                        for item in value:
+                            if isinstance(item, dict):
+                                process_dict(item)
+
+        process_dict(schema)
+        return mapping
 
     def preprocess(self, class_name, info):
         p = copy.deepcopy(info)
@@ -850,6 +1153,65 @@ class CodeGenerator:
         except Exception as e:
             raise Exception(f"Error processing class '{class_name}': {str(e)}") from e
 
+    def _is_builtin_type(self, type_name: str) -> bool:
+        """Check if a type is a built-in language type."""
+        builtin_types = {"str", "int", "float", "bool", "None", "Any", "object", "string"}
+        return type_name in builtin_types
+
+    def _handle_oneof_type_alias(self, class_name: str, p: dict) -> dict | None:
+        """Handle oneOf with multiple $ref - create type alias instead of class."""
+        if "oneOf" not in p:
+            return p
+        if not all("$ref" in item for item in p["oneOf"]) or len(p["oneOf"]) <= 1:
+            return p
+
+        union_types = [self.ref_type(item["$ref"]) for item in p["oneOf"]]
+
+        if self.config.use_inline_unions:
+            union_string = " | ".join(sorted(union_types))
+            # Handle quoted types
+            if any(t.startswith('"') and t.endswith('"') for t in union_types):
+                unquoted = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
+                union_string = f'"{ " | ".join(sorted(unquoted)) }"'
+            self.type_aliases.add(f"{class_name} = {union_string}")
+        else:
+            union_type_name = self.union_type(union_types)
+            # Replace auto-generated alias name with class name
+            for alias in list(self.type_aliases):
+                if alias.startswith(union_type_name + " ="):
+                    self.type_aliases.remove(alias)
+                    union_string = alias.split(" = ", 1)[1]
+                    self.type_aliases.add(f"{class_name} = {union_string}")
+                    break
+
+        return None  # Mark as type alias, skip class generation
+
+    def _handle_base_type_or_enum(self, class_name: str, p: dict) -> dict | None:
+        """Handle anyOf/oneOf or non-object types, including C# enum detection."""
+        has_union = "anyOf" in p or "oneOf" in p
+        is_non_object = "type" in p and p["type"] != "object"
+
+        if not (has_union or is_non_object):
+            return p
+
+        base_type = self.translate_type(p, f"{class_name}_base", is_required=True)["type"]
+
+        # For C# string enums, check if we should generate as enum
+        if self.language == "cs" and "enum" in p and base_type == "string":
+            if isinstance(p.get("enum"), dict) and len(p["enum"]) > 0:
+                p["ENUM"] = True
+                return p
+            return None  # Skip class generation, use string type
+
+        # Not an enum - set EXTENDS normally
+        p["EXTENDS"] = base_type
+        self.base_class[class_name] = base_type
+
+        if base_type not in self.class_info and not self._is_builtin_type(base_type):
+            self.class_info[base_type] = {"properties": {}}
+
+        return p
+
     def _prepare_class_info(self, class_name, info):
         # Set the current parent context for inline object naming
         self._current_parent_context = class_name
@@ -861,52 +1223,14 @@ class CodeGenerator:
             p["EXTENDS"] = extends
 
         # Check if this is a oneOf with multiple $ref - create type alias instead of class
-        if "oneOf" in p and all("$ref" in item for item in p["oneOf"]) and len(p["oneOf"]) > 1:
-            # This should be a type alias, not a class - skip class generation
-            union_types = [self.ref_type(item["$ref"]) for item in p["oneOf"]]
-
-            if self.config.use_inline_unions:
-                # Create explicit type alias even with inline unions enabled
-                union_string = " | ".join(sorted(union_types))
-                # Handle quoted types properly
-                has_quoted_types = any(t.startswith('"') and t.endswith('"') for t in union_types)
-                if has_quoted_types:
-                    unquoted_types = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
-                    union_string = " | ".join(sorted(unquoted_types))
-                    union_string = f'"{union_string}"'
-
-                type_alias_def = f"{class_name} = {union_string}"
-                self.type_aliases.add(type_alias_def)
-            else:
-                # Use the existing union_type method which will create the alias
-                union_type_name = self.union_type(union_types)
-                # Override the generated name with our class name
-                old_alias = None
-                for alias in self.type_aliases:
-                    if alias.startswith(union_type_name + " ="):
-                        old_alias = alias
-                        break
-                if old_alias:
-                    self.type_aliases.remove(old_alias)
-                    # Create new alias with the class name
-                    union_string = old_alias.split(" = ", 1)[1]
-                    type_alias_def = f"{class_name} = {union_string}"
-                    self.type_aliases.add(type_alias_def)
-
-            # Mark this as a type alias so it won't generate a class
+        p = self._handle_oneof_type_alias(class_name, p)
+        if p is None:
             return None
 
-        if ("anyOf" in p or "oneOf" in p) or ("type" in p and p["type"] != "object"):
-            # Handle anyOf/oneOf at class level or non-object types - treat as union/base type
-            # Skip if this is an enum (enums extend their base type but don't need a class_info entry)
-            base_type = self.translate_type(p, f"{class_name}_base", is_required=True)["type"]
-            p["EXTENDS"] = base_type
-            self.base_class[class_name] = base_type
-            # Only add base_type to class_info if it's not a built-in type (str, int, etc.)
-            # Built-in types shouldn't have class definitions generated
-            builtin_types = {"str", "int", "float", "bool", "None", "Any", "object"}
-            if base_type not in self.class_info and base_type not in builtin_types:
-                self.class_info[base_type] = {"properties": {}}
+        # Handle anyOf/oneOf at class level or non-object types
+        p = self._handle_base_type_or_enum(class_name, p)
+        if p is None:
+            return None
 
         p["CLASS_NAME"] = class_name
         p["SUB_CLASSES"] = self.subclasses.get(class_name, [])
@@ -919,77 +1243,30 @@ class CodeGenerator:
 
         properties = p.get("properties", {})
 
+        # Handle x-csharp-implements annotation for C# interface implementation
+        self._setup_csharp_interface_properties(p, properties)
+
+        # Process properties (with or without inheritance)
         if p.get("EXTENDS") is not None:
-            p["BASE_PROPERTIES"] = dict()
-
-            bc = self.base_class[class_name]
-            # Built-in types (str, int, etc.) don't need to be in class_info
-            # This happens when enums extend built-in types
-            builtin_types = {"str", "int", "float", "bool", "None", "Any", "object"}
-            if bc not in self.class_info:
-                if bc in builtin_types:
-                    # For built-in types, just use empty properties
-                    p_base = {"properties": {}}
-                else:
-                    raise Exception(f"Base class {bc} not found for class {class_name}")
-            else:
-                p_base = self.class_info.get(bc)
-            constructor_properties = dict()
-            for property, property_info in p_base["properties"].items():  # type: ignore
-                # For base class properties, we need to check if they're required in the base class
-                base_required = p_base.get("required", [])  # type: ignore
-                is_property_required = property in base_required
-                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
-                if "TYPE" not in property_info:
-                    property_info["TYPE"] = {}
-                property_info["TYPE"].update(TYPE)
-                child_property_info = p.get("properties", {}).get(property)
-                if child_property_info is not None and "const" in child_property_info:
-                    const = '"' + child_property_info["const"] + '"'
-                    p["BASE_PROPERTIES"][const] = property_info
-                else:
-                    constructor_properties[property] = property_info
-                    p["BASE_PROPERTIES"][property] = property_info
-
-            new_properties = dict()
-            required_fields = p.get("required", [])
-            for property, property_info in properties.items():
-                override_base_property = property in p_base["properties"]  # type: ignore
-                if override_base_property and self.config.ignoreSubClassOverrides:
-                    continue
-
-                is_property_required = property in required_fields
-                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
-                if "TYPE" not in property_info:
-                    property_info["TYPE"] = {}
-                property_info["TYPE"].update(TYPE)
-                type_modifier = "new " if override_base_property else ""
-                property_info["TYPE"]["modifier"] = type_modifier
-
-                if "type" in TYPE:
-                    constructor_properties[property] = property_info
-                    new_properties[property] = property_info
-
-            p["properties"] = new_properties
-            p["constructor_properties"] = constructor_properties
+            constructor_properties = self._process_base_properties(class_name, p)
+            p_base = self._get_base_class_info(class_name)
+            constructor_properties.update(self._process_class_properties(p, properties, p_base))
+            # Filter out const fields from constructor_properties
+            p["constructor_properties"] = {k: v for k, v in constructor_properties.items() if not (v.get("TYPE", {}).get("modifier") == "const")}
         else:
             p["constructor_properties"] = properties
-            required_fields = p.get("required", [])
+            self._process_class_properties(p, properties)
 
-            for property, property_info in properties.items():
-                is_property_required = property in required_fields
-                TYPE = self.translate_type(property_info, property, is_required=is_property_required)
-                if "TYPE" not in property_info:
-                    property_info["TYPE"] = {}
-                property_info["TYPE"].update(TYPE)
-
+        # Normalize enum format (for Python, enums may still be arrays)
         if "enum" in p:
-            # If enum is already a dict, use it as-is (allows custom member names via x-enum-members)
-            # Otherwise, convert array to dict with uppercase keys
-            if isinstance(p["enum"], dict):
-                p["enum"] = p["enum"]
-            else:
-                p["enum"] = {k.upper(): k for k in p["enum"]}
+            if not isinstance(p["enum"], dict):
+                # For Python, convert to uppercase keys; for C#, should already be dict from preprocessing
+                if self.language == "python":
+                    p["enum"] = {k.upper(): k for k in p["enum"]}
+                else:
+                    # For C#, enums should have been preprocessed to dicts
+                    # If not, auto-generate PascalCase names
+                    p["enum"] = {self._to_csharp_enum_member_name(str(k)): k for k in p["enum"]}
         else:
             p["enum"] = {}
 
@@ -997,8 +1274,15 @@ class CodeGenerator:
             p["properties"] = {k: v for k, v in p["properties"].items() if k not in self.config.global_ignore_fields}
         else:
             p["properties"] = {}
+
+        # Escape C# reserved keywords and mark interface properties
+        if self.language == "cs":
+            self._escape_csharp_property_names(p)
+            self._mark_interface_properties(p)
+
         if "constructor_properties" in p:
-            p["constructor_properties"] = {k: v for k, v in p["constructor_properties"].items() if k not in self.config.global_ignore_fields}
+            # Filter out const fields and ignored fields from constructor_properties
+            p["constructor_properties"] = {k: v for k, v in p["constructor_properties"].items() if k not in self.config.global_ignore_fields and not (v.get("TYPE", {}).get("modifier") == "const")}
 
         # Generate validation code if enabled
         if self.config.add_validation and self.validator:
@@ -1006,6 +1290,109 @@ class CodeGenerator:
             p["validation_code"] = validation_code
 
         return p
+
+    def _process_property_type(self, property_info: dict, property_name: str, is_required: bool) -> dict:
+        """Process a single property's type information."""
+        TYPE = self.translate_type(property_info, property_name, is_required=is_required)
+        if "TYPE" not in property_info:
+            property_info["TYPE"] = {}
+        property_info["TYPE"].update(TYPE)
+        return TYPE
+
+    def _get_base_class_info(self, class_name: str) -> dict:
+        """Get base class info, handling built-in types."""
+        bc = self.base_class[class_name]
+        if bc not in self.class_info:
+            if self._is_builtin_type(bc):
+                return {"properties": {}}
+            raise Exception(f"Base class {bc} not found for class {class_name}")
+        result = self.class_info.get(bc)
+        if result is None:
+            raise Exception(f"Base class {bc} info is None for class {class_name}")
+        return result
+
+    def _process_base_properties(self, class_name: str, p: dict) -> dict:
+        """Process properties from base class."""
+        p["BASE_PROPERTIES"] = {}
+        p_base = self._get_base_class_info(class_name)
+        base_required = p_base.get("required", [])
+        constructor_properties = {}
+
+        for property, property_info in p_base["properties"].items():
+            is_required = property in base_required
+            self._process_property_type(property_info, property, is_required)
+
+            child_property_info = p.get("properties", {}).get(property)
+            if child_property_info is not None and "const" in child_property_info:
+                p["BASE_PROPERTIES"][f'"{child_property_info["const"]}"'] = property_info
+            else:
+                constructor_properties[property] = property_info
+                p["BASE_PROPERTIES"][property] = property_info
+
+        return constructor_properties
+
+    def _setup_csharp_interface_properties(self, p: dict, properties: dict) -> None:
+        """Setup C# interface properties from x-csharp-implements annotation."""
+        if self.language == "cs" and "x-csharp-implements" in p:
+            p["IMPLEMENTS"] = p["x-csharp-implements"]
+            p["INTERFACE_PROPERTIES"] = {}
+            if "x-csharp-properties" in p:
+                interface_props = p["x-csharp-properties"]
+                if isinstance(interface_props, dict):
+                    for interface_prop_name, field_name in interface_props.items():
+                        if field_name in properties:
+                            p["INTERFACE_PROPERTIES"][interface_prop_name] = field_name
+        else:
+            p["IMPLEMENTS"] = None
+            p["INTERFACE_PROPERTIES"] = {}
+
+    def _escape_csharp_property_names(self, p: dict) -> None:
+        """Escape C# reserved keywords in property names."""
+        for property_name, property_info in p["properties"].items():
+            escaped_name = self._escape_csharp_keyword(property_name)
+            if escaped_name != property_name:
+                property_info["ESCAPED_PROPERTY_NAME"] = escaped_name
+
+        if "constructor_properties" in p:
+            for property_name, property_info in p["constructor_properties"].items():
+                if "ESCAPED_PROPERTY_NAME" not in property_info:
+                    escaped_name = self._escape_csharp_keyword(property_name)
+                    if escaped_name != property_name:
+                        property_info["ESCAPED_PROPERTY_NAME"] = escaped_name
+
+    def _mark_interface_properties(self, p: dict) -> None:
+        """Mark properties that implement C# interface properties."""
+        if not p.get("INTERFACE_PROPERTIES"):
+            return
+
+        for prop_name, field_name in p["INTERFACE_PROPERTIES"].items():
+            if field_name in p["properties"]:
+                p["properties"][field_name]["IS_INTERFACE_PROPERTY"] = True
+                p["properties"][field_name]["INTERFACE_PROPERTY_NAME"] = prop_name
+
+    def _process_class_properties(self, p: dict, properties: dict, p_base: dict | None = None) -> dict:
+        """Process properties for a class, handling inheritance if needed."""
+        required_fields = p.get("required", [])
+        constructor_properties = {}
+        new_properties = {}
+
+        for property, property_info in properties.items():
+            if p_base and property in p_base["properties"]:
+                if self.config.ignoreSubClassOverrides:
+                    continue
+                if "TYPE" not in property_info:
+                    property_info["TYPE"] = {}
+                property_info["TYPE"]["modifier"] = "new "
+
+            is_required = property in required_fields
+            TYPE = self._process_property_type(property_info, property, is_required)
+
+            if "type" in TYPE:
+                constructor_properties[property] = property_info
+                new_properties[property] = property_info
+
+        p["properties"] = new_properties
+        return constructor_properties
 
     def _generate_validation_code(self, class_info: Dict[str, Any], class_name: str) -> list[str]:
         """Generate validation code for all fields in a class"""
@@ -1038,6 +1425,10 @@ class CodeGenerator:
 
     def _handle_inline_object(self, type_info, field_name, is_required=True):
         """Handle inline object definitions by generating nested classes"""
+        # Never treat $ref items as inline objects - they reference $defs
+        if "$ref" in type_info:
+            raise Exception(f"_handle_inline_object should not be called for $ref items. Field: {field_name}, $ref: {type_info['$ref']}")
+
         # Generate a unique class name for this inline object based on the field name and parent context
         inline_class_name = self._generate_inline_class_name(field_name)
 
@@ -1053,7 +1444,10 @@ class CodeGenerator:
         return result
 
     def _generate_inline_class_name(self, field_name):
-        """Generate a meaningful class name for an inline object based on the field name and parent context"""
+        """Generate a meaningful class name for an inline object based on the field name and parent context
+
+        NOTE: This should NEVER be called for $ref items - $ref items must use their $def name
+        """
         # Use the pre-determined unique name from the analysis phase only if there are collisions
         if hasattr(self, "inline_class_name_mapping") and hasattr(self, "_current_parent_context") and len(self.inline_class_name_mapping) > 0:
             key = (self._current_parent_context, field_name)
@@ -1071,12 +1465,24 @@ class CodeGenerator:
 
         # Check if text is already in PascalCase format (no separators, starts with uppercase)
         if text and text[0].isupper() and re.match(r"^[a-zA-Z0-9]+$", text):
-            return text
+            result = text
+        else:
+            # Split on camelCase boundaries and non-alphanumeric characters
+            # This handles cases like "buttonObject" -> ["button", "Object"]
+            words = re.findall(r"[a-z]+|[A-Z][a-z]*|[0-9]+", text)
+            result = "".join(snake_to_pascal_case(word) for word in words)
 
-        # Split on camelCase boundaries and non-alphanumeric characters
-        # This handles cases like "buttonObject" -> ["button", "Object"]
-        words = re.findall(r"[a-z]+|[A-Z][a-z]*|[0-9]+", text)
-        return "".join(word.capitalize() for word in words)
+        # For C#, check if the result is a reserved keyword and rename it
+        if self.language == "cs" and result.lower() in self.CS_RESERVED_KEYWORDS:
+            result = result + "Type"  # e.g., "object" -> "ObjectType", "string" -> "StringType"
+
+        return result
+
+    def _escape_csharp_keyword(self, name: str) -> str:
+        """Escape C# reserved keywords by prefixing with @"""
+        if self.language == "cs" and name.lower() in self.CS_RESERVED_KEYWORDS:
+            return f"@{name}"
+        return name
 
     def _analyze_name_collisions(self):
         """Phase 1: Analyze schema to detect name collisions and determine unique class names"""
@@ -1102,19 +1508,25 @@ class CodeGenerator:
         # Check if this is an object with properties (potential inline class)
         if "properties" in schema_part:
             for field_name, field_info in schema_part["properties"].items():
-                if isinstance(field_info, dict) and "type" in field_info:
-                    if field_info["type"] == "object" and "properties" in field_info:
-                        # This is an inline object
-                        base_name = self._to_pascal_case(field_name)
-                        unique_name = self._get_unique_class_name(base_name, parent_context)
-                        self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
+                if isinstance(field_info, dict):
+                    # NEVER create inline class names for $ref items - they use $def names
+                    if "$ref" in field_info:
+                        # Skip $ref items - they reference $defs, not inline objects
+                        continue
+                    if "type" in field_info:
+                        if field_info["type"] == "object" and "properties" in field_info:
+                            # This is an inline object (not a $ref)
+                            base_name = self._to_pascal_case(field_name)
+                            unique_name = self._get_unique_class_name(base_name, parent_context)
+                            self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
 
-                        # Recursively process nested inline objects
-                        self._collect_inline_class_names(field_info, unique_name)
+                            # Recursively process nested inline objects
+                            self._collect_inline_class_names(field_info, unique_name)
                     elif field_info["type"] == "array" and "items" in field_info:
                         # Check if array items are inline objects
                         items_info = field_info["items"]
-                        if isinstance(items_info, dict) and "type" in items_info:
+                        # Skip if items have a $ref - they reference a $def, not an inline object
+                        if isinstance(items_info, dict) and "$ref" not in items_info and "type" in items_info:
                             if items_info["type"] == "object" and "properties" in items_info:
                                 # Array of inline objects
                                 base_name = self._to_pascal_case(field_name)
@@ -1232,16 +1644,28 @@ class CodeGenerator:
 
         # Generate inline classes that were discovered during type processing
         # Get all inline classes (those not in definitions but in class_info)
+        # IMPORTANT: Never generate inline classes for $ref items - they should use $def names
         inline_classes = set(self.class_info.keys())
         if definitions is not None:
             # Remove definition classes using their PascalCase names
+            # This ensures $def names take priority - if a class exists in definitions,
+            # it should be generated from definitions, not as an inline class
             pascal_case_definitions = set(self.definition_name_mapping.values())
             inline_classes -= pascal_case_definitions
+
+            # Also remove any inline classes that match $def names (safety check)
+            # This prevents duplicate classes with different names
+            for def_key, def_pascal_name in self.definition_name_mapping.items():
+                inline_classes.discard(def_pascal_name)
+
         # Remove the top-level class if it exists
         if top_level_class_info is not None:
             inline_classes.discard(self.class_name)
 
         for inline_class_name in sorted(inline_classes):
+            # Double-check: don't generate if this matches a $def name
+            if definitions is not None and inline_class_name in self.definition_name_mapping.values():
+                continue
             run_class_generator(inline_class_name, self.class_info[inline_class_name])
 
         # Separate type aliases into those with forward references and those without
