@@ -8,6 +8,7 @@ for both Python and C# targets using validation rule objects.
 import re
 from typing import Any, Dict, List
 
+from .utils import snake_to_pascal_case
 from .validation_rules import (
     ArrayItemTypeRule,
     ConstRule,
@@ -167,9 +168,7 @@ class ValidationGenerator:
 
         return rules
 
-    def _create_string_rules(
-        self, field_name: str, field_info: Dict[str, Any], is_required: bool
-    ) -> List[ValidationRule]:
+    def _create_string_rules(self, field_name: str, field_info: Dict[str, Any], is_required: bool) -> List[ValidationRule]:
         """Create string validation rules"""
         rules = []
 
@@ -191,9 +190,7 @@ class ValidationGenerator:
 
         return rules
 
-    def _create_numeric_rules(
-        self, field_name: str, field_info: Dict[str, Any], is_required: bool
-    ) -> List[ValidationRule]:
+    def _create_numeric_rules(self, field_name: str, field_info: Dict[str, Any], is_required: bool) -> List[ValidationRule]:
         """Create numeric validation rules"""
         rules = []
 
@@ -207,34 +204,22 @@ class ValidationGenerator:
             rules.append(MinimumRule(field_name, self.language, field_info["minimum"], is_required))
 
         if "exclusiveMinimum" in field_info:
-            rules.append(
-                ExclusiveMinimumRule(
-                    field_name, self.language, field_info["exclusiveMinimum"], is_required
-                )
-            )
+            rules.append(ExclusiveMinimumRule(field_name, self.language, field_info["exclusiveMinimum"], is_required))
 
         # Maximum value
         if "maximum" in field_info:
             rules.append(MaximumRule(field_name, self.language, field_info["maximum"], is_required))
 
         if "exclusiveMaximum" in field_info:
-            rules.append(
-                ExclusiveMaximumRule(
-                    field_name, self.language, field_info["exclusiveMaximum"], is_required
-                )
-            )
+            rules.append(ExclusiveMaximumRule(field_name, self.language, field_info["exclusiveMaximum"], is_required))
 
         # Multiple of
         if "multipleOf" in field_info:
-            rules.append(
-                MultipleOfRule(field_name, self.language, field_info["multipleOf"], is_required)
-            )
+            rules.append(MultipleOfRule(field_name, self.language, field_info["multipleOf"], is_required))
 
         return rules
 
-    def _create_array_rules(
-        self, field_name: str, field_info: Dict[str, Any], is_required: bool
-    ) -> List[ValidationRule]:
+    def _create_array_rules(self, field_name: str, field_info: Dict[str, Any], is_required: bool) -> List[ValidationRule]:
         """Create array validation rules"""
         rules = []
 
@@ -244,15 +229,11 @@ class ValidationGenerator:
 
         # Min items
         if "minItems" in field_info:
-            rules.append(
-                MinItemsRule(field_name, self.language, field_info["minItems"], is_required)
-            )
+            rules.append(MinItemsRule(field_name, self.language, field_info["minItems"], is_required))
 
         # Max items
         if "maxItems" in field_info:
-            rules.append(
-                MaxItemsRule(field_name, self.language, field_info["maxItems"], is_required)
-            )
+            rules.append(MaxItemsRule(field_name, self.language, field_info["maxItems"], is_required))
 
         # Validate array item types if we have a $ref
         if "items" in field_info and isinstance(field_info["items"], dict):
@@ -265,10 +246,11 @@ class ValidationGenerator:
 
     def _to_pascal_case(self, text: str) -> str:
         """Convert text to PascalCase"""
+        # If already in PascalCase, return as-is
         if text and text[0].isupper() and re.match(r"^[a-zA-Z0-9]+$", text):
             return text
-        words = re.findall(r"[a-z]+|[A-Z][a-z]*|[0-9]+", text)
-        return "".join(word.capitalize() for word in words)
+        # Use shared utility function
+        return snake_to_pascal_case(text)
 
     def needs_re_import(self, field_info: Dict[str, Any]) -> bool:
         """Check if this field validation requires the 're' module (Python only)"""

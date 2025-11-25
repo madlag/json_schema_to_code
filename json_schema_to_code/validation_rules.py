@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from .utils import snake_to_pascal_case
+
 
 class ValidationRule(ABC):
     """Base class for all validation rules"""
@@ -251,10 +253,11 @@ class ValidationRule(ABC):
 
     def _to_pascal_case(self, text: str) -> str:
         """Convert text to PascalCase"""
+        # If already in PascalCase, return as-is
         if text and text[0].isupper() and re.match(r"^[a-zA-Z0-9]+$", text):
             return text
-        words = re.findall(r"[a-z]+|[A-Z][a-z]*|[0-9]+", text)
-        return "".join(word.capitalize() for word in words)
+        # Use shared utility function
+        return snake_to_pascal_case(text)
 
 
 class OptionalFieldValidationRule(ValidationRule):

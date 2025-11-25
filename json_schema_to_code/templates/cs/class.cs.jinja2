@@ -47,12 +47,12 @@ public class {{CLASS_NAME}}{% if EXTENDS %} : {{EXTENDS}}{% endif %}{% if IMPLEM
 {
     {% for property, info in properties.items() %}
     {% set escaped_property = info.ESCAPED_PROPERTY_NAME if info.ESCAPED_PROPERTY_NAME else property %}
-    {% if info.IS_INTERFACE_PROPERTY %}
-    private {{info.TYPE.type}} {{escaped_property}}{% if info.TYPE.init %} = {{info.TYPE.init}}{% endif %};
-    [JsonProperty("{{property}}")]
-    public {{info.TYPE.type}} {{info.INTERFACE_PROPERTY_NAME}} { get => {{escaped_property}}; set => {{escaped_property}} = value; }
+    {% if info.TYPE.modifier and info.TYPE.modifier == "const" %}
+    public {{info.TYPE.modifier}} {{info.TYPE.type}} {{escaped_property}}{% if info.TYPE.init %} = {{info.TYPE.init}}{% endif %};{{info.TYPE.comment}}
     {% else %}
-    public {% if info.TYPE.modifier %}{{info.TYPE.modifier}} {% endif %}{{info.TYPE.type}} {{escaped_property}}{% if info.TYPE.init %} = {{info.TYPE.init}}{% endif %};{{info.TYPE.comment}}
+    {% set pascal_property = (info.INTERFACE_PROPERTY_NAME if info.IS_INTERFACE_PROPERTY else (escaped_property|snake_to_pascal)) %}
+    [JsonProperty("{{property}}")]
+    public {{info.TYPE.type}} {{pascal_property}} { get; set; }{% if info.TYPE.init %} = {{info.TYPE.init}};{% endif %}{{info.TYPE.comment}}
     {% endif %}
     {% endfor %}
     public {{CLASS_NAME}}({% for property, info in constructor_properties.items() %}{{info.TYPE.type}} {% if info.ESCAPED_PROPERTY_NAME %}{{info.ESCAPED_PROPERTY_NAME}}{% else %}{{property}}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}){% if EXTENDS %}: base({% for property, info in BASE_PROPERTIES.items() %}{% if info.ESCAPED_PROPERTY_NAME %}{{info.ESCAPED_PROPERTY_NAME}}{% else %}{{property}}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %})
@@ -60,8 +60,9 @@ public class {{CLASS_NAME}}{% if EXTENDS %} : {{EXTENDS}}{% endif %}{% if IMPLEM
     {
         {% for property, info in properties.items() %}
         {% set escaped_property = info.ESCAPED_PROPERTY_NAME if info.ESCAPED_PROPERTY_NAME else property %}
+        {% set pascal_property = (info.INTERFACE_PROPERTY_NAME if info.IS_INTERFACE_PROPERTY else (escaped_property|snake_to_pascal)) %}
         {% if not info.TYPE.modifier or info.TYPE.modifier != "const" %}
-        this.{{escaped_property}} = {{escaped_property}};
+        this.{{pascal_property}} = {{escaped_property}};
         {% endif %}
         {% endfor %}
 {%- if validation_code %}

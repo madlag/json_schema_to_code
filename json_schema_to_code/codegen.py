@@ -8,31 +8,10 @@ import jinja2
 
 from . import __version__
 from .cli_utils import reconstruct_command_line
+from .utils import snake_to_pascal_case
 from .validator import ValidationGenerator
 
 CURRENT_DIR = Path(__file__).parent.resolve().absolute()
-
-
-def snake_to_pascal_case(text: str) -> str:
-    """Convert snake_case or space-separated text to PascalCase.
-
-    Examples:
-        "first_name" -> "FirstName"
-        "FIRST_NAME" -> "FirstName"
-        "first 3 rows" -> "First3Rows"
-        "ABC" -> "Abc"
-        "Full" -> "Full"
-
-    Args:
-        text: The text to convert (snake_case, UPPER_SNAKE_CASE, or space-separated)
-
-    Returns:
-        PascalCase string
-    """
-    if not text:
-        return ""
-    # Split on underscores or spaces, capitalize each word, and join
-    return "".join(word.capitalize() for word in text.replace("_", " ").split())
 
 
 class ImportType(Enum):
@@ -209,6 +188,8 @@ class CodeGenerator:
         # Build ref_class_name_mapping from x-ref-class-name annotations
         self.ref_class_name_mapping = self._build_ref_class_name_mapping(self.schema)
         self.jinja_env = jinja2.Environment(lstrip_blocks=True, trim_blocks=True)
+        # Add custom filters
+        self.jinja_env.filters["snake_to_pascal"] = snake_to_pascal_case
         language_to_extension = {"cs": "cs", "python": "py"}
         extension = language_to_extension[language]
         self.prefix = self.jinja_env.from_string(open(CURRENT_DIR / f"templates/{language}/prefix.{extension}.jinja2").read())
