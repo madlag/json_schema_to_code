@@ -251,6 +251,11 @@ class CodeGenerator:
         """Get the appropriate comment prefix for the current language"""
         return "//" if self.language == "cs" else "#"
 
+    @staticmethod
+    def _is_external_ref(value: Any) -> bool:
+        """Check if a value is an external $ref (not a local reference)."""
+        return isinstance(value, dict) and "$ref" in value and not value["$ref"].startswith("#")
+
     def register_import_needed(self, import_type: ImportType) -> None:
         """Register that a specific import type is needed.
 
@@ -671,7 +676,11 @@ class CodeGenerator:
         PRIORITY: Always use the $def key name from definition_name_mapping.
         Never use inline class names or field-name-based naming for $ref items.
         """
-        type_name = ref.split("/")[-1]
+        # Handle external $ref: extract class name from fragment
+        if not ref.startswith("#") and "#/$defs/" in ref:
+            type_name = ref.split("#/$defs/", 1)[1]
+        else:
+            type_name = ref.split("/")[-1]
 
         # Check for x-ref-class-name mapping in schema (for external $ref)
         if hasattr(self, "ref_class_name_mapping"):
@@ -1551,6 +1560,9 @@ class CodeGenerator:
                 # Skip comment fields which are strings, not schema objects
                 if isinstance(v, str) or k.startswith("_comment"):
                     continue
+                # Skip external $ref definitions (they reference classes in other files)
+                if CodeGenerator._is_external_ref(v):
+                    continue
                 pascal_case_name = self._to_pascal_case(k)
                 self.definition_name_mapping[k] = pascal_case_name
                 # Store class info with PascalCase name
@@ -1612,12 +1624,20 @@ class CodeGenerator:
         if definitions is not None:
             for k in self.config.order_classes:
                 if k in definitions:
+                    # Skip external $ref definitions
+                    v = definitions[k]
+                    if CodeGenerator._is_external_ref(v):
+                        continue
                     pascal_case_name = self.definition_name_mapping.get(k, k)
-                    run_class_generator(pascal_case_name, definitions[k])
+                    if pascal_case_name in self.definition_name_mapping.values():
+                        run_class_generator(pascal_case_name, v)
 
             for k, v in definitions.items():
                 # Skip comment fields which are strings, not schema objects
                 if isinstance(v, str) or k.startswith("_comment"):
+                    continue
+                # Skip external $ref definitions
+                if CodeGenerator._is_external_ref(v):
                     continue
                 if k not in self.config.order_classes:
                     pascal_case_name = self.definition_name_mapping.get(k, k)
