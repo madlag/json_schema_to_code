@@ -44,6 +44,9 @@ class CodeGeneratorConfig:
     use_future_annotations: bool = True
     exclude_default_value_from_json: bool = False
     add_validation: bool = False
+    # External reference import configuration for Python
+    external_ref_base_module: str = ""  # Base module path for external $ref imports
+    external_ref_schema_to_module: dict[str, str] = {}  # Custom schema path → module mappings
 
     @staticmethod
     def from_dict(d):
@@ -718,6 +721,44 @@ class CodeGenerator:
 
         return type_name
 
+    def _schema_ref_to_module_path(self, schema_ref: str) -> tuple[str, str] | None:
+        """Convert external $ref to (module_path, class_name) for Python imports.
+
+        Example:
+            "/activities/guess/guess_schema#/$defs/GuessData"
+            → ("explayn_dh_agent.barbara.db.app_object_definitions.activities.guess.guess_dataclass", "GuessData")
+
+        Args:
+            schema_ref: The $ref string from schema
+
+        Returns:
+            (module_path, class_name) tuple or None if not an external ref or not configured
+        """
+        if not schema_ref or schema_ref.startswith("#"):
+            return None  # Local ref, not external
+
+        # Parse: "/activities/guess/guess_schema#/$defs/GuessData"
+        if "#/$defs/" not in schema_ref:
+            return None
+
+        path_part, class_name = schema_ref.split("#/$defs/", 1)
+        path_part = path_part.lstrip("/")
+
+        # Check for custom mapping first
+        if self.config.external_ref_schema_to_module:
+            if path_part in self.config.external_ref_schema_to_module:
+                module_path = self.config.external_ref_schema_to_module[path_part]
+                return (module_path, class_name)
+
+        # Auto-convert using base module if configured
+        if self.config.external_ref_base_module:
+            # Convert: "activities/guess/guess_schema" → "activities.guess.guess_dataclass"
+            module_path = path_part.replace("/", ".").replace("_schema", "_dataclass")
+            full_module = f"{self.config.external_ref_base_module}.{module_path}"
+            return (full_module, class_name)
+
+        return None
+
     def super_type(self, items: Dict[str, Any]):
         types = set()
         for item in items:
@@ -836,7 +877,15 @@ class CodeGenerator:
         if "$ref" in type_info:
             # Always use $def name for $ref items - never use inline class names
             # This ensures $def keys are prioritized over any field-name-based naming
-            type = self.ref_type(type_info["$ref"])
+            ref = type_info["$ref"]
+            type = self.ref_type(ref)
+
+            # Register import for external refs in Python
+            if self.language == "python":
+                module_info = self._schema_ref_to_module_path(ref)
+                if module_info:
+                    module_path, ref_class_name = module_info
+                    self.python_import_tuples.add((module_path, ref_class_name))
 
             # Handle defaults and optional fields for $ref types
             result = {"type": type}
@@ -1134,6 +1183,19 @@ class CodeGenerator:
             if class_name not in self.config.ignore_classes:
                 self.subclasses[base_class].append([class_name, json_name])
             self.base_class[class_name] = base_class
+
+        # For C#, detect discriminated unions (anyOf/oneOf with type discriminator)
+        if self.language == "cs":
+            union_key = self._get_union_key(p)
+            if union_key:
+                discriminator_info = self._is_discriminated_union(union_key, p)
+                if discriminator_info:
+                    for variant_class, discriminator_value in discriminator_info:
+                        self.subclasses[class_name].append([variant_class, discriminator_value])
+                        self.base_class[variant_class] = class_name
+                    # Store empty base class info for subclasses to inherit from
+                    p = {"properties": {}}
+
         self.class_info[class_name] = p
 
     def prepare_class_info(self, class_name, info):
@@ -1148,25 +1210,74 @@ class CodeGenerator:
         builtin_types = {"str", "int", "float", "bool", "None", "Any", "object", "string"}
         return type_name in builtin_types
 
+    def _get_union_key(self, p: dict) -> str | None:
+        """Get the union key ('oneOf' or 'anyOf') if present."""
+        if "oneOf" in p:
+            return "oneOf"
+        if "anyOf" in p:
+            return "anyOf"
+        return None
+
+    def _get_discriminator_value(self, ref: str) -> str | None:
+        """Get the discriminator value from a referenced type's 'type' field with const."""
+        def_name = ref.split("/")[-1]
+        result = self._find_definition(def_name)
+        if result is None:
+            return None
+        _, def_info = result
+        return def_info.get("properties", {}).get("type", {}).get("const")
+
+    def _is_discriminated_union(self, union_key: str, p: dict) -> list[tuple[str, str]] | None:
+        """Check if a oneOf/anyOf is a discriminated union with 'type' field discriminator.
+
+        Returns a list of (class_name, discriminator_value) tuples if discriminated,
+        otherwise returns None.
+        """
+        items = p.get(union_key, [])
+        if not items or not all("$ref" in item for item in items):
+            return None
+
+        discriminator_info = []
+        for item in items:
+            ref = item["$ref"]
+            class_name = self.ref_type(ref)
+            discriminator_value = self._get_discriminator_value(ref)
+            if discriminator_value is None:
+                return None
+            discriminator_info.append((class_name, discriminator_value))
+
+        return discriminator_info
+
     def _handle_oneof_type_alias(self, class_name: str, p: dict) -> dict | None:
-        """Handle oneOf with multiple $ref - create type alias instead of class."""
-        if "oneOf" not in p:
-            return p
-        if not all("$ref" in item for item in p["oneOf"]) or len(p["oneOf"]) <= 1:
+        """Handle oneOf/anyOf with multiple $ref.
+
+        For Python: creates a type alias (union type).
+        For C#: if discriminated union, creates a base class with subclasses.
+        """
+        union_key = self._get_union_key(p)
+        if not union_key:
             return p
 
-        union_types = [self.ref_type(item["$ref"]) for item in p["oneOf"]]
+        items = p[union_key]
+        if not all("$ref" in item for item in items) or len(items) <= 1:
+            return p
 
+        union_types = [self.ref_type(item["$ref"]) for item in items]
+
+        # For C#, check if this is a discriminated union (already registered in preprocess)
+        if self.language == "cs" and self.subclasses.get(class_name):
+            # Return empty base class for the union
+            return {"properties": {}, "CLASS_NAME": class_name}
+
+        # For Python (or non-discriminated unions), create type alias
         if self.config.use_inline_unions:
             union_string = " | ".join(sorted(union_types))
-            # Handle quoted types
             if any(t.startswith('"') and t.endswith('"') for t in union_types):
                 unquoted = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
                 union_string = f'"{ " | ".join(sorted(unquoted)) }"'
             self.type_aliases.add(f"{class_name} = {union_string}")
         else:
             union_type_name = self.union_type(union_types)
-            # Replace auto-generated alias name with class name
             for alias in list(self.type_aliases):
                 if alias.startswith(union_type_name + " ="):
                     self.type_aliases.remove(alias)
@@ -1174,7 +1285,7 @@ class CodeGenerator:
                     self.type_aliases.add(f"{class_name} = {union_string}")
                     break
 
-        return None  # Mark as type alias, skip class generation
+        return None
 
     def _handle_base_type_or_enum(self, class_name: str, p: dict) -> dict | None:
         """Handle anyOf/oneOf or non-object types, including C# enum detection."""
@@ -1208,9 +1319,22 @@ class CodeGenerator:
         p = copy.deepcopy(info)
 
         if "allOf" in p:
-            extends = self.ref_type(p["allOf"][0]["$ref"])
+            ref = p["allOf"][0]["$ref"]
+            extends = self.ref_type(ref)
+
+            # Register import for external refs in Python
+            if self.language == "python":
+                module_info = self._schema_ref_to_module_path(ref)
+                if module_info:
+                    module_path, base_class_name = module_info
+                    self.python_import_tuples.add((module_path, base_class_name))
+
             p = p["allOf"][1]
             p["EXTENDS"] = extends
+
+        # Check if this class was registered as a subclass of a discriminated union
+        if class_name in self.base_class and "EXTENDS" not in p:
+            p["EXTENDS"] = self.base_class[class_name]
 
         # Check if this is a oneOf with multiple $ref - create type alias instead of class
         p = self._handle_oneof_type_alias(class_name, p)
@@ -1290,12 +1414,16 @@ class CodeGenerator:
         return TYPE
 
     def _get_base_class_info(self, class_name: str) -> dict:
-        """Get base class info, handling built-in types."""
+        """Get base class info, handling built-in types and external references."""
+        if class_name not in self.base_class:
+            # This class doesn't have a base class (might be external ref or root class)
+            # Return empty properties
+            return {"properties": {}}
         bc = self.base_class[class_name]
         if bc not in self.class_info:
-            if self._is_builtin_type(bc):
-                return {"properties": {}}
-            raise Exception(f"Base class {bc} not found for class {class_name}")
+            # External base class (from another schema) or built-in type
+            # Return empty properties - inheritance will work at runtime via imports
+            return {"properties": {}}
         result = self.class_info.get(bc)
         if result is None:
             raise Exception(f"Base class {bc} info is None for class {class_name}")
