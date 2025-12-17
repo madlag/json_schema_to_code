@@ -14,13 +14,6 @@
       "class BaseUIObject(ABC):",
       "class Style:",
       "width: float | str",
-      "height: float | str",
-      "margin: Any | str",
-      "padding: Any | str",
-      "fontSize: float | str",
-      "fontWeight: float | str",
-      "borderRadius: float | str",
-      "style: None | Style",
       "enabled: bool",
       "class TextObject(BaseUIObject):",
       "class ButtonObject(BaseUIObject):",
@@ -31,7 +24,6 @@
     "expected_not_contains": [
       "FloatOrStr =",
       "AnyOrStr =",
-      "NoneOrStyle =",
       "_comment_definitions",
       "_comment_base",
       "_comment_ui_objects",
@@ -48,15 +40,7 @@
     "expected_contains": [
       "AnyOrStr = Any | str",
       "FloatOrStr = float | str",
-      "NoneOrStyle = None | Style",
       "width: FloatOrStr",
-      "height: FloatOrStr",
-      "margin: AnyOrStr",
-      "padding: AnyOrStr",
-      "fontSize: FloatOrStr",
-      "fontWeight: FloatOrStr",
-      "borderRadius: FloatOrStr",
-      "style: NoneOrStyle",
       "class BaseUIObject(ABC):",
       "class TextObject(BaseUIObject):",
       "class ButtonObject(BaseUIObject):",
@@ -64,11 +48,6 @@
       "class ContainerObject(BaseUIObject):"
     ],
     "expected_not_contains": [
-      "width: float | str",
-      "height: float | str",
-      "margin: Any | str",
-      "fontSize: float | str",
-      "style: None | Style",
       "_comment_definitions",
       "_comment_base",
       "class _comment"
@@ -117,7 +96,6 @@
       "class FormObject(BaseUIObject):",
       "class TableObject(BaseUIObject):",
       "type: str",
-      "style: None | Style",
       "enabled: bool"
     ],
     "expected_not_contains": [

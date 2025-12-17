@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/exercise/true_false/true_false_schema",
+  "title": "TrueFalse Schema",
+  "type": "object",
+  "$defs": {
+    "TrueFalse": {
+      "type": "object",
+      "description": "True/false question and correct answer",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text"
+        },
+        "correct_answer": {
+          "type": "boolean",
+          "description": "Whether the correct answer is true or false"
+        }
+      },
+      "required": [
+        "question",
+        "correct_answer"
+      ],
+      "additionalProperties": false
+    },
+    "TrueFalseData": {
+      "type": "object",
+      "description": "Complete true/false data with question, answer, and metadata",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "exercise/true_false"
+        },
+        "true_false": {
+          "$ref": "#/$defs/TrueFalse"
+        },
+        "question_text": {
+          "type": "string",
+          "description": "The question text (usually same as true_false.question)"
+        },
+        "correct_answer": {
+          "type": "string",
+          "description": "The correct answer as a string ('true' or 'false')"
+        }
+      },
+      "required": [
+        "type",
+        "true_false",
+        "question_text",
+        "correct_answer"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/TrueFalseData"
+}

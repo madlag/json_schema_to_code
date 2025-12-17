@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ..codegen import CodeGenerator, CodeGeneratorConfig
+from json_schema_to_code.codegen import CodeGenerator, CodeGeneratorConfig
 
 
 class TestTemplateSimplification:
@@ -11,7 +11,7 @@ class TestTemplateSimplification:
     def test_python_template_structure(self):
         """Test that Python template has the same simple structure as C#"""
         # Read both templates
-        template_dir = Path(__file__).parent.parent / "templates"
+        template_dir = Path(__file__).parent.parent.parent / "templates"
 
         python_template = (template_dir / "python" / "prefix.py.jinja2").read_text()
         cs_template = (template_dir / "cs" / "prefix.cs.jinja2").read_text()
@@ -88,7 +88,7 @@ class TestTemplateSimplification:
 
     def test_template_consistency_between_languages(self):
         """Test that both templates follow the same pattern"""
-        template_dir = Path(__file__).parent.parent / "templates"
+        template_dir = Path(__file__).parent.parent.parent / "templates"
 
         python_template = (template_dir / "python" / "prefix.py.jinja2").read_text()
         cs_template = (template_dir / "cs" / "prefix.cs.jinja2").read_text()
@@ -103,7 +103,7 @@ class TestTemplateSimplification:
 
     def test_no_unused_template_variables(self):
         """Test that templates don't reference unused variables"""
-        template_dir = Path(__file__).parent.parent / "templates"
+        template_dir = Path(__file__).parent.parent.parent / "templates"
         python_template = (template_dir / "python" / "prefix.py.jinja2").read_text()
 
         # Should not reference old complex variables

@@ -1,0 +1,131 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$id": "/maths/basic_operations/activities/complete/basic_operations_schema.json",
+    "title": "Basic Operations UI Schema",
+    "description": "Reusable UI schema definitions for basic math operations (addition, subtraction, multiplication, division)",
+    "$defs": {
+        "DigitState": {
+            "type": "object",
+            "description": "State for a single digit display (can be label or input)",
+            "required": [
+                "text",
+                "color_flag",
+                "interaction"
+            ],
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "What to display: digit ('0'-'9'), operator ('+', '-', '\u00d7', '\u00f7'), space (' '), or empty string",
+                    "examples": [
+                        "5",
+                        "+",
+                        " ",
+                        ""
+                    ]
+                },
+                "color_flag": {
+                    "type": "string",
+                    "description": "Abstract color flag for styling (mapped to concrete colors by the view)",
+                    "enum": [
+                        "normal",
+                        "success",
+                        "error",
+                        "warning",
+                        "highlight",
+                        "pending",
+                        "input"
+                    ],
+                    "default": "normal",
+                    "examples": [
+                        {
+                            "value": "normal",
+                            "description": "Default styling"
+                        },
+                        {
+                            "value": "success",
+                            "description": "Green - correct answer"
+                        },
+                        {
+                            "value": "error",
+                            "description": "Red - incorrect answer"
+                        },
+                        {
+                            "value": "highlight",
+                            "description": "Yellow + Bold - draw attention"
+                        },
+                        {
+                            "value": "warning",
+                            "description": "Orange - caution"
+                        },
+                        {
+                            "value": "pending",
+                            "description": "Light blue - user input awaiting validation (alias: 'input')"
+                        }
+                    ]
+                },
+                "interaction": {
+                    "type": "string",
+                    "description": "How the user can interact with this digit",
+                    "enum": [
+                        "ReadOnly",
+                        "Editable",
+                        "Placeholder"
+                    ],
+                    "default": "ReadOnly",
+                    "examples": [
+                        {
+                            "value": "ReadOnly",
+                            "description": "Display only (operand digits, operators)"
+                        },
+                        {
+                            "value": "Editable",
+                            "description": "User can type input here"
+                        },
+                        {
+                            "value": "Placeholder",
+                            "description": "Empty spacing (non-interactive)"
+                        }
+                    ]
+                },
+                "action": {
+                    "$ref": "/activities/ui_schema.json#/$defs/UIAction",
+                    "description": "Action to perform when the user interacts with this digit (only for editable digits)"
+                }
+            }
+        },
+        "OperandRowState": {
+            "type": "object",
+            "description": "State for one operand row (a number in the operation)",
+            "required": [
+                "digits"
+            ],
+            "properties": {
+                "digits": {
+                    "type": "array",
+                    "description": "List of digit states for this row (includes operator, spaces, padding, and actual digits)",
+                    "items": {
+                        "$ref": "#/$defs/DigitState"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
+        "InputRowState": {
+            "type": "object",
+            "description": "State for an input row (carry-over, borrow, or result)",
+            "required": [
+                "digits"
+            ],
+            "properties": {
+                "digits": {
+                    "type": "array",
+                    "description": "List of digit states for this input row",
+                    "items": {
+                        "$ref": "#/$defs/DigitState"
+                    },
+                    "minItems": 1
+                }
+            }
+        }
+    }
+}

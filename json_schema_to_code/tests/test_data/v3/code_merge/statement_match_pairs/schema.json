@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/primitive/statement/activities/match_pairs/statement_match_pairs_schema",
+  "title": "Statement Match Pairs Activity Schema",
+  "x-csharp-using": ["EduObject.Activities.MatchPairs", "EduObject.Activities.MediaContentTypes"],
+  "type": "object",
+  "$defs": {
+    "StatementMatchPairsProblem": {
+      "x-csharp-generate": false,
+      "description": "Match pairs problem with an embedded statement (backend-only)",
+      "allOf": [
+        {
+          "$ref": "/activities/match_pairs/match_pairs_schema#/$defs/MatchPairsProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "statement": {
+              "$ref": "/primitive/statement/statement_schema#/$defs/StatementDataStatement",
+              "description": "The statement providing context"
+            }
+          },
+          "required": ["statement"]
+        }
+      ]
+    },
+    "StatementMatchPairsData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data for statement match pairs (backend-only)",
+      "allOf": [
+        {
+          "$ref": "/activities/match_pairs/match_pairs_schema#/$defs/MatchPairsData"
+        },
+        {
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/StatementMatchPairsProblem",
+              "description": "The statement match pairs problem"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/StatementMatchPairsData"
+}

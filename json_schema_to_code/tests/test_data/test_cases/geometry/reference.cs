@@ -5,15 +5,21 @@ using System;
 using System.Collections.Generic;
 [Serializable]
 public class Geometry{
-    public List<GeometryObject> objects;
-    public List<Constraint> constraints;
-    public List<Style> styles;
+    [JsonProperty("objects")]
+    public List<GeometryObject> Objects { get; set; }
+    [JsonProperty("constraints")]
+    public List<Constraint> Constraints { get; set; }
+    [JsonProperty("styles")]
+    public List<Style> Styles { get; set; }
     public Geometry(List<GeometryObject> objects, List<Constraint> constraints, List<Style> styles)    {
-        this.objects = objects;
-        this.constraints = constraints;
-        this.styles = styles;
+        this.Objects = objects;
+        this.Constraints = constraints;
+        this.Styles = styles;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public Geometry() { }
 }
+
 [Serializable]
 [JsonConverter(typeof(JsonSubtypes), "type")]
 [JsonSubtypes.KnownSubType(typeof(GeometryObjectPoint), "point")]
@@ -25,107 +31,139 @@ public class Geometry{
 [JsonSubtypes.KnownSubType(typeof(GeometryObjectQuadrilateral), "quadrilateral")]
 [JsonSubtypes.KnownSubType(typeof(GeometryObjectCircle), "center")]
 public class GeometryObject{
-    public string type;
+    [JsonProperty("type")]
+    public string Type { get; set; }
     public GeometryObject(string type)    {
-        this.type = type;
+        this.Type = type;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObject() { }
 }
+
 [Serializable]
-public class GeometryObjectPoint : GeometryObject
-{
-    public new string type = "point";
-    public string name;
-    public List<float>? coordinate;
-    public GeometryObjectPoint(string type, string name, List<float>? coordinate): base("point")
+public class GeometryObjectPoint : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "point";
+    [JsonProperty("name")]
+    public string Name { get; set; }
+    [JsonProperty("coordinate")]
+    public List<float>? Coordinate { get; set; }
+    public GeometryObjectPoint(string name, List<float>? coordinate): base("point")
     {
-        this.type = type;
-        this.name = name;
-        this.coordinate = coordinate;
+        this.Name = name;
+        this.Coordinate = coordinate;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectPoint() { }
 }
+
 [Serializable]
-public class GeometryObjectSegment : GeometryObject
-{
-    public new string type = "segment";
-    public List<string> points;
-    public GeometryObjectSegment(string type, List<string> points): base("segment")
+public class GeometryObjectSegment : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "segment";
+    [JsonProperty("points")]
+    public List<string> Points { get; set; }
+    public GeometryObjectSegment(List<string> points): base("segment")
     {
-        this.type = type;
-        this.points = points;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectSegment() { }
 }
+
 [Serializable]
-public class GeometryObjectLine : GeometryObject
-{
-    public new string type = "line";
-    public List<string>? points;
-    public GeometryObjectLine(string type, List<string>? points): base("line")
+public class GeometryObjectLine : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "line";
+    [JsonProperty("points")]
+    public List<string>? Points { get; set; }
+    public GeometryObjectLine(List<string>? points): base("line")
     {
-        this.type = type;
-        this.points = points;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectLine() { }
 }
+
 [Serializable]
-public class GeometryObjectRay : GeometryObject
-{
-    public new string type = "ray";
-    public List<string> points;
-    public GeometryObjectRay(string type, List<string> points): base("ray")
+public class GeometryObjectRay : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "ray";
+    [JsonProperty("points")]
+    public List<string> Points { get; set; }
+    public GeometryObjectRay(List<string> points): base("ray")
     {
-        this.type = type;
-        this.points = points;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectRay() { }
 }
+
 [Serializable]
-public class GeometryObjectVector : GeometryObject
-{
-    public new string type = "vector";
-    public List<string> points;
-    public GeometryObjectVector(string type, List<string> points): base("vector")
+public class GeometryObjectVector : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "vector";
+    [JsonProperty("points")]
+    public List<string> Points { get; set; }
+    public GeometryObjectVector(List<string> points): base("vector")
     {
-        this.type = type;
-        this.points = points;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectVector() { }
 }
+
 [Serializable]
-public class GeometryObjectTriangle : GeometryObject
-{
-    public new string type = "triangle";
-    public string kind;  // Allowed values: "isosceles", "equilateral", "general"
-    public List<string> points;
-    public GeometryObjectTriangle(string type, string kind, List<string> points): base("triangle")
+public class GeometryObjectTriangle : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "triangle";
+    [JsonProperty("kind")]
+    public string Kind { get; set; }  // Allowed values: "isosceles", "equilateral", "general"
+    [JsonProperty("points")]
+    public List<string> Points { get; set; }
+    public GeometryObjectTriangle(string kind, List<string> points): base("triangle")
     {
-        this.type = type;
-        this.kind = kind;
-        this.points = points;
+        this.Kind = kind;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectTriangle() { }
 }
+
 [Serializable]
-public class GeometryObjectQuadrilateral : GeometryObject
-{
-    public new string type = "quadrilateral";
-    public string kind;  // Allowed values: "square", "rectangle", "rhombus", "parallelogram", "trapezoid", "kite", "general"
-    public List<string>? points;
-    public GeometryObjectQuadrilateral(string type, string kind, List<string>? points): base("quadrilateral")
+public class GeometryObjectQuadrilateral : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "quadrilateral";
+    [JsonProperty("kind")]
+    public string Kind { get; set; }  // Allowed values: "square", "rectangle", "rhombus", "parallelogram", "trapezoid", "kite", "general"
+    [JsonProperty("points")]
+    public List<string>? Points { get; set; }
+    public GeometryObjectQuadrilateral(string kind, List<string>? points): base("quadrilateral")
     {
-        this.type = type;
-        this.kind = kind;
-        this.points = points;
+        this.Kind = kind;
+        this.Points = points;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectQuadrilateral() { }
 }
+
 [Serializable]
-public class GeometryObjectCircle : GeometryObject
-{
-    public new string type = "center";
-    public string center;
-    public float radius;
-    public GeometryObjectCircle(string type, string center, float radius): base("center")
+public class GeometryObjectCircle : GeometryObject{
+    [JsonProperty("type")]
+    public const string type = "center";
+    [JsonProperty("center")]
+    public string Center { get; set; }
+    [JsonProperty("radius")]
+    public float Radius { get; set; }
+    public GeometryObjectCircle(string center, float radius): base("center")
     {
-        this.type = type;
-        this.center = center;
-        this.radius = radius;
+        this.Center = center;
+        this.Radius = radius;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public GeometryObjectCircle() { }
 }
+
 [Serializable]
 [JsonConverter(typeof(JsonSubtypes), "type")]
 [JsonSubtypes.KnownSubType(typeof(ConstraintDistanceFixed), "distance_fixed")]
@@ -133,59 +171,74 @@ public class GeometryObjectCircle : GeometryObject
 [JsonSubtypes.KnownSubType(typeof(ConstraintAngleFixed), "angle_fixed")]
 [JsonSubtypes.KnownSubType(typeof(ConstraintAngleEquals), "angle_equals")]
 public class Constraint{
-    public string type;
+    [JsonProperty("type")]
+    public string Type { get; set; }
     public Constraint(string type)    {
-        this.type = type;
+        this.Type = type;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public Constraint() { }
 }
+
 [Serializable]
-public class ConstraintDistanceFixed : Constraint
-{
-    public new string type = "distance_fixed";
-    public float distance;
-    public ConstraintDistanceFixed(string type, float distance): base("distance_fixed")
+public class ConstraintDistanceFixed : Constraint{
+    [JsonProperty("type")]
+    public const string type = "distance_fixed";
+    [JsonProperty("distance")]
+    public float Distance { get; set; }
+    public ConstraintDistanceFixed(float distance): base("distance_fixed")
     {
-        this.type = type;
-        this.distance = distance;
+        this.Distance = distance;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public ConstraintDistanceFixed() { }
 }
+
 [Serializable]
-public class ConstraintDistanceEquals : Constraint
-{
-    public new string type = "distance_equals";
-    public ConstraintDistanceEquals(string type): base("distance_equals")
+public class ConstraintDistanceEquals : Constraint{
+    [JsonProperty("type")]
+    public const string type = "distance_equals";
+    public ConstraintDistanceEquals(): base("distance_equals")
     {
-        this.type = type;
     }
 }
+
 [Serializable]
-public class ConstraintAngleFixed : Constraint
-{
-    public new string type = "angle_fixed";
-    public float angle;
-    public ConstraintAngleFixed(string type, float angle): base("angle_fixed")
+public class ConstraintAngleFixed : Constraint{
+    [JsonProperty("type")]
+    public const string type = "angle_fixed";
+    [JsonProperty("angle")]
+    public float Angle { get; set; }
+    public ConstraintAngleFixed(float angle): base("angle_fixed")
     {
-        this.type = type;
-        this.angle = angle;
+        this.Angle = angle;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public ConstraintAngleFixed() { }
 }
+
 [Serializable]
-public class ConstraintAngleEquals : Constraint
-{
-    public new string type = "angle_equals";
-    public ConstraintAngleEquals(string type): base("angle_equals")
+public class ConstraintAngleEquals : Constraint{
+    [JsonProperty("type")]
+    public const string type = "angle_equals";
+    public ConstraintAngleEquals(): base("angle_equals")
     {
-        this.type = type;
     }
 }
+
 [Serializable]
 public class Style{
-    public string name;
-    public string color;
-    public float strokeWidth;
+    [JsonProperty("name")]
+    public string Name { get; set; }
+    [JsonProperty("color")]
+    public string Color { get; set; }
+    [JsonProperty("strokeWidth")]
+    public float StrokeWidth { get; set; }
     public Style(string name, string color, float strokeWidth)    {
-        this.name = name;
-        this.color = color;
-        this.strokeWidth = strokeWidth;
+        this.Name = name;
+        this.Color = color;
+        this.StrokeWidth = strokeWidth;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public Style() { }
 }

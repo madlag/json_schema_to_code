@@ -1,0 +1,124 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$id": "/activities/quiz/quiz_schema",
+    "title": "Quiz Activity Schema",
+    "x-csharp-using": ["EduObject.Activities.MediaContentTypes"],
+    "type": "object",
+    "$defs": {
+        "QuizAnswer": {
+            "type": "object",
+            "description": "A single answer option in a quiz",
+            "properties": {
+                "content": {
+                    "$ref": "/activities/media_content/media_content_types_schema#/$defs/MediaContentType",
+                    "description": "The answer content (text, image, or both)"
+                },
+                "is_correct": {
+                    "type": "boolean",
+                    "description": "Whether this is the correct answer"
+                }
+            },
+            "required": ["content", "is_correct"],
+            "additionalProperties": false
+        },
+        "QuizProblem": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Quiz problem containing the question and answers",
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "description": "List of answer options",
+                    "items": {
+                        "$ref": "#/$defs/QuizAnswer"
+                    },
+                    "minItems": 4,
+                    "maxItems": 4
+                }
+            },
+            "required": ["answers"],
+            "additionalProperties": false
+        },
+        "QuizState": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "State tracking student work for quiz activity",
+            "properties": {
+                "selected_answers": {
+                    "type": "array",
+                    "description": "The selected answers to the question",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "default": []
+                }
+            },
+            "required": ["selected_answers"],
+            "additionalProperties": false
+        },
+        "QuizUIAnswerOption": {
+            "type": "object",
+            "description": "Answer option for UI rendering",
+            "properties": {
+                "answer": {
+                    "$ref": "#/$defs/QuizAnswer",
+                    "description": "The answer content (text, image, or both)"
+                },
+                "is_selected": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "action": {
+                    "$ref": "/activities/ui_schema#/$defs/UIAction",
+                    "default": null
+                }
+            },
+            "required": ["answer", "is_selected", "action"],
+            "additionalProperties": false
+        },
+        "QuizUIData": {
+            "type": "object",
+            "description": "UI data for quiz activity rendering",
+            "properties": {
+                "common": {
+                    "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields",
+                    "default": null
+                },
+                "answers": {
+                    "type": "array",
+                    "description": "The answers to the question",
+                    "items": {
+                        "$ref": "#/$defs/QuizUIAnswerOption"
+                    },
+                    "default": []
+                }
+            },
+            "required": ["common", "answers"],
+            "additionalProperties": false
+        },
+        "QuizData": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Complete activity data for quiz - question, student's answer, and UI state",
+            "properties": {
+                "problem": {
+                    "$ref": "#/$defs/QuizProblem",
+                    "description": "The quiz problem (question and answers)"
+                },
+                "state": {
+                    "$ref": "#/$defs/QuizState",
+                    "default": null,
+                    "description": "Current student selection state"
+                },
+                "ui_data": {
+                    "$ref": "#/$defs/QuizUIData",
+                    "default": null,
+                    "description": "UI rendering data"
+                }
+            },
+            "required": ["problem", "state", "ui_data"],
+            "additionalProperties": false
+        }
+    },
+    "$ref": "#/$defs/QuizData"
+}

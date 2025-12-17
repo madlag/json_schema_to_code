@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/activities/media_content/media_content_types_schema",
+  "title": "Shared Media Content Types",
+  "x-csharp-namespace": "EduObject.Activities.MediaContentTypes",
+  "$defs": {
+    "MediaContentText": {
+      "type": "object",
+      "description": "Text-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentImage": {
+      "type": "object",
+      "description": "Image-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "image"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "image_url"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentTextAndImage": {
+      "type": "object",
+      "description": "Text and image content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text_and_image"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "image_url"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentType": {
+      "description": "Content that can be text, image, or both",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MediaContentText"
+        },
+        {
+          "$ref": "#/$defs/MediaContentImage"
+        },
+        {
+          "$ref": "#/$defs/MediaContentTextAndImage"
+        }
+      ]
+    }
+  }
+}

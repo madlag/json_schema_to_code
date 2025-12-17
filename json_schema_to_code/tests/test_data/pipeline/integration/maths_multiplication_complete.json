@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Multiplication Schema",
+  "$ref": "#/$defs/MultiplicationCompleteData",
+  "$defs": {
+    "MultiplicationCompleteProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "The multiplication problem being solved",
+      "properties": {
+        "multiplicand": {
+          "type": "integer",
+          "description": "The top number being multiplied",
+          "minimum": 0,
+          "default": 0
+        },
+        "multiplier": {
+          "type": "integer",
+          "description": "The bottom number (multiplier)",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [
+        "multiplicand",
+        "multiplier"
+      ],
+      "unevaluatedProperties": false
+    },
+    "MultiplicationCompleteState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Current state of the multiplication computation",
+      "properties": {
+        "partial_products": {
+          "type": "array",
+          "description": "Partial products (one list per multiplier digit). Each inner list contains digits from right to left.",
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "default": []
+        },
+        "carry_rows": {
+          "type": "array",
+          "description": "Carry rows for each partial product. Each inner list contains carry digits from right to left. First element is for tens column (no carry for units).",
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "default": []
+        },
+        "final_sum": {
+          "type": "array",
+          "description": "Final sum of all partial products",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": []
+        },
+        "final_carry_row": {
+          "type": "array",
+          "description": "Carry row for the final sum. First element is for tens column (no carry for units).",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "partial_products",
+        "carry_rows",
+        "final_sum",
+        "final_carry_row"
+      ],
+      "unevaluatedProperties": false
+    },
+    "MultiplicationCompleteUIData": {
+      "type": "object",
+      "description": "Complete UI state for the multiplication activity view. Built by the agent/backend and consumed by the Unity view.",
+      "properties": {
+        "question_text": {
+          "type": "string",
+          "description": "The question text to display to the user",
+          "default": ""
+        },
+        "multiplicand_row": {
+          "$ref": "#/$defs/OperandRowState",
+          "description": "The multiplicand row (top number)",
+          "default": null
+        },
+        "multiplier_row": {
+          "$ref": "#/$defs/OperandRowState",
+          "description": "The multiplier row (bottom number with \u00d7 sign)",
+          "default": null
+        },
+        "partial_product_carry_rows": {
+          "type": "array",
+          "description": "Carry rows for each partial product",
+          "items": {
+            "$ref": "#/$defs/InputRowState"
+          },
+          "default": []
+        },
+        "partial_product_rows": {
+          "type": "array",
+          "description": "Partial product rows (one per multiplier digit)",
+          "items": {
+            "$ref": "#/$defs/InputRowState"
+          },
+          "default": []
+        },
+        "final_carry_row": {
+          "$ref": "#/$defs/InputRowState",
+          "description": "Carry row for the final sum",
+          "default": null
+        },
+        "final_sum_row": {
+          "$ref": "#/$defs/InputRowState",
+          "description": "Final sum row",
+          "default": null
+        }
+      },
+      "required": [
+        "question_text",
+        "multiplicand_row",
+        "multiplier_row",
+        "partial_product_carry_rows",
+        "partial_product_rows",
+        "final_carry_row",
+        "final_sum_row"
+      ],
+      "unevaluatedProperties": false
+    },
+    "MultiplicationCompleteData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Schema representing the state of column multiplication being computed by a human, so it may be incomplete or partially incorrect.",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/MultiplicationCompleteProblem"
+        },
+        "state": {
+          "$ref": "#/$defs/MultiplicationCompleteState",
+          "default": null
+        },
+        "ui_data": {
+          "$ref": "#/$defs/MultiplicationCompleteUIData",
+          "default": null
+        }
+      },
+      "required": [
+        "problem",
+        "state"
+      ],
+      "unevaluatedProperties": false
+    },
+    "OperandRowState": {
+      "type": "object",
+      "description": "State for one operand row (a number in the operation)",
+      "required": [
+        "digits"
+      ],
+      "properties": {
+        "digits": {
+          "type": "array",
+          "description": "List of digit states for this row (includes operator, spaces, padding, and actual digits)",
+          "items": {
+            "$ref": "#/$defs/DigitState"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "InputRowState": {
+      "type": "object",
+      "description": "State for an input row (carry-over, borrow, or result)",
+      "required": [
+        "digits"
+      ],
+      "properties": {
+        "digits": {
+          "type": "array",
+          "description": "List of digit states for this input row",
+          "items": {
+            "$ref": "#/$defs/DigitState"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "DigitState": {
+      "type": "object",
+      "description": "State for a single digit display (can be label or input)",
+      "required": [
+        "text",
+        "color_flag",
+        "interaction"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "What to display: digit ('0'-'9'), operator ('+', '-', '\u00d7', '\u00f7'), space (' '), or empty string",
+          "examples": [
+            "5",
+            "+",
+            " ",
+            ""
+          ]
+        },
+        "color_flag": {
+          "type": "string",
+          "description": "Abstract color flag for styling (mapped to concrete colors by the view)",
+          "enum": [
+            "normal",
+            "success",
+            "error",
+            "warning",
+            "highlight",
+            "pending",
+            "input"
+          ],
+          "default": "normal",
+          "examples": [
+            {
+              "value": "normal",
+              "description": "Default styling"
+            },
+            {
+              "value": "success",
+              "description": "Green - correct answer"
+            },
+            {
+              "value": "error",
+              "description": "Red - incorrect answer"
+            },
+            {
+              "value": "highlight",
+              "description": "Yellow + Bold - draw attention"
+            },
+            {
+              "value": "warning",
+              "description": "Orange - caution"
+            },
+            {
+              "value": "pending",
+              "description": "Light blue - user input awaiting validation (alias: 'input')"
+            }
+          ]
+        },
+        "interaction": {
+          "type": "string",
+          "description": "How the user can interact with this digit",
+          "enum": [
+            "ReadOnly",
+            "Editable",
+            "Placeholder"
+          ],
+          "default": "ReadOnly",
+          "examples": [
+            {
+              "value": "ReadOnly",
+              "description": "Display only (operand digits, operators)"
+            },
+            {
+              "value": "Editable",
+              "description": "User can type input here"
+            },
+            {
+              "value": "Placeholder",
+              "description": "Empty spacing (non-interactive)"
+            }
+          ]
+        },
+        "action": {
+          "$ref": "/activities/ui_schema.json#/$defs/UIAction",
+          "description": "Action to perform when the user interacts with this digit (only for editable digits)"
+        }
+      }
+    }
+  }
+}

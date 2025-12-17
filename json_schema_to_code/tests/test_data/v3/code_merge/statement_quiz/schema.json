@@ -1,0 +1,48 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$id": "/primitive/statement/activities/quiz/statement_quiz_schema",
+    "title": "Statement Quiz Activity Schema",
+    "x-csharp-using": [
+        "EduObject.Activities.Quiz"
+    ],
+    "$ref": "#/$defs/StatementQuizData",
+    "$defs": {
+        "StatementQuizProblem": {
+            "x-csharp-generate": false,
+            "description": "Quiz problem{{ (' about ' + topic) if topic is defined and topic else '' }} containing a statement and quiz question/answers. The statement provides the content being quizzed about.",
+            "allOf": [
+                {
+                    "$ref": "/activities/quiz/quiz_schema#/$defs/QuizProblem"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "statement": {
+                            "$ref": "/primitive/statement/statement_schema#/$defs/StatementDataStatement",
+                            "description": "The statement content being quizzed about"
+                        }
+                    },
+                    "required": ["statement"]
+                }
+            ]
+        },
+        "StatementQuizData": {
+            "x-csharp-generate": false,
+            "description": "Complete activity data for statement quiz. Contains the statement, quiz question/answers, student's state, and UI data.",
+            "allOf": [
+                {
+                    "$ref": "/activities/quiz/quiz_schema#/$defs/QuizData"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "problem": {
+                            "$ref": "#/$defs/StatementQuizProblem",
+                            "description": "The quiz problem with statement content"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

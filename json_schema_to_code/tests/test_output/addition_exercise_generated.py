@@ -14,9 +14,7 @@ class AdditionExercise:
     state: AdditionExerciseState
     correct_answer: str
     question_text: str
-    type: Literal["exercise/maths/basic_operations/addition"] = (
-        "exercise/maths/basic_operations/addition"
-    )
+    type: Literal["exercise/maths/basic_operations/addition"] = "exercise/maths/basic_operations/addition"
 
 
 @dataclass_json

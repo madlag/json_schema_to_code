@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/primitive/statement/activities/true_false/statement_true_false_schema",
+  "title": "Statement True/False Activity Schema",
+  "x-csharp-using": ["EduObject.Activities.TrueFalse"],
+  "$ref": "#/$defs/StatementTrueFalseData",
+  "$defs": {
+    "StatementTrueFalseProblem": {
+      "x-csharp-generate": false,
+      "description": "True/false problem about a statement. Statement.text is the question.",
+      "allOf": [
+        {
+          "$ref": "/activities/true_false/true_false_schema#/$defs/TrueFalseProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "statement": {
+              "$ref": "/primitive/statement/statement_schema#/$defs/StatementDataStatement",
+              "description": "The statement content (provides question text)"
+            }
+          },
+          "required": ["statement"]
+        }
+      ]
+    },
+    "StatementTrueFalseData": {
+      "x-csharp-generate": false,
+      "description": "Complete activity data for statement true/false.",
+      "allOf": [
+        {
+          "$ref": "/activities/true_false/true_false_schema#/$defs/TrueFalseData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/StatementTrueFalseProblem",
+              "description": "The true/false problem with statement content"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "chemistry/compound"
+    },
+    "compound": {
+      "type": "object",
+      "properties": {
+        "atoms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "aid": {
+                "type": "integer",
+                "description": "Atom identifier"
+              },
+              "z": {
+                "type": "integer",
+                "description": "Atomic number"
+              },
+              "pos": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "3D coordinates [x, y, z]"
+              },
+              "charge": {
+                "type": "integer",
+                "description": "Atomic charge"
+              }
+            },
+            "required": [
+              "aid",
+              "z",
+              "pos",
+              "charge"
+            ],
+            "unevaluatedProperties": false
+          }
+        },
+        "bonds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "aid0": {
+                "type": "integer",
+                "description": "First atom identifier"
+              },
+              "aid1": {
+                "type": "integer",
+                "description": "Second atom identifier"
+              },
+              "order": {
+                "type": "integer",
+                "description": "Bond order"
+              }
+            },
+            "required": [
+              "aid0",
+              "aid1",
+              "order"
+            ],
+            "unevaluatedProperties": false
+          }
+        },
+        "charge": {
+          "type": "integer",
+          "description": "Total molecular charge"
+        },
+        "metas": {
+          "type": "object",
+          "properties": {
+            "pubchem_cid": {
+              "type": "integer",
+              "description": "PubChem Compound identifier"
+            },
+            "compound_complexity": {
+              "type": "number",
+              "description": "Measure of molecular complexity"
+            },
+            "preferred_iupac_name": {
+              "type": "string",
+              "description": "Preferred IUPAC name"
+            },
+            "traditional_iupac_name": {
+              "type": "string",
+              "description": "Traditional IUPAC name"
+            },
+            "inchi": {
+              "type": "string",
+              "description": "InChI identifier",
+              "pattern": "^InChI=1S/.*"
+            },
+            "inchikey": {
+              "type": "string",
+              "description": "InChIKey identifier",
+              "pattern": "^[A-Z]{14}-[A-Z]{10}-[A-Z]$"
+            },
+            "molecular_formula": {
+              "type": "string",
+              "description": "Molecular formula",
+              "pattern": "^([A-Z][a-z]?[0-9]*)+$"
+            },
+            "molecular_weight": {
+              "type": "number",
+              "description": "Molecular weight",
+              "minimum": 0,
+              "exclusiveMinimum": 0
+            },
+            "smiles": {
+              "type": "string",
+              "description": "SMILES notation"
+            },
+            "description": {
+              "type": "string"
+            },
+            "chemical_families": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "pubchem_cid",
+            "compound_complexity",
+            "preferred_iupac_name",
+            "traditional_iupac_name",
+            "inchi",
+            "inchikey",
+            "molecular_formula",
+            "molecular_weight",
+            "smiles",
+            "description",
+            "chemical_families"
+          ],
+          "unevaluatedProperties": false
+        }
+      },
+      "required": [
+        "atoms",
+        "bonds",
+        "charge",
+        "metas"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "compound"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

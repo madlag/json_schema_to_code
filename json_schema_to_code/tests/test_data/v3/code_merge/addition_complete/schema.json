@@ -1,0 +1,134 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "title": "Addition Schema",
+    "$ref": "#/$defs/AdditionCompleteData",
+    "$defs": {
+        "AdditionCompleteProblem": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "The addition problem being solved",
+            "properties": {
+                "operands": {
+                    "type": "array",
+                    "description": "The numbers being added together",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "minItems": 2,
+                    "default": []
+                }
+            },
+            "required": [
+                "operands"
+            ],
+            "unevaluatedProperties": false
+        },
+        "AdditionCompleteState": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Current state of the computation",
+            "properties": {
+                "carry_over_row": {
+                    "type": "array",
+                    "description": "Carry-over row. One digit for each column, even if it means that the digit is 0. For example for 143 + 72, the full carry row should be [0, 1]. Be careful, human do not write a zero when there is no carry, they just leave a blank space. The first element of the array is for the tens column, the second element is for the hundreds column, and so on (there is never a carry-over for the unit column, so we skip it).",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "default": []
+                },
+                "result_row": {
+                    "type": "array",
+                    "description": "Result row",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "default": []
+                }
+            },
+            "required": [
+                "carry_over_row",
+                "result_row"
+            ],
+            "unevaluatedProperties": false
+        },
+        "AdditionCompleteUIData": {
+            "type": "object",
+            "description": "Complete UI state for the addition activity view. Built by the agent/backend and consumed by the Unity view.",
+            "properties": {
+                "question_text": {
+                    "type": "string",
+                    "description": "The question text to display to the user",
+                    "default": ""
+                },
+                "operand_rows": {
+                    "type": "array",
+                    "description": "List of operand rows to display (e.g., the numbers being added)",
+                    "items": {
+                        "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/OperandRowState"
+                    },
+                    "minItems": 1,
+                    "default": []
+                },
+                "carry_over_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/InputRowState",
+                    "description": "The carry-over row where users enter carried digits",
+                    "default": null
+                },
+                "result_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/InputRowState",
+                    "description": "The result row where users enter the final answer",
+                    "default": null
+                }
+            },
+            "required": [
+                "question_text",
+                "operand_rows",
+                "carry_over_row",
+                "result_row"
+            ],
+            "unevaluatedProperties": false
+        },
+        "AdditionCompleteData": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Schema representing the state of a column addition being computed by a human, so it may be incomplete or partially incorrect.",
+            "properties": {
+                "problem": {
+                    "$ref": "#/$defs/AdditionCompleteProblem"
+                },
+                "state": {
+                    "$ref": "#/$defs/AdditionCompleteState",
+                    "default": null
+                },
+                "ui_data": {
+                    "$ref": "#/$defs/AdditionCompleteUIData",
+                    "default": null
+                }
+            },
+            "required": [
+                "problem",
+                "state"
+            ],
+            "unevaluatedProperties": false
+        }
+    }
+}

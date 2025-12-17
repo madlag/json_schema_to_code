@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "chemistry/periodic_table",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "chemistry/periodic_table"
+    },
+    "periodic_table": {
+      "properties": {
+        "elements": {
+          "type": "array",
+          "description": "Array of all chemical elements in the periodic table",
+          "items": {
+            "type": "object",
+            "properties": {
+              "atomic_number": {
+                "type": "integer",
+                "description": "The number of protons in the nucleus of the element"
+              },
+              "symbol": {
+                "type": "string",
+                "description": "The chemical symbol of the element (e.g., H, He, Li)"
+              },
+              "name": {
+                "type": "string",
+                "description": "The full name of the element"
+              },
+              "atomic_mass": {
+                "type": "number",
+                "description": "The atomic mass of the element in atomic mass units (amu)"
+              },
+              "group": {
+                "type": "integer",
+                "description": "The group number (column) in the periodic table (1-18)"
+              },
+              "period": {
+                "type": "integer",
+                "description": "The period number (row) in the periodic table (1-7)"
+              },
+              "block": {
+                "type": "string",
+                "description": "The block of the periodic table (s, p, d, or f)"
+              },
+              "category": {
+                "type": "string",
+                "description": "The category or classification of the element (e.g., alkali metal, noble gas, transition metal)"
+              },
+              "electron_configuration": {
+                "type": "string",
+                "description": "The electron configuration of the element in its ground state"
+              },
+              "electronegativity": {
+                "type": "number",
+                "description": "The electronegativity value of the element (typically on the Pauling scale)"
+              },
+              "oxidation_states": {
+                "type": "array",
+                "description": "Common oxidation states of the element",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "melting_point": {
+                "type": "number",
+                "description": "The melting point of the element in Kelvin"
+              },
+              "boiling_point": {
+                "type": "number",
+                "description": "The boiling point of the element in Kelvin"
+              },
+              "density": {
+                "type": "number",
+                "description": "The density of the element in g/cm\u00b3 at standard conditions"
+              },
+              "phase_at_stp": {
+                "type": "string",
+                "description": "The phase of the element at standard temperature and pressure (solid, liquid, or gas)"
+              },
+              "discovered_by": {
+                "type": "string",
+                "description": "The person or people who discovered the element"
+              },
+              "discovery_year": {
+                "type": "integer",
+                "description": "The year the element was discovered"
+              },
+              "radioactive": {
+                "type": "boolean",
+                "description": "Whether the element is radioactive"
+              }
+            },
+            "required": [
+              "atomic_number",
+              "symbol",
+              "name",
+              "atomic_mass",
+              "group",
+              "period",
+              "block",
+              "category",
+              "electron_configuration",
+              "electronegativity",
+              "oxidation_states",
+              "melting_point",
+              "boiling_point",
+              "density",
+              "phase_at_stp",
+              "discovered_by",
+              "discovery_year",
+              "radioactive"
+            ],
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "type": "object",
+      "required": [
+        "title",
+        "version",
+        "elements"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "periodic_table"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

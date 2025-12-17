@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "subtraction_borrowing_state",
+  "type": "object",
+  "description": "Schema representing the state of a column subtraction with borrowing being computed by a human, so it may be incomplete or partially incorrect.",
+  "properties": {
+    "problem": {
+      "type": "object",
+      "description": "The subtraction problem being solved",
+      "properties": {
+        "minuend": {
+          "type": "integer",
+          "description": "The top number (number being subtracted from)",
+          "minimum": 0
+        },
+        "subtrahend": {
+          "type": "integer",
+          "description": "The bottom number (number being subtracted)",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "minuend",
+        "subtrahend"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "description": "Current state of the subtraction computation showing borrowing work",
+      "properties": {
+        "swapped_arguments": {
+          "type": "boolean",
+          "description": "Whether the minuend and subtrahend have been swapped",
+          "default": false
+        },
+        "final_sign": {
+          "type": "string",
+          "description": "The sign of the final result",
+          "enum": ["+", "-"]
+        },
+        "borrowing_row": {
+          "type": "array",
+          "description": "Row showing borrowed values above each digit of the minuend (1 indicates borrowed from, empty/null means no borrowing)",
+          "items": {
+            "type": [
+              "integer"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "adjusted_minuend_row": {
+          "type": "array",
+          "description": "Row showing the adjusted minuend digits after borrowing (e.g., if borrowing from tens place, it decreases by 1)",
+          "items": {
+            "type": [
+              "integer"
+            ],
+            "minimum": 0,
+            "maximum": 19
+          }
+        },
+        "result_row": {
+          "type": "array",
+          "description": "Result digits for each column from right to left",
+          "items": {
+            "type": [
+              "integer"
+            ],
+            "minimum": 0,
+            "maximum": 9
+          }
+        }
+      },
+      "required": [
+        "borrowing_row",
+        "adjusted_minuend_row",
+        "result_row"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "problem",
+    "state"
+  ],
+  "additionalProperties": false
+}

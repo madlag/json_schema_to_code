@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Addition Schema",
+  "$ref": "#/$defs/AdditionCompleteData",
+  "$defs": {
+    "AdditionCompleteProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "The addition problem being solved",
+      "properties": {
+        "operands": {
+          "type": "array",
+          "description": "The numbers being added together",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "default": []
+        }
+      },
+      "required": [
+        "operands"
+      ],
+      "unevaluatedProperties": false
+    },
+    "AdditionCompleteState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Current state of the computation",
+      "properties": {
+        "carry_over_row": {
+          "type": "array",
+          "description": "Carry-over row. One digit for each column, even if it means that the digit is 0. For example for 143 + 72, the full carry row should be [0, 1]. Be careful, human do not write a zero when there is no carry, they just leave a blank space. The first element of the array is for the tens column, the second element is for the hundreds column, and so on (there is never a carry-over for the unit column, so we skip it).",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": []
+        },
+        "result_row": {
+          "type": "array",
+          "description": "Result row",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "carry_over_row",
+        "result_row"
+      ],
+      "unevaluatedProperties": false
+    },
+    "AdditionCompleteUIData": {
+      "type": "object",
+      "description": "Complete UI state for the addition activity view. Built by the agent/backend and consumed by the Unity view.",
+      "properties": {
+        "question_text": {
+          "type": "string",
+          "description": "The question text to display to the user",
+          "default": ""
+        },
+        "operand_rows": {
+          "type": "array",
+          "description": "List of operand rows to display (e.g., the numbers being added)",
+          "items": {
+            "$ref": "#/$defs/OperandRowState"
+          },
+          "minItems": 1,
+          "default": []
+        },
+        "carry_over_row": {
+          "$ref": "#/$defs/InputRowState",
+          "description": "The carry-over row where users enter carried digits",
+          "default": null
+        },
+        "result_row": {
+          "$ref": "#/$defs/InputRowState",
+          "description": "The result row where users enter the final answer",
+          "default": null
+        }
+      },
+      "required": [
+        "question_text",
+        "operand_rows",
+        "carry_over_row",
+        "result_row"
+      ],
+      "unevaluatedProperties": false
+    },
+    "AdditionCompleteData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Schema representing the state of a column addition being computed by a human, so it may be incomplete or partially incorrect.",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/AdditionCompleteProblem"
+        },
+        "state": {
+          "$ref": "#/$defs/AdditionCompleteState",
+          "default": null
+        },
+        "ui_data": {
+          "$ref": "#/$defs/AdditionCompleteUIData",
+          "default": null
+        }
+      },
+      "required": [
+        "problem",
+        "state"
+      ],
+      "unevaluatedProperties": false
+    },
+    "OperandRowState": {
+      "type": "object",
+      "description": "State for one operand row (a number in the operation)",
+      "required": [
+        "digits"
+      ],
+      "properties": {
+        "digits": {
+          "type": "array",
+          "description": "List of digit states for this row (includes operator, spaces, padding, and actual digits)",
+          "items": {
+            "$ref": "#/$defs/DigitState"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "InputRowState": {
+      "type": "object",
+      "description": "State for an input row (carry-over, borrow, or result)",
+      "required": [
+        "digits"
+      ],
+      "properties": {
+        "digits": {
+          "type": "array",
+          "description": "List of digit states for this input row",
+          "items": {
+            "$ref": "#/$defs/DigitState"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "DigitState": {
+      "type": "object",
+      "description": "State for a single digit display (can be label or input)",
+      "required": [
+        "text",
+        "color_flag",
+        "interaction"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "What to display: digit ('0'-'9'), operator ('+', '-', '\u00d7', '\u00f7'), space (' '), or empty string",
+          "examples": [
+            "5",
+            "+",
+            " ",
+            ""
+          ]
+        },
+        "color_flag": {
+          "type": "string",
+          "description": "Abstract color flag for styling (mapped to concrete colors by the view)",
+          "enum": [
+            "normal",
+            "success",
+            "error",
+            "warning",
+            "highlight",
+            "pending",
+            "input"
+          ],
+          "default": "normal",
+          "examples": [
+            {
+              "value": "normal",
+              "description": "Default styling"
+            },
+            {
+              "value": "success",
+              "description": "Green - correct answer"
+            },
+            {
+              "value": "error",
+              "description": "Red - incorrect answer"
+            },
+            {
+              "value": "highlight",
+              "description": "Yellow + Bold - draw attention"
+            },
+            {
+              "value": "warning",
+              "description": "Orange - caution"
+            },
+            {
+              "value": "pending",
+              "description": "Light blue - user input awaiting validation (alias: 'input')"
+            }
+          ]
+        },
+        "interaction": {
+          "type": "string",
+          "description": "How the user can interact with this digit",
+          "enum": [
+            "ReadOnly",
+            "Editable",
+            "Placeholder"
+          ],
+          "default": "ReadOnly",
+          "examples": [
+            {
+              "value": "ReadOnly",
+              "description": "Display only (operand digits, operators)"
+            },
+            {
+              "value": "Editable",
+              "description": "User can type input here"
+            },
+            {
+              "value": "Placeholder",
+              "description": "Empty spacing (non-interactive)"
+            }
+          ]
+        },
+        "action": {
+          "$ref": "/activities/ui_schema.json#/$defs/UIAction",
+          "description": "Action to perform when the user interacts with this digit (only for editable digits)"
+        }
+      }
+    }
+  }
+}

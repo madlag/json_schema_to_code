@@ -1,0 +1,91 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "multiplication_column_state",
+    "type": "object",
+    "description": "Schema representing the state of a column multiplication being computed by a human, so it may be incomplete or partially incorrect.",
+    "properties": {
+        "problem": {
+            "type": "object",
+            "description": "The multiplication problem being solved",
+            "properties": {
+                "multiplicand": {
+                    "type": "integer",
+                    "description": "The number being multiplied (top number)",
+                    "minimum": 0
+                },
+                "multiplier": {
+                    "type": "integer",
+                    "description": "The number multiplying (bottom number)",
+                    "minimum": 0
+                }
+            },
+            "required": [
+                "multiplicand",
+                "multiplier"
+            ],
+            "additionalProperties": false
+        },
+        "state": {
+            "type": "object",
+            "description": "Current state of the multiplication computation",
+            "properties": {
+                "partial_products": {
+                    "type": "array",
+                    "description": "Array of partial products, one for each digit in the multiplier. Each partial product is represented as an array of digits. The first element of the array is for the units column, the second element is for the tens column, and so on.",
+                    "items": {
+                        "type": "array",
+                        "description": "A single partial product as an array of digits",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9
+                        }
+                    }
+                },
+                "carry_rows": {
+                    "type": "array",
+                    "description": "Array of carry rows, one for each partial product. Each carry row shows the carries for that partial product. The first element of the array is for the units column, the second element is for the tens column, and so on.",
+                    "items": {
+                        "type": "array",
+                        "description": "Carry row for a partial product",
+                        "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9
+                        }
+                    }
+                },
+                "final_sum": {
+                    "type": "array",
+                    "description": "Final sum of all partial products. The first element of the array is for the units column, the second element is for the tens column, and so on.",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9
+                    }
+                },
+                "final_carry_row": {
+                    "type": "array",
+                    "description": "Carry row for the final addition of partial products. The first element of the array is for the units column, the second element is for the tens column, and so on.",
+                    "items": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9
+                    }
+                }
+            },
+            "required": [
+                "partial_products",
+                "carry_rows",
+                "final_sum",
+                "final_carry_row"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "required": [
+        "problem",
+        "state"
+    ],
+    "additionalProperties": false
+}

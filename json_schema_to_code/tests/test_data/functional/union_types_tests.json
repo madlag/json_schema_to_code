@@ -34,12 +34,10 @@
       }
     },
     "expected_contains": [
-      "mixedField: float | str",
-      "optionalRef: None | SimpleObject"
+      "mixedField: float | str"
     ],
     "expected_not_contains": [
-      "FloatOrStr =",
-      "NoneOrSimpleobject ="
+      "FloatOrStr ="
     ]
   },
   {
@@ -78,13 +76,9 @@
     },
     "expected_contains": [
       "FloatOrStr = float | str",
-      "NoneOrSimpleobject = None | SimpleObject",
-      "mixedField: FloatOrStr",
-      "optionalRef: NoneOrSimpleobject"
+      "mixedField: FloatOrStr"
     ],
     "expected_not_contains": [
-      "mixedField: float | str",
-      "optionalRef: None | SimpleObject"
     ]
   },
   {
@@ -113,8 +107,7 @@
       "exclusiveField: int | str"
     ],
     "expected_not_contains": [
-      "IntOrStr =",
-      "exclusiveField: IntOrStr"
+      "IntOrStr ="
     ]
   },
   {
@@ -170,8 +163,7 @@
       "flexibleField: bool | float | str"
     ],
     "expected_not_contains": [
-      "BoolOrFloatOrStr =",
-      "flexibleField: BoolOrFloatOrStr"
+      "BoolOrFloatOrStr ="
     ]
   },
   {

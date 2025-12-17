@@ -1,14 +1,24 @@
+"""
+Reference file tests for v2 (PipelineGenerator) implementation.
+
+These tests verify the pipeline-based code generator produces output
+that matches the reference files.
+"""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
 import pytest
 
-from json_schema_to_code.codegen import CodeGenerator, CodeGeneratorConfig
+from json_schema_to_code.pipeline import PipelineGenerator
+from json_schema_to_code.pipeline.config import CodeGeneratorConfig
 
 
 def discover_test_cases():
     """Automatically discover all test cases from test_cases directory"""
-    test_cases_dir = Path(__file__).parent / "test_data" / "test_cases"
+    test_cases_dir = Path(__file__).parent.parent / "test_data" / "test_cases"
     test_cases = []
 
     # Iterate through each test case directory
@@ -25,9 +35,11 @@ def discover_test_cases():
 
         test_case_name = test_dir.name
 
-        # Check for Python reference
+        # Check for Python reference (prefer v2-specific reference if exists)
+        py_ref_v2 = test_dir / "reference.v2.py"
         py_ref_file = test_dir / "reference.py"
-        if py_ref_file.exists():
+        py_ref = py_ref_v2 if py_ref_v2.exists() else py_ref_file
+        if py_ref.exists():
             test_cases.append(
                 {
                     "test_name": f"{test_case_name}_python",
@@ -36,13 +48,15 @@ def discover_test_cases():
                     "config_file": config_file,
                     "test_case_name": test_case_name,
                     "language": "python",
-                    "reference_file": py_ref_file,
+                    "reference_file": py_ref,
                 }
             )
 
-        # Check for C# reference
+        # Check for C# reference (prefer v2-specific reference if exists)
+        cs_ref_v2 = test_dir / "reference.v2.cs"
         cs_ref_file = test_dir / "reference.cs"
-        if cs_ref_file.exists():
+        cs_ref = cs_ref_v2 if cs_ref_v2.exists() else cs_ref_file
+        if cs_ref.exists():
             test_cases.append(
                 {
                     "test_name": f"{test_case_name}_cs",
@@ -51,7 +65,7 @@ def discover_test_cases():
                     "config_file": config_file,
                     "test_case_name": test_case_name,
                     "language": "cs",
-                    "reference_file": cs_ref_file,
+                    "reference_file": cs_ref,
                 }
             )
 
@@ -80,7 +94,7 @@ def test_reference_file_generation(test_case):
     class_name = "".join(word.capitalize() for word in test_case["test_case_name"].split("_"))
 
     # Generate code
-    codegen = CodeGenerator(class_name, schema, config, test_case["language"])
+    codegen = PipelineGenerator(class_name, schema, config, test_case["language"])
     generated_code = codegen.generate()
 
     # Load reference file
@@ -105,9 +119,7 @@ def test_reference_file_generation(test_case):
         )
         diff_text = "".join(diff)
 
-        pytest.fail(
-            f"Generated code does not match reference for {test_case['test_name']}\n\nDiff:\n{diff_text}"
-        )
+        pytest.fail(f"Generated code does not match reference for {test_case['test_name']}\n\nDiff:\n{diff_text}")
 
 
 if __name__ == "__main__":

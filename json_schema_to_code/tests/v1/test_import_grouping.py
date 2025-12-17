@@ -1,6 +1,6 @@
 import pytest
 
-from ..codegen import CodeGenerator, CodeGeneratorConfig, ImportType
+from json_schema_to_code.codegen import CodeGenerator, CodeGeneratorConfig, ImportType
 
 
 class TestImportGrouping:

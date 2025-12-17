@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/activities/true_false/true_false_schema",
+  "title": "True/False Activity Schema",
+  "type": "object",
+  "$defs": {
+    "TrueFalseProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "True/false problem - only correct answer. Question comes from context.",
+      "properties": {
+        "correct_answer": {
+          "type": "boolean",
+          "description": "The correct answer (true or false)"
+        }
+      },
+      "required": ["correct_answer"],
+      "additionalProperties": false
+    },
+    "TrueFalseState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "State tracking student work",
+      "properties": {
+        "selected_answer": {
+          "type": ["boolean", "null"],
+          "description": "Student's selected answer, null if not selected",
+          "default": null
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "TrueFalseUIAnswerOption": {
+      "type": "object",
+      "description": "Answer option for UI rendering",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Display text ('True' or 'False' in user's language)",
+          "default": ""
+        },
+        "value": {
+          "type": "boolean",
+          "description": "The boolean value this option represents"
+        },
+        "is_correct": {
+          "type": "boolean",
+          "description": "Whether this option is the correct answer",
+          "default": false
+        },
+        "is_selected": {
+          "type": "boolean",
+          "default": false
+        },
+        "action": {
+          "$ref": "/activities/ui_schema#/$defs/UIAction",
+          "default": null
+        }
+      },
+      "required": ["text", "value", "is_selected", "action"],
+      "additionalProperties": false
+    },
+    "TrueFalseUIData": {
+      "type": "object",
+      "description": "UI data for rendering",
+      "properties": {
+        "common": {
+          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields",
+          "default": null
+        },
+        "answers": {
+          "type": "array",
+          "description": "The two answer options (True and False)",
+          "items": {
+            "$ref": "#/$defs/TrueFalseUIAnswerOption"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "default": []
+        }
+      },
+      "required": ["common", "answers"],
+      "additionalProperties": false
+    },
+    "TrueFalseData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/TrueFalseProblem"
+        },
+        "state": {
+          "$ref": "#/$defs/TrueFalseState",
+          "default": null
+        },
+        "ui_data": {
+          "$ref": "#/$defs/TrueFalseUIData",
+          "default": null
+        }
+      },
+      "required": ["problem", "state", "ui_data"],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/TrueFalseData"
+}

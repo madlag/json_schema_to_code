@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Text Connect Schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "exercise/text_connect"
+    },
+    "text_connect": {
+      "type": "object",
+      "properties": {
+        "introduction": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "pairs": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "text1": {
+                "type": "string"
+              },
+              "text2": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text1",
+              "text2"
+            ],
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "required": [
+        "introduction",
+        "instructions",
+        "pairs"
+      ],
+      "unevaluatedProperties": false
+    },
+    "question_text": {
+      "type": "string"
+    },
+    "correct_answer": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "text_connect",
+    "question_text",
+    "correct_answer"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

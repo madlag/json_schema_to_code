@@ -114,10 +114,14 @@ class ValidationRule(ABC):
         Args:
             condition: The condition to check
             error_message: The error message to display
-            use_raw_string: Whether to use raw f-string (rf"...") for Python (default: False)
-            use_plain_string: Whether to use plain string (no f-string) for Python (default: False)
-            exception_type: For C#, which exception type to use (default: ArgumentException)
-            **extra_params: Extra parameters for language-specific formatting (e.g., prop_name for C#)
+            use_raw_string: Whether to use raw f-string (rf"...") for Python
+                (default: False)
+            use_plain_string: Whether to use plain string (no f-string) for Python
+                (default: False)
+            exception_type: For C#, which exception type to use
+                (default: ArgumentException)
+            **extra_params: Extra parameters for language-specific formatting
+                (e.g., prop_name for C#)
 
         Returns:
             List of formatted code lines
@@ -172,7 +176,6 @@ class ValidationRule(ABC):
         Returns:
             Dictionary with parameters specific to this validation rule
         """
-        pass
 
     def apply_none_check(self) -> bool:
         """
@@ -480,7 +483,7 @@ class EnumRule(ValidationRule):
             prop_name = self._to_pascal_case(self.field_name)
             enum_list = ", ".join(f'"{v}"' for v in self.enum_values)
             return [
-                f"var valid{prop_name}Values = new[] {{ {enum_list} }};",
+                f"var valid{prop_name}Values = new[] {{{enum_list}}} ;",
                 f"if (!valid{prop_name}Values.Contains({prop_name}))",
                 f'    throw new ArgumentException($"{prop_name} must be one of: {enum_list}", nameof({prop_name}));',
             ]

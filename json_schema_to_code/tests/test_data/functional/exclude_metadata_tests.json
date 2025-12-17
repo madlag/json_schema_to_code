@@ -44,6 +44,15 @@
       "exclude_default_value_from_json": true
     },
     "expected_python": [
+      "string_with_default: str = field(default='hello', metadata=config(exclude=lambda x: x == 'hello'))",
+      "number_with_default: float = field(default=42.5, metadata=config(exclude=lambda x: x == 42.5))",
+      "integer_with_default: int = field(default=10, metadata=config(exclude=lambda x: x == 10))",
+      "boolean_with_default_true: bool = field(default=True, metadata=config(exclude=lambda x: x is True))",
+      "boolean_with_default_false: bool = field(default=False, metadata=config(exclude=lambda x: x is False))",
+      "null_default: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",
+      "string_without_default: str"
+    ],
+    "expected_python_v1": [
       "string_with_default: str = field(default=\"hello\", metadata=config(exclude=lambda x: x == \"hello\"))",
       "number_with_default: float = field(default=42.5, metadata=config(exclude=lambda x: x == 42.5))",
       "integer_with_default: int = field(default=10, metadata=config(exclude=lambda x: x == 10))",
@@ -85,6 +94,11 @@
       "exclude_default_value_from_json": true
     },
     "expected_python": [
+      "string_array_with_default: list[str] = field(default_factory=lambda: ['item1', 'item2'], metadata=config(exclude=lambda x: x == ['item1', 'item2']))",
+      "empty_array_default: list[int] = field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))",
+      "number_array_default: list[float] = field(default_factory=lambda: [1.5, 2.7], metadata=config(exclude=lambda x: x == [1.5, 2.7]))"
+    ],
+    "expected_python_v1": [
       "string_array_with_default: list[str] = field(default_factory=lambda: [\"item1\", \"item2\"], metadata=config(exclude=lambda x: x == [\"item1\", \"item2\"]))",
       "empty_array_default: list[int] = field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))",
       "number_array_default: list[float] = field(default_factory=lambda: [1.5, 2.7], metadata=config(exclude=lambda x: x == [1.5, 2.7]))"
@@ -116,6 +130,10 @@
     },
     "expected_python": [
       "empty_dict: Any = field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))",
+      "populated_dict: Any = field(default_factory=lambda: {'key1': 'value1', 'key2': 42}, metadata=config(exclude=lambda x: x == {'key1': 'value1', 'key2': 42}))"
+    ],
+    "expected_python_v1": [
+      "empty_dict: Any = field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))",
       "populated_dict: Any = field(default_factory=lambda: {\"key1\": \"value1\", \"key2\": 42}, metadata=config(exclude=lambda x: x == {\"key1\": \"value1\", \"key2\": 42}))"
     ]
   },
@@ -145,6 +163,10 @@
       "exclude_default_value_from_json": false
     },
     "expected_python": [
+      "string_with_default: str = 'hello'",
+      "array_with_default: list[str] = field(default_factory=lambda: ['item1'])"
+    ],
+    "expected_python_v1": [
       "string_with_default: str = \"hello\"",
       "array_with_default: list[str] = field(default_factory=lambda: [\"item1\"])"
     ]
@@ -170,6 +192,12 @@
       "exclude_default_value_from_json": true
     },
     "expected_python": [
+      "string_with_quotes: str = field(default='He said \"hello\"', metadata=config(exclude=lambda x: x == 'He said \"hello\"'))"
+    ],
+    "expected_python_v1": [
+      "string_with_quotes: str = field(default=\"He said \\\"hello\\\"\", metadata=config(exclude=lambda x: x == \"He said \\\"hello\\\"\"))"
+    ],
+    "expected_python_v2": [
       "string_with_quotes: str = field(default=\"He said \\\"hello\\\"\", metadata=config(exclude=lambda x: x == \"He said \\\"hello\\\"\"))"
     ]
   },
@@ -205,6 +233,12 @@
       "exclude_default_value_from_json": true
     },
     "expected_python": [
+      "required_field: str",
+      "required_with_default: str = field(default='hello', metadata=config(exclude=lambda x: x == 'hello'))",
+      "optional_field: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",
+      "optional_with_default: int = field(default=42, metadata=config(exclude=lambda x: x == 42))"
+    ],
+    "expected_python_v1": [
       "required_field: str",
       "required_with_default: str = field(default=\"hello\", metadata=config(exclude=lambda x: x == \"hello\"))",
       "optional_field: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",

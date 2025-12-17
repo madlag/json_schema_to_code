@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Cloze Test Schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "exercise/cloze_test"
+    },
+    "cloze_test": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "answers": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "properties": {
+              "answer": {
+                "type": "string"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "answer",
+              "valid"
+            ],
+            "unevaluatedProperties": false
+          }
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "answers",
+        "explanation"
+      ],
+      "unevaluatedProperties": false
+    },
+    "question_text": {
+      "type": "string"
+    },
+    "correct_answer": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "cloze_test",
+    "question_text",
+    "correct_answer"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

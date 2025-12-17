@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Exercise List Schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": ""
+    },
+    "exercise_list": {
+      "type": "object",
+      "properties": {
+        "exercises": {
+          "type": "array",
+          "description": "A list of exercise descriptions with their types",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uuid": {
+                "type": "string",
+                "description": "The UUID of the exercise"
+              },
+              "exercise_type": {
+                "type": "string",
+                "description": "The type of exercise to be generated"
+              },
+              "description": {
+                "type": "string",
+                "description": "A brief sentence describing the idea or concept behind the exercise"
+              }
+            },
+            "required": [
+              "uuid",
+              "exercise_type",
+              "description"
+            ],
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "required": [
+        "exercises"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "exercise_list"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

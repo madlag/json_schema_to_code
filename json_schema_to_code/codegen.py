@@ -8,6 +8,7 @@ import jinja2
 
 from . import __version__
 from .cli_utils import reconstruct_command_line
+from .pipeline.config import CodeGeneratorConfig
 from .utils import snake_to_pascal_case
 from .validator import ValidationGenerator
 
@@ -30,30 +31,7 @@ class ImportType(Enum):
     CONFIG = "config"  # dataclasses_json.config - only needed when using config() calls
 
 
-class CodeGeneratorConfig:
-    ignore_classes: list[str] = []
-    global_ignore_fields: list[str] = []
-    order_classes: list[str] = []
-    ignoreSubClassOverrides: bool = False
-    drop_min_max_items: bool = False
-    use_array_of_super_type_for_variable_length_tuple: bool = True
-    use_tuples: bool = True
-    use_inline_unions: bool = False
-    add_generation_comment: bool = True
-    quoted_types_for_python: list[str] = []
-    use_future_annotations: bool = True
-    exclude_default_value_from_json: bool = False
-    add_validation: bool = False
-    # External reference import configuration for Python
-    external_ref_base_module: str = ""  # Base module path for external $ref imports
-    external_ref_schema_to_module: dict[str, str] = {}  # Custom schema path → module mappings
-
-    @staticmethod
-    def from_dict(d):
-        config = CodeGeneratorConfig()
-        for k, v in d.items():
-            setattr(config, k, v)
-        return config
+# Import unified config from pipeline
 
 
 class CodeGenerator:
@@ -528,21 +506,25 @@ class CodeGenerator:
                     # C# doesn't support inline unions, use object as fallback
                     union_types_str = " | ".join(sorted_types)
                     raise Exception(
-                        f"C# code generation failed: Union types are not supported when 'use_inline_unions' is enabled.\n"
+                        f"C# code generation failed: Union types are not supported when "
+                        f"'use_inline_unions' is enabled.\n"
                         f"\n"
                         f"Union type encountered: {union_types_str}\n"
                         f"\n"
-                        f"C# does not natively support inline union types (like Python's 'str | int').\n"
+                        f"C# does not natively support inline union types "
+                        f"(like Python's 'str | int').\n"
                         f"\n"
                         f"To fix this, you have two options:\n"
-                        f"  1. Set 'use_inline_unions=False' in CodeGeneratorConfig - this will generate type aliases\n"
+                        f"  1. Set 'use_inline_unions=False' in CodeGeneratorConfig - "
+                        f"this will generate type aliases\n"
                         f"     (though they still resolve to 'object' in C#)\n"
                         f"  2. Refactor your JSON schema to avoid union types:\n"
                         f"     - Use discriminated unions with a 'type' discriminator field\n"
                         f"     - Split union properties into separate optional properties\n"
                         f"     - Use a base class with subclasses for different variants\n"
                         f"\n"
-                        f"Note: Python dataclass generation fully supports union types, so this limitation\n"
+                        f"Note: Python dataclass generation fully supports union types, "
+                        f"so this limitation\n"
                         f"only affects C# code generation."
                     )
                 else:
@@ -671,7 +653,10 @@ class CodeGenerator:
             return {"type": "string", "comment": self._generate_enum_comment(enum_values)}
 
         Warning(f"We should have information about what values are allowed for enum {type_name}")
-        return {"type": self.type_map[type_name], "comment": self._generate_enum_comment(enum_values)}
+        return {
+            "type": self.type_map[type_name],
+            "comment": self._generate_enum_comment(enum_values),
+        }
 
     def ref_type(self, ref: str) -> str:
         """Resolve a $ref to its class name.
@@ -726,7 +711,8 @@ class CodeGenerator:
 
         Example:
             "/activities/guess/guess_schema#/$defs/GuessData"
-            → ("explayn_dh_agent.barbara.db.app_object_definitions.activities.guess.guess_dataclass", "GuessData")
+            → ("explayn_dh_agent.barbara.db.app_object_definitions.activities."
+               "guess.guess_dataclass", "GuessData")
 
         Args:
             schema_ref: The $ref string from schema
@@ -943,7 +929,8 @@ class CodeGenerator:
             tuple_type = self.type_map["tuple"]
             if type == "array":
                 if isinstance(type_info["items"], dict):
-                    item_type_info = self.translate_type(type_info["items"], field_name, is_required=True)  # Array items are always considered required
+                    # Array items are always considered required
+                    item_type_info = self.translate_type(type_info["items"], field_name, is_required=True)
                     item_type = item_type_info["type"]
                     item_type = self.quote_type(item_type)
                     self.register_import_needed(ImportType.LIST)
@@ -1274,7 +1261,7 @@ class CodeGenerator:
             union_string = " | ".join(sorted(union_types))
             if any(t.startswith('"') and t.endswith('"') for t in union_types):
                 unquoted = [t.strip('"') if t.startswith('"') and t.endswith('"') else t for t in union_types]
-                union_string = f'"{ " | ".join(sorted(unquoted)) }"'
+                union_string = f'"{" | ".join(sorted(unquoted))}"'
             self.type_aliases.add(f"{class_name} = {union_string}")
         else:
             union_type_name = self.union_type(union_types)
@@ -1374,7 +1361,8 @@ class CodeGenerator:
         # Normalize enum format (for Python, enums may still be arrays)
         if "enum" in p:
             if not isinstance(p["enum"], dict):
-                # For Python, convert to uppercase keys; for C#, should already be dict from preprocessing
+                # For Python, convert to uppercase keys; for C#, should already be dict
+                # from preprocessing
                 if self.language == "python":
                     p["enum"] = {k.upper(): k for k in p["enum"]}
                 else:
@@ -1547,7 +1535,8 @@ class CodeGenerator:
         if "$ref" in type_info:
             raise Exception(f"_handle_inline_object should not be called for $ref items. Field: {field_name}, $ref: {type_info['$ref']}")
 
-        # Generate a unique class name for this inline object based on the field name and parent context
+        # Generate a unique class name for this inline object based on the field
+        # name and parent context
         inline_class_name = self._generate_inline_class_name(field_name)
 
         # Store the inline object definition for later class generation
@@ -1562,7 +1551,8 @@ class CodeGenerator:
         return result
 
     def _generate_inline_class_name(self, field_name):
-        """Generate a meaningful class name for an inline object based on the field name and parent context
+        """Generate a meaningful class name for an inline object based on the field name
+        and parent context
 
         NOTE: This should NEVER be called for $ref items - $ref items must use their $def name
         """
@@ -1640,19 +1630,19 @@ class CodeGenerator:
 
                             # Recursively process nested inline objects
                             self._collect_inline_class_names(field_info, unique_name)
-                    elif field_info["type"] == "array" and "items" in field_info:
-                        # Check if array items are inline objects
-                        items_info = field_info["items"]
-                        # Skip if items have a $ref - they reference a $def, not an inline object
-                        if isinstance(items_info, dict) and "$ref" not in items_info and "type" in items_info:
-                            if items_info["type"] == "object" and "properties" in items_info:
-                                # Array of inline objects
-                                base_name = self._to_pascal_case(field_name)
-                                unique_name = self._get_unique_class_name(base_name, parent_context)
-                                self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
+                        elif field_info["type"] == "array" and "items" in field_info:
+                            # Check if array items are inline objects
+                            items_info = field_info["items"]
+                            # Skip if items have a $ref - they reference a $def, not an inline object
+                            if isinstance(items_info, dict) and "$ref" not in items_info and "type" in items_info:
+                                if items_info["type"] == "object" and "properties" in items_info:
+                                    # Array of inline objects
+                                    base_name = self._to_pascal_case(field_name)
+                                    unique_name = self._get_unique_class_name(base_name, parent_context)
+                                    self.inline_class_name_mapping[(parent_context, field_name)] = unique_name
 
-                                # Recursively process nested inline objects
-                                self._collect_inline_class_names(items_info, unique_name)
+                                    # Recursively process nested inline objects
+                                    self._collect_inline_class_names(items_info, unique_name)
 
     def _get_unique_class_name(self, base_name, parent_context):
         """Get a unique class name, using parent context to ensure uniqueness"""

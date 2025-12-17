@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Addition Schema",
+  "$ref": "#/$defs/AdditionData",
+  "$defs": {
+    "AdditionData": {
+      "type": "object",
+      "description": "Schema representing the state of a column addition being computed by a human, so it may be incomplete or partially incorrect.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "maths/basic_operations/addition"
+        },
+        "problem": {
+          "$ref": "#/$defs/AdditionProblem"
+        },
+        "correct_answer": {
+          "type": "string",
+          "default": ""
+        },
+        "question_text": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [
+        "type",
+        "problem",
+        "correct_answer",
+        "question_text"
+      ],
+      "unevaluatedProperties": false
+    },
+    "AdditionProblem": {
+      "type": "object",
+      "description": "The addition problem being solved",
+      "properties": {
+        "operands": {
+          "type": "array",
+          "description": "The numbers being added together",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "default": []
+        }
+      },
+      "required": [
+        "operands"
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

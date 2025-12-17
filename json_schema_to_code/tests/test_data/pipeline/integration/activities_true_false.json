@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/activities/true_false/true_false_schema",
+  "title": "True/False Activity Schema",
+  "type": "object",
+  "$defs": {
+    "TrueFalseProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "True/false problem - only correct answer. Question comes from context.",
+      "properties": {
+        "correct_answer": {
+          "type": "boolean",
+          "description": "The correct answer (true or false)"
+        }
+      },
+      "required": [
+        "correct_answer"
+      ],
+      "additionalProperties": false
+    },
+    "TrueFalseState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "State tracking student work",
+      "properties": {
+        "selected_answer": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Student's selected answer, null if not selected",
+          "default": null
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "TrueFalseUIAnswerOption": {
+      "type": "object",
+      "description": "Answer option for UI rendering",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Display text ('True' or 'False' in user's language)",
+          "default": ""
+        },
+        "value": {
+          "type": "boolean",
+          "description": "The boolean value this option represents"
+        },
+        "is_correct": {
+          "type": "boolean",
+          "description": "Whether this option is the correct answer",
+          "default": false
+        },
+        "is_selected": {
+          "type": "boolean",
+          "default": false
+        },
+        "action": {
+          "$ref": "#/$defs/UIAction",
+          "default": null
+        }
+      },
+      "required": [
+        "text",
+        "value",
+        "is_selected",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "TrueFalseUIData": {
+      "type": "object",
+      "description": "UI data for rendering",
+      "properties": {
+        "common": {
+          "$ref": "#/$defs/UIDataCommonFields",
+          "default": null
+        },
+        "answers": {
+          "type": "array",
+          "description": "The two answer options (True and False)",
+          "items": {
+            "$ref": "#/$defs/TrueFalseUIAnswerOption"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "default": []
+        }
+      },
+      "required": [
+        "common",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "TrueFalseData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/TrueFalseProblem"
+        },
+        "state": {
+          "$ref": "#/$defs/TrueFalseState",
+          "default": null
+        },
+        "ui_data": {
+          "$ref": "#/$defs/TrueFalseUIData",
+          "default": null
+        }
+      },
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
+      "additionalProperties": false
+    },
+    "UIAction": {
+      "type": "object",
+      "description": "Action configuration for user input components",
+      "properties": {
+        "operations": {
+          "type": "array",
+          "description": "Action parameters (always an array, even for a single parameter)",
+          "items": {
+            "$ref": "#/$defs/UIStateChangeOperation"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "operations"
+      ]
+    },
+    "UIDataCommonFields": {
+      "type": "object",
+      "description": "Base fields for all activities",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text to ask the student"
+        },
+        "answer": {
+          "type": "string",
+          "description": "The answer text to display to the student"
+        }
+      },
+      "required": [
+        "question",
+        "answer"
+      ],
+      "additionalProperties": false
+    },
+    "UIStateChangeOperation": {
+      "type": "object",
+      "description": "Action parameter as a JSON object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of the action parameter",
+          "const": "state_change"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the action parameter"
+        },
+        "op": {
+          "type": "string",
+          "description": "Operation to perform on the action parameter",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "type_change",
+            "append"
+          ]
+        },
+        "value_type": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Accepted types for the value (any match is valid)",
+            "enum": [
+              "dict",
+              "array",
+              "string",
+              "char",
+              "boolean",
+              "integer",
+              "float",
+              "null",
+              "any"
+            ]
+          },
+          "minItems": 1,
+          "description": "List of acceptable types for the value (e.g., [\"integer\", \"number\"] allows either)"
+        },
+        "value": {
+          "description": "Value to set for the action parameter (filled by controller before sending, optional in JSON). Can be any type: string, number, boolean, null, object, or array.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "path",
+        "op",
+        "value_type"
+      ]
+    }
+  },
+  "$ref": "#/$defs/TrueFalseData"
+}

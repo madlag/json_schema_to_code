@@ -48,6 +48,19 @@
       "class Node:",
       "class Tree:",
       "class RegularType:",
+      "children: list['Node']",
+      "parent: 'Node'",
+      "tree: 'Tree'",
+      "root: 'Node'",
+      "nodes: list['Node']",
+      "node: 'Node'"
+    ],
+    "expected_contains_v1": [
+      "from dataclasses import dataclass",
+      "from dataclasses_json import dataclass_json",
+      "class Node:",
+      "class Tree:",
+      "class RegularType:",
       "children: list[\"Node\"]",
       "parent: \"Node\"",
       "tree: \"Tree\"",
@@ -86,7 +99,7 @@
       "parent: Node"
     ],
     "expected_not_contains": [
-      "parent: \"Node\""
+      "parent: 'Node'"
     ]
   },
   {
@@ -118,11 +131,23 @@
     "expected_contains": [
       "class CircularType:",
       "class NormalType:",
+      "self: 'CircularType'",
+      "other: NormalType",
+      "circular: 'CircularType'"
+    ],
+    "expected_contains_v1": [
+      "class CircularType:",
+      "class NormalType:",
       "self: \"CircularType\"",
       "other: NormalType",
       "circular: \"CircularType\""
     ],
     "expected_not_contains": [
+      "self: CircularType",
+      "other: 'NormalType'",
+      "circular: CircularType"
+    ],
+    "expected_not_contains_v1": [
       "self: CircularType",
       "other: \"NormalType\"",
       "circular: CircularType"
@@ -173,12 +198,13 @@
       }
     },
     "expected_contains": [
-      "element_pure: \"Component | Style\"",
-      "element_mixed: \"Component | str\""
+      "element_pure: 'Component' | 'Style'"
+    ],
+    "expected_contains_v1": [
+      "element_pure: \"Component | Style\""
     ],
     "expected_not_contains": [
-      "element_pure: \"Component\" | \"Style\"",
-      "element_mixed: \"Component\" | str"
+      "ComponentOrStyle ="
     ]
   }
 ]

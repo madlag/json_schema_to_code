@@ -1,0 +1,237 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "classify_state",
+    "$ref": "#/$defs/ClassifyData",
+    "$defs": {
+        "ClassifyInnerObject": {
+            "type": "object",
+            "description": "An object that can be classified into buckets",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "The type of object (e.g., 'primitive/text', 'primitive/image')"
+                },
+                "uuid": {
+                    "type": "string",
+                    "description": "Unique identifier for the object",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Text content of the object (for text objects)",
+                    "default": null
+                },
+                "image_url": {
+                    "type": "string",
+                    "description": "URL of the image (for image objects)",
+                    "default": null
+                },
+                "hint": {
+                    "type": "string",
+                    "description": "Hint text for the object",
+                    "default": null
+                },
+                "explanation": {
+                    "type": "string",
+                    "description": "Explanation text for the object",
+                    "default": null
+                },
+                "mnemonic": {
+                    "type": "string",
+                    "description": "Mnemonic text for the object",
+                    "default": null
+                },
+                "additional_properties": {
+                    "type": "object",
+                    "description": "Additional properties for the object",
+                    "default": {}
+                }
+            },
+            "required": [
+                "type",
+                "uuid"
+            ]
+        },
+        "ClassifiableObject": {
+            "type": "object",
+            "description": "An object that can be classified with its associated bucket",
+            "properties": {
+                "object": {
+                    "$ref": "#/$defs/ClassifyInnerObject",
+                    "description": "The object to be classified"
+                },
+                "bucket": {
+                    "type": "string",
+                    "description": "The correct bucket/category this object belongs to"
+                }
+            },
+            "required": [
+                "object",
+                "bucket"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyUIData": {
+            "type": "object",
+            "description": "Complete UI state for classify activity - includes all data needed for rendering",
+            "properties": {
+                "buckets": {
+                    "type": "array",
+                    "description": "The categories/buckets to display",
+                    "items": {
+                        "$ref": "#/$defs/ClassifyBucket"
+                    },
+                    "minItems": 2
+                },
+                "items": {
+                    "type": "array",
+                    "description": "The objects that need to be classified (remaining items)",
+                    "items": {
+                        "$ref": "#/$defs/ClassifiableObject"
+                    },
+                    "minItems": 0
+                },
+                "classified_items": {
+                    "type": "array",
+                    "description": "Items already classified by the student (for display in buckets)",
+                    "items": {
+                        "$ref": "#/$defs/ClassifyStateBucket"
+                    }
+                },
+                "actionTemplate": {
+                    "$ref": "/activities/ui_schema.json#/$defs/UIAction"
+                }
+            },
+            "required": [
+                "buckets",
+                "items",
+                "classified_items",
+                "current_item_index",
+                "actionTemplate"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyBucket": {
+            "type": "object",
+            "description": "A classification bucket/category",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name/label of the classification bucket (e.g., 'mammal', 'reptile')"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional description of what belongs in this bucket"
+                }
+            },
+            "required": [
+                "name",
+                "description"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyStateBucket": {
+            "type": "object",
+            "description": "A bucket in the classification state with items placed by the student",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the bucket (must match problem bucket names)"
+                },
+                "items": {
+                    "type": "array",
+                    "description": "Objects currently placed in this bucket by the student",
+                    "items": {
+                        "$ref": "#/$defs/ClassifiableObject"
+                    }
+                }
+            },
+            "required": [
+                "name",
+                "items"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyProblem": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "The classification problem being solved",
+            "properties": {
+                "buckets": {
+                    "type": "array",
+                    "description": "The categories or buckets that objects should be sorted into",
+                    "items": {
+                        "$ref": "#/$defs/ClassifyBucket"
+                    },
+                    "minItems": 2
+                },
+                "items": {
+                    "type": "array",
+                    "description": "The objects that need to be classified into buckets",
+                    "items": {
+                        "$ref": "#/$defs/ClassifiableObject"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "buckets",
+                "items"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyState": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Current state of the student's classification work",
+            "properties": {
+                "buckets": {
+                    "type": "array",
+                    "description": "Current state of buckets with objects placed by the student",
+                    "items": {
+                        "$ref": "#/$defs/ClassifyStateBucket"
+                    },
+                    "minItems": 2
+                },
+                "items": {
+                    "type": "array",
+                    "description": "Objects not yet classified or remaining to be classified",
+                    "items": {
+                        "$ref": "#/$defs/ClassifiableObject"
+                    },
+                    "minItems": 0
+                }
+            },
+            "required": [
+                "buckets",
+                "items"
+            ],
+            "additionalProperties": false
+        },
+        "ClassifyData": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Schema representing the state of a classification activity being completed by a human, so it may be incomplete or partially incorrect.",
+            "properties": {
+                "problem": {
+                    "$ref": "#/$defs/ClassifyProblem",
+                    "default": null
+                },
+                "state": {
+                    "$ref": "#/$defs/ClassifyState",
+                    "default": null
+                },
+                "ui_data": {
+                    "$ref": "#/$defs/ClassifyUIData",
+                    "description": "UI state for the classify activity",
+                    "default": null
+                }
+            },
+            "required": [
+                "problem",
+                "state"
+            ],
+            "additionalProperties": false
+        }
+    }
+}

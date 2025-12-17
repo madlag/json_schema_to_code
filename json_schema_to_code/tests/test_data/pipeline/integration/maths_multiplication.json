@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Multiplication Schema",
+  "type": "object",
+  "description": "Schema representing the state of a column multiplication being computed by a human, so it may be incomplete or partially incorrect.",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "maths/basic_operations/multiplication"
+    },
+    "problem": {
+      "type": "object",
+      "description": "The multiplication problem being solved",
+      "properties": {
+        "multiplicand": {
+          "type": "integer",
+          "description": "The top number (being multiplied)",
+          "minimum": 0
+        },
+        "multiplier": {
+          "type": "integer",
+          "description": "The bottom number (multiplying by)",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "multiplicand",
+        "multiplier"
+      ],
+      "unevaluatedProperties": false
+    },
+    "state": {
+      "type": "object",
+      "description": "Current state of the multiplication computation",
+      "properties": {
+        "partial_products": {
+          "type": "array",
+          "description": "Array of partial products, one for each digit in the multiplier. Each partial product is an array of digits. Index 0 = units, 1 = tens, etc.",
+          "items": {
+            "type": "array",
+            "description": "A single partial product as an array of digits",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "carry_rows": {
+          "type": "array",
+          "description": "Array of carry rows, one for each partial product. Each carry row shows the carries for that partial product. Index 0 = units, 1 = tens, etc.",
+          "items": {
+            "type": "array",
+            "description": "Carry row for a partial product",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "final_sum": {
+          "type": "array",
+          "description": "Final sum of all partial products. Index 0 = units, 1 = tens, etc.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "final_carry_row": {
+          "type": "array",
+          "description": "Carry row for the final addition of partial products. Index 0 = units, 1 = tens, etc.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "partial_products",
+        "carry_rows",
+        "final_sum",
+        "final_carry_row"
+      ],
+      "unevaluatedProperties": false
+    },
+    "correct_answer": {
+      "type": "string"
+    },
+    "question_text": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "problem",
+    "state",
+    "correct_answer",
+    "question_text"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

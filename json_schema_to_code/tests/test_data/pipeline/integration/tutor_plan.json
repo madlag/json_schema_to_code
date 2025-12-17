@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Tutor Plan",
+  "description": "A two-level plan of a topic to be explored with a student",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "tutor_plan"
+    },
+    "tutor_plan": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "The main topic to be explored with the student"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the topic"
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the topic"
+        },
+        "user_level": {
+          "type": "string",
+          "description": "The level of the user"
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief overview of the topic and its educational importance"
+        },
+        "illustration": {
+          "$ref": "/primitive/smart_image/smart_image_schema"
+        },
+        "sections": {
+          "type": "array",
+          "description": "The subsections within this main section",
+          "items": {
+            "type": "object",
+            "properties": {
+              "topic": {
+                "type": "string",
+                "description": "The topic of the subsection"
+              },
+              "category": {
+                "type": "string",
+                "description": "The category of the section: only 1-3 words."
+              },
+              "title": {
+                "type": "string",
+                "description": "The title of the subsection"
+              },
+              "illustration": {
+                "$ref": "/primitive/smart_image/smart_image_schema"
+              },
+              "importance_justification": {
+                "type": "string",
+                "description": "Explanation of why this subtopic is important for understanding the main topic"
+              },
+              "teaching_objectives": {
+                "type": "array",
+                "description": "Create a sequential teaching plan that guides the student through the actual process of solving or understanding the topic. Each step should be a necessary part of the solution process. Skip introductions, background explanations, or concept definitions. Adapt based on topic type: For Math/Science, start with concrete elements and guide toward patterns through observation. For History, identify key factors, explore causes with evidence, analyze event sequences, and examine consequences. For Literature/Language, jump to analysis and interpretation using textual evidence. For Social Studies, start with specific cases and build understanding through concrete examples. Focus on the concrete steps needed to reach the answer.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "objective_title": {
+                      "type": "string",
+                      "description": "A brief title for this teaching step (5 words maximum)"
+                    },
+                    "learning_goal": {
+                      "type": "string",
+                      "description": "What the user should understand, analyze, or be able to explain after this step (20 words maximum)"
+                    },
+                    "expected_understanding": {
+                      "type": "string",
+                      "description": "The key insight, connection, or understanding the user should develop through your questions (25 words maximum)"
+                    },
+                    "guiding_question": {
+                      "type": "string",
+                      "description": "A question that will guide the user into understanding the 'expected_understanding'. It should be specific and actionable. Ask the user to calculate, observe, or identify concrete elements, not abstract concepts."
+                    }
+                  },
+                  "required": [
+                    "objective_title",
+                    "learning_goal",
+                    "expected_understanding",
+                    "guiding_question"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 3,
+                "maxItems": 5
+              },
+              "opening_question": {
+                "type": "string",
+                "description": "An engaging question to open discussion of this section corresponding to the first teaching objective"
+              },
+              "action": {
+                "$ref": "/component/action/action_schema"
+              }
+            },
+            "required": [
+              "topic",
+              "category",
+              "title",
+              "illustration",
+              "opening_question",
+              "importance_justification",
+              "teaching_objectives"
+            ],
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "required": [
+        "topic",
+        "title",
+        "category",
+        "user_level",
+        "description",
+        "illustration",
+        "sections"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "tutor_plan"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

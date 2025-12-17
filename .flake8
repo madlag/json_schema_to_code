@@ -1,4 +1,7 @@
 [flake8]
-max-line-length = 160
+max-line-length = 150
+exclude =
+    json_schema_to_code/tests/test_data/test_cases/*/reference.*
+    json_schema_to_code/tests/test_output/*
 per-file-ignores =
     json_schema_to_code/tests/test_data/references/*:W291,W292,W293,E302,E303

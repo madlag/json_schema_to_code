@@ -1,0 +1,219 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$id": "/chemistry/periodic_table/activities/guess/periodic_table_guess_schema",
+    "title": "Guess The Element Activity Schema",
+    "x-csharp-using": [
+        "EduObject.Activities.Guess"
+    ],
+    "$ref": "#/$defs/PeriodicTableGuessData",
+    "$defs": {
+        "PeriodicTableType": {
+            "type": "string",
+            "enum": [
+                "Full",
+                "First3Rows"
+            ],
+            "x-enum-members": {
+                "Full": "FULL",
+                "First3Rows": "FIRST_3_ROWS"
+            },
+            "description": "Type of periodic table to display"
+        },
+        "ElementProperties": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Properties of a chemical element",
+            "properties": {
+                "atomic_number": {
+                    "type": "integer",
+                    "description": "Atomic number of the element",
+                    "minimum": 1,
+                    "default": 0
+                },
+                "column": {
+                    "type": "integer",
+                    "description": "Column position in the periodic table",
+                    "minimum": 1,
+                    "default": 0
+                },
+                "row": {
+                    "type": "integer",
+                    "description": "Row position in the periodic table",
+                    "minimum": 1,
+                    "default": 0
+                },
+                "year_discovered": {
+                    "type": "integer",
+                    "description": "Year the element was discovered",
+                    "minimum": 0,
+                    "default": 0
+                },
+                "symbol": {
+                    "type": "string",
+                    "description": "Chemical symbol (e.g., 'H', 'He', 'Li')",
+                    "default": ""
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Full name of the element",
+                    "default": ""
+                },
+                "chemical_category": {
+                    "type": "string",
+                    "description": "Chemical category (e.g., 'noble gas', 'alkali metal')",
+                    "default": ""
+                },
+                "usage": {
+                    "type": "string",
+                    "description": "Common uses and applications of the element",
+                    "default": ""
+                },
+                "anecdotes": {
+                    "type": "array",
+                    "description": "Interesting facts and anecdotes about the element",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": []
+                }
+            },
+            "required": [
+                "atomic_number",
+                "column",
+                "row",
+                "year_discovered",
+                "symbol",
+                "name",
+                "chemical_category",
+                "usage",
+                "anecdotes"
+            ],
+            "additionalProperties": false
+        },
+        "PeriodicTableGuessProblem": {
+            "x-csharp-generate": false,
+            "description": "Problem definition for the guess the element activity",
+            "allOf": [
+                {
+                    "$ref": "/activities/guess/guess_schema#/$defs/GuessProblem"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "filter_mode": {
+                            "$ref": "#/$defs/PeriodicTableType",
+                            "default": "Full"
+                        },
+                        "element_properties": {
+                            "$ref": "#/$defs/ElementProperties",
+                            "default": null
+                        }
+                    },
+                    "required": [
+                        "filter_mode",
+                        "element_properties"
+                    ]
+                }
+            ]
+        },
+        "PeriodicTableGuessState": {
+            "x-csharp-generate": false,
+            "description": "Current state of the guess the element activity",
+            "allOf": [
+                {
+                    "$ref": "/activities/guess/guess_schema#/$defs/GuessState"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "confirmed_element_properties": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "atomic_number",
+                                    "column",
+                                    "row",
+                                    "year_discovered",
+                                    "symbol",
+                                    "name",
+                                    "chemical_category",
+                                    "usage",
+                                    "anecdotes[0]",
+                                    "anecdotes[1]",
+                                    "anecdotes[2]",
+                                    "anecdotes[3]",
+                                    "anecdotes[4]",
+                                    "anecdotes[5]",
+                                    "anecdotes[6]",
+                                    "anecdotes[7]",
+                                    "anecdotes[8]",
+                                    "anecdotes[9]"
+                                ]
+                            },
+                            "description": "Properties of the confirmed correct element (null until confirmed)",
+                            "default": []
+                        }
+                    },
+                    "required": [
+                        "confirmed_element_properties"
+                    ]
+                }
+            ]
+        },
+        "PeriodicTableGuessData": {
+            "x-csharp-generate": false,
+            "description": "Complete activity data for guess the element",
+            "allOf": [
+                {
+                    "$ref": "/activities/guess/guess_schema#/$defs/GuessData"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "problem": {
+                            "$ref": "#/$defs/PeriodicTableGuessProblem",
+                            "description": "Element guessing problem with periodic table context"
+                        },
+                        "state": {
+                            "$ref": "#/$defs/PeriodicTableGuessState",
+                            "description": "Current state with element-specific tracking"
+                        },
+                        "ui_data": {
+                            "$ref": "#/$defs/PeriodicTableGuessUIData",
+                            "description": "UI data with periodic table display"
+                        }
+                    }
+                }
+            ]
+        },
+        "PeriodicTableGuessUIData": {
+            "description": "UI state for guess the element activity",
+            "allOf": [
+                {
+                    "$ref": "/activities/guess/guess_schema#/$defs/GuessUIData"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "filter_mode": {
+                            "$ref": "#/$defs/PeriodicTableType",
+                            "description": "Type of periodic table to display",
+                            "default": "Full"
+                        },
+                        "element_states": {
+                            "type": "string",
+                            "pattern": "^[NHCIFUA]*$",
+                            "description": "State of each element (indexed by atomic number - 1). Alias for item_states.",
+                            "default": ""
+                        }
+                    },
+                    "required": [
+                        "filter_mode",
+                        "element_states"
+                    ]
+                }
+            ]
+        }
+    }
+}

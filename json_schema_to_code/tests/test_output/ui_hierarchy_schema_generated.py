@@ -138,14 +138,4 @@ class TableObject(BaseUIObject):
 
 
 NoneOrStyle = None | Style
-UiObjectUnion = (
-    ButtonObject
-    | ContainerObject
-    | FormObject
-    | ImageObject
-    | InputObject
-    | ListObject
-    | ModalObject
-    | TableObject
-    | TextObject
-)
+UiObjectUnion = ButtonObject | ContainerObject | FormObject | ImageObject | InputObject | ListObject | ModalObject | TableObject | TextObject

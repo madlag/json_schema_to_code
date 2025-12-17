@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/chemistry/periodic_table/activities/guess/periodic_table_guess_schema",
+  "title": "Guess The Element Activity Schema",
+  "x-csharp-using": [
+    "EduObject.Activities.Guess"
+  ],
+  "$ref": "#/$defs/PeriodicTableGuessData",
+  "$defs": {
+    "PeriodicTableType": {
+      "type": "string",
+      "enum": [
+        "Full",
+        "First3Rows"
+      ],
+      "x-enum-members": {
+        "Full": "FULL",
+        "First3Rows": "FIRST_3_ROWS"
+      },
+      "description": "Type of periodic table to display"
+    },
+    "ElementProperties": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Properties of a chemical element",
+      "properties": {
+        "atomic_number": {
+          "type": "integer",
+          "description": "Atomic number of the element",
+          "minimum": 1,
+          "default": 0
+        },
+        "column": {
+          "type": "integer",
+          "description": "Column position in the periodic table",
+          "minimum": 1,
+          "default": 0
+        },
+        "row": {
+          "type": "integer",
+          "description": "Row position in the periodic table",
+          "minimum": 1,
+          "default": 0
+        },
+        "year_discovered": {
+          "type": "integer",
+          "description": "Year the element was discovered",
+          "minimum": 0,
+          "default": 0
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Chemical symbol (e.g., 'H', 'He', 'Li')",
+          "default": ""
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the element",
+          "default": ""
+        },
+        "chemical_category": {
+          "type": "string",
+          "description": "Chemical category (e.g., 'noble gas', 'alkali metal')",
+          "default": ""
+        },
+        "usage": {
+          "type": "string",
+          "description": "Common uses and applications of the element",
+          "default": ""
+        },
+        "anecdotes": {
+          "type": "array",
+          "description": "Interesting facts and anecdotes about the element",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "atomic_number",
+        "column",
+        "row",
+        "year_discovered",
+        "symbol",
+        "name",
+        "chemical_category",
+        "usage",
+        "anecdotes"
+      ],
+      "additionalProperties": false
+    },
+    "PeriodicTableGuessProblem": {
+      "x-csharp-generate": false,
+      "description": "Problem definition for the guess the element activity",
+      "allOf": [
+        {
+          "$ref": "#/$defs/GuessProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "filter_mode": {
+              "$ref": "#/$defs/PeriodicTableType",
+              "default": "Full"
+            },
+            "element_properties": {
+              "$ref": "#/$defs/ElementProperties",
+              "default": null
+            }
+          },
+          "required": [
+            "filter_mode",
+            "element_properties"
+          ]
+        }
+      ]
+    },
+    "PeriodicTableGuessState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Current state of the guess the element activity",
+      "properties": {
+        "guess_state": {
+          "$ref": "#/$defs/GuessState",
+          "description": "Generic guess state (selected_item_ids = selected_element_indices, item_states = element_states)",
+          "default": null
+        },
+        "confirmed_element_properties": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "atomic_number",
+              "column",
+              "row",
+              "year_discovered",
+              "symbol",
+              "name",
+              "chemical_category",
+              "usage",
+              "anecdotes[0]",
+              "anecdotes[1]",
+              "anecdotes[2]",
+              "anecdotes[3]",
+              "anecdotes[4]",
+              "anecdotes[5]",
+              "anecdotes[6]",
+              "anecdotes[7]",
+              "anecdotes[8]",
+              "anecdotes[9]"
+            ]
+          },
+          "description": "Properties of the confirmed correct element (null until confirmed)",
+          "default": []
+        }
+      },
+      "required": [
+        "confirmed_element_properties"
+      ],
+      "additionalProperties": false
+    },
+    "PeriodicTableGuessData": {
+      "x-csharp-generate": false,
+      "description": "Complete activity data for guess the element",
+      "allOf": [
+        {
+          "$ref": "#/$defs/GuessData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/PeriodicTableGuessProblem",
+              "description": "Element guessing problem with periodic table context"
+            },
+            "state": {
+              "$ref": "#/$defs/PeriodicTableGuessState",
+              "description": "Current state with element-specific tracking"
+            },
+            "ui_data": {
+              "$ref": "#/$defs/PeriodicTableGuessUIData",
+              "description": "UI data with periodic table display"
+            }
+          }
+        }
+      ]
+    },
+    "PeriodicTableGuessUIData": {
+      "description": "UI state for guess the element activity",
+      "allOf": [
+        {
+          "$ref": "#/$defs/GuessUIData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "filter_mode": {
+              "$ref": "#/$defs/PeriodicTableType",
+              "description": "Type of periodic table to display",
+              "default": "Full"
+            },
+            "element_states": {
+              "type": "string",
+              "pattern": "^[NHCIFUA]*$",
+              "description": "State of each element (indexed by atomic number - 1). Alias for item_states.",
+              "default": ""
+            }
+          },
+          "required": [
+            "filter_mode",
+            "element_states"
+          ]
+        }
+      ]
+    },
+    "GuessProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Generic guess problem - contains the correct answer, question, and hints",
+      "properties": {
+        "correct_item_id": {
+          "type": "integer",
+          "description": "The index of the correct item (0-based, used to index into item_states)",
+          "minimum": 0
+        },
+        "question_text": {
+          "type": "string",
+          "description": "The question or prompt to display to the student",
+          "default": ""
+        },
+        "difficulty_level": {
+          "type": "integer",
+          "description": "Difficulty level (higher = more difficult)",
+          "minimum": 1,
+          "default": 1
+        },
+        "correct_answer_text": {
+          "type": "string",
+          "description": "Human-readable text of the correct answer (for display after completion)",
+          "default": ""
+        },
+        "hints": {
+          "type": "array",
+          "description": "Available hints for this problem",
+          "items": {
+            "$ref": "#/$defs/GuessHint"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "correct_item_id",
+        "question_text",
+        "difficulty_level",
+        "correct_answer_text",
+        "hints"
+      ],
+      "additionalProperties": false
+    },
+    "GuessState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "State tracking for guess activity",
+      "properties": {
+        "selected_item_ids": {
+          "type": "array",
+          "description": "List of selected item identifiers (history of guesses)",
+          "items": {
+            "type": "integer"
+          },
+          "default": []
+        },
+        "item_states": {
+          "type": "string",
+          "pattern": "^[NHCIFUA]*$",
+          "description": "State of each item (indexed by position). Each character represents one item's state.",
+          "default": ""
+        },
+        "used_hints": {
+          "type": "array",
+          "description": "List of hint IDs that have been revealed",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "selected_item_ids",
+        "item_states",
+        "used_hints"
+      ],
+      "additionalProperties": false
+    },
+    "GuessUIData": {
+      "type": "object",
+      "description": "UI data for guess activity rendering",
+      "properties": {
+        "question_text": {
+          "type": "string",
+          "description": "The question text to display",
+          "default": ""
+        },
+        "used_hints": {
+          "type": "array",
+          "description": "List of hints that have been revealed",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "item_states": {
+          "type": "string",
+          "pattern": "^[NHCIFUA]*$",
+          "description": "State of each item (indexed by position)",
+          "default": ""
+        },
+        "actionTemplate": {
+          "$ref": "/activities/ui_schema#/$defs/UIAction",
+          "description": "Template action for selecting an item",
+          "default": null
+        }
+      },
+      "required": [
+        "question_text",
+        "used_hints",
+        "item_states",
+        "actionTemplate"
+      ],
+      "additionalProperties": false
+    },
+    "GuessData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data for guess - problem, student's guesses, and state",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/GuessProblem",
+          "description": "The guess problem"
+        },
+        "state": {
+          "$ref": "#/$defs/GuessState",
+          "default": null,
+          "description": "Current student guess state"
+        },
+        "ui_data": {
+          "$ref": "#/$defs/GuessUIData",
+          "default": null,
+          "description": "UI rendering data"
+        }
+      },
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
+      "additionalProperties": false
+    },
+    "GuessHint": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "A hint for the guess activity",
+      "properties": {
+        "hint_id": {
+          "type": "string",
+          "description": "Unique identifier for this hint"
+        },
+        "hint_text": {
+          "type": "string",
+          "description": "The hint text to display"
+        },
+        "difficulty": {
+          "type": "integer",
+          "description": "Difficulty level (higher = more difficult/less helpful)",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "hint_id",
+        "hint_text",
+        "difficulty"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

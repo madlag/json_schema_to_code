@@ -1,0 +1,96 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$id": "/activities/ui_schema.json",
+    "title": "Base UI Schema",
+    "description": "Reusable UI schema definitions for all educational activities",
+    "$defs": {
+        "UIStateChangeOperation": {
+            "type": "object",
+            "description": "Action parameter as a JSON object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "Type of the action parameter",
+                    "const": "state_change"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Path to the action parameter"
+                },
+                "op": {
+                    "type": "string",
+                    "description": "Operation to perform on the action parameter",
+                    "enum": [
+                        "add",
+                        "remove",
+                        "replace",
+                        "type_change",
+                        "append"
+                    ]
+                },
+                "value_type": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "description": "Accepted types for the value (any match is valid)",
+                        "enum": [
+                            "dict",
+                            "array",
+                            "string",
+                            "char",
+                            "boolean",
+                            "integer",
+                            "float",
+                            "null",
+                            "any"
+                        ]
+                    },
+                    "minItems": 1,
+                    "description": "List of acceptable types for the value (e.g., [\"integer\", \"number\"] allows either)"
+                },
+                "value": {
+                    "description": "Value to set for the action parameter (filled by controller before sending, optional in JSON). Can be any type: string, number, boolean, null, object, or array.",
+                    "type": "object"
+                }
+            },
+            "required": [
+                "path",
+                "op",
+                "value_type"
+            ]
+        },
+        "UIAction": {
+            "type": "object",
+            "description": "Action configuration for user input components",
+            "properties": {
+                "operations": {
+                    "type": "array",
+                    "description": "Action parameters (always an array, even for a single parameter)",
+                    "items": {
+                        "$ref": "#/$defs/UIStateChangeOperation"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "operations"
+            ]
+        },
+        "UIDataCommonFields": {
+            "type": "object",
+            "description": "Base fields for all activities",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The question text to ask the student"
+                },
+                "answer": {
+                    "type": "string",
+                    "description": "The answer text to display to the student"
+                }
+            },
+            "required": ["question", "answer"],
+            "additionalProperties": false
+        }
+    }
+}

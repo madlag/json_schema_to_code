@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/exercise/quiz/quiz_schema",
+  "title": "Quiz Schema",
+  "$ref": "#/$defs/QuizData",
+  "$defs": {
+    "QuizAnswer": {
+      "type": "object",
+      "description": "A single answer option in a quiz",
+      "properties": {
+        "answer": {
+          "type": "string",
+          "description": "The answer text"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Whether this is the correct answer"
+        }
+      },
+      "required": [
+        "answer",
+        "valid"
+      ],
+      "additionalProperties": false
+    },
+    "Quiz": {
+      "type": "object",
+      "description": "Quiz question and answers",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text"
+        },
+        "answers": {
+          "type": "array",
+          "description": "List of answer options",
+          "items": {
+            "$ref": "#/$defs/QuizAnswer"
+          }
+        }
+      },
+      "required": [
+        "question",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "QuizData": {
+      "type": "object",
+      "description": "Complete quiz data with question, answers, and metadata",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "exercise/quiz"
+        },
+        "quiz": {
+          "$ref": "#/$defs/Quiz"
+        },
+        "question_text": {
+          "type": "string",
+          "description": "The question text (usually same as quiz.question)"
+        },
+        "correct_answer": {
+          "type": "string",
+          "description": "The correct answer text"
+        }
+      },
+      "required": [
+        "type",
+        "quiz",
+        "question_text",
+        "correct_answer"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

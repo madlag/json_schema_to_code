@@ -33,6 +33,13 @@
       }
     },
     "expected_python": [
+      "string_with_default: str = 'hello'",
+      "number_with_default: float = 42.5",
+      "integer_with_default: int = 10",
+      "boolean_with_default: bool = True",
+      "string_without_default: str"
+    ],
+    "expected_python_v1": [
       "string_with_default: str = \"hello\"",
       "number_with_default: float = 42.5",
       "integer_with_default: int = 10",
@@ -40,11 +47,11 @@
       "string_without_default: str"
     ],
     "expected_cs": [
-      "public string string_with_default = \"hello\";",
-      "public float number_with_default = 42.5;",
-      "public int integer_with_default = 10;",
-      "public bool boolean_with_default = true;",
-      "public string string_without_default;"
+      "public string StringWithDefault { get; set; } = \"hello\";",
+      "public float NumberWithDefault { get; set; } = 42.5",
+      "public int IntegerWithDefault { get; set; } = 10;",
+      "public bool BooleanWithDefault { get; set; } = true;",
+      "public string StringWithoutDefault { get; set; }"
     ]
   },
   {
@@ -72,14 +79,24 @@
       }
     },
     "expected_python": [
+      "optional_string_with_default: str = 'default_value'",
+      "optional_number_with_null_default: float | None = None",
+      "optional_string_without_default: str | None = None"
+    ],
+    "expected_python_v1": [
       "optional_string_with_default: str | None = \"default_value\"",
       "optional_number_with_null_default: float | None = None",
       "optional_string_without_default: str | None = None"
     ],
     "expected_cs": [
-      "public string? optional_string_with_default = \"default_value\";",
-      "public float? optional_number_with_null_default = null;",
-      "public string? optional_string_without_default;"
+      "public string OptionalStringWithDefault { get; set; } = \"default_value\";",
+      "public float? OptionalNumberWithNullDefault { get; set; }",
+      "public string? OptionalStringWithoutDefault { get; set; }"
+    ],
+    "expected_cs_v1": [
+      "public string? OptionalStringWithDefault { get; set; } = \"default_value\";",
+      "public float? OptionalNumberWithNullDefault { get; set; }",
+      "public string? OptionalStringWithoutDefault { get; set; }"
     ]
   },
   {
@@ -106,12 +123,16 @@
       }
     },
     "expected_python": [
+      "string_array_with_default: list[str] = field(default_factory=lambda: ['item1', 'item2'])",
+      "empty_array_default: list[int] = field(default_factory=list)"
+    ],
+    "expected_python_v1": [
       "string_array_with_default: list[str] = field(default_factory=lambda: [\"item1\", \"item2\"])",
       "empty_array_default: list[int] = field(default_factory=list)"
     ],
     "expected_cs": [
-      "public List<string> string_array_with_default = new List<string> {\"item1\", \"item2\"};",
-      "public List<int> empty_array_default = new List<int>();"
+      "public List<string> StringArrayWithDefault { get; set; } = new List<string> {\"item1\", \"item2\"};",
+      "public List<int> EmptyArrayDefault { get; set; } = new List<int>();"
     ]
   },
   {
@@ -144,15 +165,21 @@
     },
     "expected_python": [
       "required_field: str",
+      "required_with_default: str = 'hello'",
+      "optional_field: str | None = None",
+      "optional_with_default: int = 42"
+    ],
+    "expected_python_v1": [
+      "required_field: str",
       "required_with_default: str = \"hello\"",
       "optional_field: str | None = None",
       "optional_with_default: int = 42"
     ],
     "expected_cs": [
-      "public string required_field;",
-      "public string required_with_default = \"hello\";",
-      "public string? optional_field;",
-      "public int optional_with_default = 42;"
+      "public string RequiredField { get; set; }",
+      "public string RequiredWithDefault { get; set; } = \"hello\";",
+      "public string? OptionalField { get; set; }",
+      "public int OptionalWithDefault { get; set; } = 42;"
     ]
   },
   {
@@ -196,13 +223,16 @@
       }
     },
     "expected_python": [
+      "className: str = ''",
+      "style: Style | None = field(default_factory=lambda: Style())"
+    ],
+    "expected_python_v1": [
       "className: str = \"\"",
-      "style: NoneOrStyle = None",
-      "NoneOrStyle = None | Style"
+      "style: NoneOrStyle = None"
     ],
     "expected_cs": [
-      "public string className = \"\";",
-      "public StyleOrNull style = null;"
+      "public string ClassName { get; set; } = \"\";",
+      "public Style? Style { get; set; }"
     ]
   },
   {
@@ -228,11 +258,15 @@
     },
     "expected_python": [
       "empty_dict: Any = field(default_factory=dict)",
+      "populated_dict: Any = field(default_factory=lambda: {'key1': 'value1', 'key2': 42})"
+    ],
+    "expected_python_v1": [
+      "empty_dict: Any = field(default_factory=dict)",
       "populated_dict: Any = field(default_factory=lambda: {\"key1\": \"value1\", \"key2\": 42})"
     ],
     "expected_cs": [
-      "public object empty_dict = new object();",
-      "public object populated_dict = new object {[\"key1\"] = \"value1\", [\"key2\"] = 42};"
+      "public object EmptyDict { get; set; } = new object();",
+      "public object PopulatedDict { get; set; }"
     ]
   }
 ]

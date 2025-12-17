@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fraction_addition_state",
+  "type": "object",
+  "description": "Schema representing the state of fraction addition being computed by a human, so it may be incomplete or partially incorrect.",
+  "properties": {
+    "problem": {
+      "type": "object",
+      "description": "The fraction addition problem being solved",
+      "properties": {
+        "fraction1": {
+          "type": "object",
+          "description": "First fraction to be added",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Numerator of the first fraction"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Denominator of the first fraction",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "fraction2": {
+          "type": "object",
+          "description": "Second fraction to be added",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Numerator of the second fraction"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Denominator of the second fraction",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "fraction1",
+        "fraction2"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "description": "Current state of the fraction addition computation",
+      "properties": {
+        "common_denominator": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Student's calculated common denominator (null if not yet attempted)",
+          "minimum": 1
+        },
+        "converted_fraction1": {
+          "type": "object",
+          "description": "First fraction converted to common denominator",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Converted numerator for first fraction"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Common denominator used",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "converted_fraction2": {
+          "type": "object",
+          "description": "Second fraction converted to common denominator",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Converted numerator for second fraction"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Common denominator used",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "sum_before_simplification": {
+          "type": "object",
+          "description": "Result of adding the converted fractions before simplification",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Sum of the converted numerators"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Common denominator",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "simplified_result": {
+          "type": "object",
+          "description": "Final simplified fraction result",
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "description": "Simplified numerator"
+            },
+            "denominator": {
+              "type": "integer",
+              "description": "Simplified denominator",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "gcd_work": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Student's calculated greatest common divisor for simplification (null if not attempted or not shown)",
+          "minimum": 1
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "problem",
+    "state"
+  ],
+  "additionalProperties": false
+}

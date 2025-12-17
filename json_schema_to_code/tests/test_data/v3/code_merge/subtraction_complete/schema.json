@@ -1,0 +1,163 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "title": "Subtraction Schema",
+    "$ref": "#/$defs/SubtractionCompleteData",
+    "$defs": {
+        "SubtractionCompleteProblem": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "The subtraction problem being solved",
+            "properties": {
+                "minuend": {
+                    "type": "integer",
+                    "description": "The top number (being subtracted from)",
+                    "minimum": 0,
+                    "default": 0
+                },
+                "subtrahend": {
+                    "type": "integer",
+                    "description": "The bottom number (being subtracted)",
+                    "minimum": 0,
+                    "default": 0
+                }
+            },
+            "required": [
+                "minuend",
+                "subtrahend"
+            ],
+            "unevaluatedProperties": false
+        },
+        "SubtractionCompleteState": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Current state of the computation",
+            "properties": {
+                "borrowing_row": {
+                    "type": "array",
+                    "description": "Borrowing row. One mark for each column where borrowing occurs. For example for 543 - 178, the borrowing row might be [1, 1, 0] indicating borrowing in units and tens columns. Index 0 = units, 1 = tens, etc. Humans typically mark a 1 where borrowing occurs, or leave blank (null).",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "default": []
+                },
+                "adjusted_minuend_row": {
+                    "type": "array",
+                    "description": "Adjusted minuend row showing digits after borrowing. For example, if top number is 543 and we borrow from the tens place, the 4 becomes 3. Index 0 = units, 1 = tens, etc. Values can be 0-19 (when 10 is added from borrowing).",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 19
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "default": []
+                },
+                "result_row": {
+                    "type": "array",
+                    "description": "Result row. Index 0 = units, 1 = tens, etc.",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "default": []
+                }
+            },
+            "required": [
+                "borrowing_row",
+                "adjusted_minuend_row",
+                "result_row"
+            ],
+            "unevaluatedProperties": false
+        },
+        "SubtractionCompleteUIData": {
+            "type": "object",
+            "description": "Complete UI state for the subtraction activity view. Built by the agent/backend and consumed by the Unity view.",
+            "properties": {
+                "question_text": {
+                    "type": "string",
+                    "description": "The question text to display to the user",
+                    "default": ""
+                },
+                "minuend_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/OperandRowState",
+                    "description": "The minuend (top number) row",
+                    "default": null
+                },
+                "subtrahend_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/OperandRowState",
+                    "description": "The subtrahend (bottom number) row with minus sign",
+                    "default": null
+                },
+                "borrowing_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/InputRowState",
+                    "description": "The borrowing row where users mark borrowing operations",
+                    "default": null
+                },
+                "adjusted_minuend_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/InputRowState",
+                    "description": "The adjusted minuend row showing digits after borrowing",
+                    "default": null
+                },
+                "result_row": {
+                    "$ref": "/maths/basic_operations/activities/complete/basic_operations_schema#/$defs/InputRowState",
+                    "description": "The result row where users enter the final answer",
+                    "default": null
+                }
+            },
+            "required": [
+                "question_text",
+                "minuend_row",
+                "subtrahend_row",
+                "borrowing_row",
+                "adjusted_minuend_row",
+                "result_row"
+            ],
+            "unevaluatedProperties": false
+        },
+        "SubtractionCompleteData": {
+            "x-csharp-generate": false,
+            "type": "object",
+            "description": "Schema representing the state of a column subtraction being computed by a human, so it may be incomplete or partially incorrect.",
+            "properties": {
+                "problem": {
+                    "$ref": "#/$defs/SubtractionCompleteProblem"
+                },
+                "state": {
+                    "$ref": "#/$defs/SubtractionCompleteState",
+                    "default": null
+                },
+                "ui_data": {
+                    "$ref": "#/$defs/SubtractionCompleteUIData",
+                    "default": null
+                }
+            },
+            "required": [
+                "problem",
+                "state"
+            ],
+            "unevaluatedProperties": false
+        }
+    }
+}

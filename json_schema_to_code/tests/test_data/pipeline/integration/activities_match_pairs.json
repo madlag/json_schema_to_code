@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/activities/match_pairs/match_pairs_schema",
+  "title": "Match Pairs Activity Schema",
+  "x-csharp-using": [
+    "EduObject.Activities.MediaContentTypes"
+  ],
+  "type": "object",
+  "$defs": {
+    "MatchPair": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "A correct pairing of left and right content (backend-only)",
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/MediaContentType",
+          "description": "Left side content"
+        },
+        "right": {
+          "$ref": "#/$defs/MediaContentType",
+          "description": "Right side content"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Problem with correct pairings (backend-only). Question comes from context.",
+      "properties": {
+        "correct_pairs": {
+          "type": "array",
+          "description": "The correct pairings",
+          "items": {
+            "$ref": "#/$defs/MatchPair"
+          },
+          "minItems": 2
+        }
+      },
+      "required": [
+        "correct_pairs"
+      ],
+      "additionalProperties": false
+    },
+    "IntegerPair": {
+      "type": "object",
+      "description": "Pair of integers representing left/right indices",
+      "properties": {
+        "left_index": {
+          "type": "integer",
+          "description": "Index of left item in correct_pairs"
+        },
+        "right_index": {
+          "type": "integer",
+          "description": "Index of right item in correct_pairs"
+        }
+      },
+      "required": [
+        "left_index",
+        "right_index"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Current pairings as integer pairs (shuffled initially)",
+      "properties": {
+        "pairs": {
+          "type": "array",
+          "description": "Current pairings - list of index pairs",
+          "items": {
+            "$ref": "#/$defs/IntegerPair"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "pairs"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsUIItem": {
+      "type": "object",
+      "description": "UI item for left or right side",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "Index in the correct_pairs array"
+        },
+        "content": {
+          "$ref": "#/$defs/MediaContentType",
+          "description": "The content to display"
+        }
+      },
+      "required": [
+        "index",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsUIRow": {
+      "type": "object",
+      "description": "A row with left and right items",
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/MatchPairsUIItem",
+          "description": "Left side item"
+        },
+        "right": {
+          "$ref": "#/$defs/MatchPairsUIItem",
+          "description": "Right side item"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsUIData": {
+      "type": "object",
+      "description": "UI data for rendering",
+      "properties": {
+        "common": {
+          "$ref": "#/$defs/UIDataCommonFields",
+          "default": null
+        },
+        "rows": {
+          "type": "array",
+          "description": "Rows of left-right pairs",
+          "items": {
+            "$ref": "#/$defs/MatchPairsUIRow"
+          },
+          "default": []
+        },
+        "action": {
+          "$ref": "#/$defs/UIAction",
+          "description": "Action template for swapping pairs (MOVE operation)",
+          "default": null
+        }
+      },
+      "required": [
+        "common",
+        "rows",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "MatchPairsData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data (backend-only)",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/MatchPairsProblem",
+          "description": "The match pairs problem"
+        },
+        "state": {
+          "$ref": "#/$defs/MatchPairsState",
+          "default": null,
+          "description": "Current pairing state"
+        },
+        "ui_data": {
+          "$ref": "#/$defs/MatchPairsUIData",
+          "default": null,
+          "description": "UI rendering data"
+        }
+      },
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
+      "additionalProperties": false
+    },
+    "UIAction": {
+      "type": "object",
+      "description": "Action configuration for user input components",
+      "properties": {
+        "operations": {
+          "type": "array",
+          "description": "Action parameters (always an array, even for a single parameter)",
+          "items": {
+            "$ref": "#/$defs/UIStateChangeOperation"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "operations"
+      ]
+    },
+    "UIDataCommonFields": {
+      "type": "object",
+      "description": "Base fields for all activities",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text to ask the student"
+        },
+        "answer": {
+          "type": "string",
+          "description": "The answer text to display to the student"
+        }
+      },
+      "required": [
+        "question",
+        "answer"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentType": {
+      "description": "Content that can be text, image, or both",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MediaContentText"
+        },
+        {
+          "$ref": "#/$defs/MediaContentImage"
+        },
+        {
+          "$ref": "#/$defs/MediaContentTextAndImage"
+        }
+      ]
+    },
+    "UIStateChangeOperation": {
+      "type": "object",
+      "description": "Action parameter as a JSON object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of the action parameter",
+          "const": "state_change"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the action parameter"
+        },
+        "op": {
+          "type": "string",
+          "description": "Operation to perform on the action parameter",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "type_change",
+            "append"
+          ]
+        },
+        "value_type": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Accepted types for the value (any match is valid)",
+            "enum": [
+              "dict",
+              "array",
+              "string",
+              "char",
+              "boolean",
+              "integer",
+              "float",
+              "null",
+              "any"
+            ]
+          },
+          "minItems": 1,
+          "description": "List of acceptable types for the value (e.g., [\"integer\", \"number\"] allows either)"
+        },
+        "value": {
+          "description": "Value to set for the action parameter (filled by controller before sending, optional in JSON). Can be any type: string, number, boolean, null, object, or array.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "path",
+        "op",
+        "value_type"
+      ]
+    },
+    "MediaContentText": {
+      "type": "object",
+      "description": "Text-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentImage": {
+      "type": "object",
+      "description": "Image-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "image"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "image_url"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentTextAndImage": {
+      "type": "object",
+      "description": "Text and image content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text_and_image"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "image_url"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/MatchPairsData"
+}

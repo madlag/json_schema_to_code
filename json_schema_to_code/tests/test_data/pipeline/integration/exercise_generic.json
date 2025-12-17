@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Exercise System Schema",
+  "$defs": {
+    "DisplayWidgetType": {
+      "type": "string",
+      "enum": [
+        "voice",
+        "text",
+        "image",
+        "quiz"
+      ],
+      "description": "The type of display widget"
+    },
+    "DisplayWidget": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/DisplayWidgetType"
+        }
+      },
+      "discriminator": {
+        "propertyName": "type",
+        "mapping": {
+          "voice": "#/$defs/DisplayWidgetVoice",
+          "text": "#/$defs/DisplayWidgetText",
+          "image": "#/$defs/DisplayWidgetImage",
+          "quiz": "#/$defs/DisplayWidget"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "unevaluatedProperties": false
+    },
+    "DisplayWidgetVoice": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/DisplayWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "voice"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "DisplayWidgetText": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/DisplayWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "DisplayWidgetImage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/DisplayWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "image"
+            },
+            "image_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "caption": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "image_url",
+            "caption"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetType": {
+      "type": "string",
+      "enum": [
+        "voice",
+        "quiz",
+        "cloze_test",
+        "true_false",
+        "text_connect",
+        "keypad"
+      ],
+      "description": "The type of user input widget"
+    },
+    "UserInputWidget": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/UserInputWidgetType"
+        }
+      },
+      "discriminator": {
+        "propertyName": "type",
+        "mapping": {
+          "voice": "#/$defs/UserInputWidgetVoice",
+          "quiz": "#/$defs/UserInputWidgetQuiz",
+          "cloze_test": "#/$defs/UserInputWidgetClozeTest",
+          "true_false": "#/$defs/UserInputWidgetTrueFalse",
+          "text_connect": "#/$defs/UserInputWidgetTextConnect",
+          "keypad": "#/$defs/UserInputWidgetKeypad"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetVoice": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "voice"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetQuiz": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "quiz"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetClozeTest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "cloze_test"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetTrueFalse": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "true_false"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetTextConnect": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "text_connect"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "UserInputWidgetKeypad": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/UserInputWidget"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "keypad"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Exercise": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "ID of the exercise: a path to the exercise definition"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the exercise"
+        },
+        "statement": {
+          "type": "string",
+          "description": "Statement of the exercise"
+        },
+        "correct_answer": {
+          "type": "string",
+          "description": "Correct answer"
+        },
+        "difficulty": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Difficulty of the exercise (1 to 3)"
+        },
+        "maximum_difficulty": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum difficulty of the exercise generator used to generate the exercise"
+        },
+        "maximum_time": {
+          "type": "number",
+          "format": "float",
+          "description": "Maximum time to answer the exercise (indicative)"
+        },
+        "hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "At least one hint, but may include several, with more and more details"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Explain why the right answer is correct"
+        },
+        "display_widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DisplayWidget"
+          },
+          "minItems": 1,
+          "description": "At least one DisplayWidget (that may include voice only 'display')"
+        },
+        "input_widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UserInputWidget"
+          },
+          "minItems": 1,
+          "description": "At least one UserInputWidget (that may include voice only 'input')"
+        },
+        "topics": {
+          "type": "object",
+          "unevaluatedProperties": {
+            "type": "object",
+            "unevaluatedProperties": {
+              "type": "string"
+            }
+          },
+          "description": "Topics of the exercise"
+        },
+        "skills": {
+          "type": "object",
+          "unevaluatedProperties": {
+            "type": "object",
+            "unevaluatedProperties": {
+              "type": "string"
+            }
+          },
+          "description": "Skills of the exercise"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags of the exercise"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "statement",
+        "correct_answer",
+        "difficulty",
+        "maximum_difficulty",
+        "maximum_time",
+        "hints",
+        "explanation",
+        "display_widgets",
+        "input_widgets",
+        "topics",
+        "skills",
+        "tags"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "exercise/generic_exercise"
+    },
+    "generic_exercise": {
+      "$ref": "#/$defs/Exercise"
+    },
+    "correct_answer": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "generic_exercise",
+    "correct_answer"
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Classification Generator",
+  "x-csharp-skip": true,
+  "type": "object",
+  "description": "A classification generator that creates classification exercises with two categories and items with hints, explanations, and mnemonics.",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "activities/classify/generator"
+    },
+    "generator": {
+      "type": "object",
+      "properties": {
+        "introduction": {
+          "type": "string",
+          "description": "An introduction to the exercise. It should be a single short sentence."
+        },
+        "category_1_name": {
+          "type": "string",
+          "description": "The name of the first category for classification."
+        },
+        "category_2_name": {
+          "type": "string",
+          "description": "The name of the second category for classification."
+        },
+        "items": {
+          "type": "array",
+          "description": "A list of items to be classified into one of the two categories.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "The text content of the item to be classified."
+              },
+              "correct_category": {
+                "type": "string",
+                "description": "The name of the correct category for this item. Must match either category_1_name or category_2_name."
+              },
+              "hint": {
+                "type": "string",
+                "description": "An optional hint to help the user classify the item."
+              },
+              "explanation": {
+                "type": "string",
+                "description": "An optional explanation for why the item belongs to its correct category."
+              },
+              "mnemonic": {
+                "type": "string",
+                "description": "An optional mnemonic device to help remember the classification of the item."
+              },
+              "uuid": {
+                "type": "string",
+                "description": "The UUID of the item (can be used for tracking the item)",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              }
+            },
+            "required": [
+              "text",
+              "correct_category",
+              "hint",
+              "explanation",
+              "mnemonic",
+              "uuid"
+            ],
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "required": [
+        "category_1_name",
+        "category_2_name",
+        "items"
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "required": [
+    "type",
+    "generator"
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {}
+}

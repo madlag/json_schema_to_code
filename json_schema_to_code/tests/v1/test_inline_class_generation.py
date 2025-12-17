@@ -11,9 +11,10 @@ from json_schema_to_code.codegen import CodeGenerator, CodeGeneratorConfig
 
 
 def test_classification_generator_textobject_generation():
-    """Test that the classification generator schema generates TextObject class correctly from inline object definitions."""
+    """Test that the classification generator schema generates TextObject class correctly
+    from inline object definitions."""
     # Load the schema
-    schema_path = Path(__file__).parent / "test_data" / "schemas" / "classification_generator.json"
+    schema_path = Path(__file__).parent.parent / "test_data" / "schemas" / "classification_generator.json"
     with open(schema_path) as f:
         schema = json.load(f)
 
@@ -41,7 +42,8 @@ def test_classification_generator_textobject_generation():
 
     # Verify that the main classes are generated
     assert "class ClassificationGenerator:" in out
-    assert "class ClassificationGeneratorGenerator:" in out  # Named from the 'generator' field with prefix
+    # Named from the 'generator' field with prefix
+    assert "class ClassificationGeneratorGenerator:" in out
 
     # Verify that the generator property references Items with full name
     assert "items: list[ClassificationGeneratorGeneratorItems]" in out

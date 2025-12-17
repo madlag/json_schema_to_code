@@ -4,32 +4,47 @@ using System;
 using System.Collections.Generic;
 [Serializable]
 public class AdditionExercise{
-    public conststring type = "exercise/maths/basic_operations/addition";
-    public AdditionExerciseProblem problem;
-    public AdditionExerciseState state;
-    public string correct_answer;
-    public string question_text;
-    public AdditionExercise(string type, AdditionExerciseProblem problem, AdditionExerciseState state, string correct_answer, string question_text)    {
-        this.type = type;
-        this.problem = problem;
-        this.state = state;
-        this.correct_answer = correct_answer;
-        this.question_text = question_text;
+    [JsonProperty("type")]
+    public const string type = "exercise/maths/basic_operations/addition";
+    [JsonProperty("problem")]
+    public AdditionExerciseProblem Problem { get; set; }
+    [JsonProperty("state")]
+    public AdditionExerciseState State { get; set; }
+    [JsonProperty("correct_answer")]
+    public string CorrectAnswer { get; set; }
+    [JsonProperty("question_text")]
+    public string QuestionText { get; set; }
+    public AdditionExercise(AdditionExerciseProblem problem, AdditionExerciseState state, string correct_answer, string question_text)    {
+        this.Problem = problem;
+        this.State = state;
+        this.CorrectAnswer = correct_answer;
+        this.QuestionText = question_text;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public AdditionExercise() { }
 }
+
 [Serializable]
 public class AdditionExerciseProblem{
-    public List<int> operands;
+    [JsonProperty("operands")]
+    public List<int> Operands { get; set; }
     public AdditionExerciseProblem(List<int> operands)    {
-        this.operands = operands;
+        this.Operands = operands;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public AdditionExerciseProblem() { }
 }
+
 [Serializable]
 public class AdditionExerciseState{
-    public List<int> carry_over_row;
-    public List<int> result_row;
+    [JsonProperty("carry_over_row")]
+    public List<int> CarryOverRow { get; set; }
+    [JsonProperty("result_row")]
+    public List<int> ResultRow { get; set; }
     public AdditionExerciseState(List<int> carry_over_row, List<int> result_row)    {
-        this.carry_over_row = carry_over_row;
-        this.result_row = result_row;
+        this.CarryOverRow = carry_over_row;
+        this.ResultRow = result_row;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public AdditionExerciseState() { }
 }

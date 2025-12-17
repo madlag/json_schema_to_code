@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/activities/quiz/quiz_schema",
+  "title": "Quiz Activity Schema",
+  "x-csharp-using": [
+    "EduObject.Activities.MediaContentTypes"
+  ],
+  "type": "object",
+  "$defs": {
+    "QuizAnswer": {
+      "type": "object",
+      "description": "A single answer option in a quiz",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/MediaContentType",
+          "description": "The answer content (text, image, or both)"
+        },
+        "is_correct": {
+          "type": "boolean",
+          "description": "Whether this is the correct answer"
+        }
+      },
+      "required": [
+        "content",
+        "is_correct"
+      ],
+      "additionalProperties": false
+    },
+    "QuizProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Quiz problem containing the question and answers",
+      "properties": {
+        "answers": {
+          "type": "array",
+          "description": "List of answer options",
+          "items": {
+            "$ref": "#/$defs/QuizAnswer"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "QuizState": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "State tracking student work for quiz activity",
+      "properties": {
+        "selected_answers": {
+          "type": "array",
+          "description": "The selected answers to the question",
+          "items": {
+            "type": "integer"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "selected_answers"
+      ],
+      "additionalProperties": false
+    },
+    "QuizUIAnswerOption": {
+      "type": "object",
+      "description": "Answer option for UI rendering",
+      "properties": {
+        "answer": {
+          "$ref": "#/$defs/QuizAnswer",
+          "description": "The answer content (text, image, or both)"
+        },
+        "is_selected": {
+          "type": "boolean",
+          "default": false
+        },
+        "action": {
+          "$ref": "#/$defs/UIAction",
+          "default": null
+        }
+      },
+      "required": [
+        "answer",
+        "is_selected",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "QuizUIData": {
+      "type": "object",
+      "description": "UI data for quiz activity rendering",
+      "properties": {
+        "common": {
+          "$ref": "#/$defs/UIDataCommonFields",
+          "default": null
+        },
+        "answers": {
+          "type": "array",
+          "description": "The answers to the question",
+          "items": {
+            "$ref": "#/$defs/QuizUIAnswerOption"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "common",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "QuizData": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Complete activity data for quiz - question, student's answer, and UI state",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/QuizProblem",
+          "description": "The quiz problem (question and answers)"
+        },
+        "state": {
+          "$ref": "#/$defs/QuizState",
+          "default": null,
+          "description": "Current student selection state"
+        },
+        "ui_data": {
+          "$ref": "#/$defs/QuizUIData",
+          "default": null,
+          "description": "UI rendering data"
+        }
+      },
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
+      "additionalProperties": false
+    },
+    "UIAction": {
+      "type": "object",
+      "description": "Action configuration for user input components",
+      "properties": {
+        "operations": {
+          "type": "array",
+          "description": "Action parameters (always an array, even for a single parameter)",
+          "items": {
+            "$ref": "#/$defs/UIStateChangeOperation"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "operations"
+      ]
+    },
+    "UIDataCommonFields": {
+      "type": "object",
+      "description": "Base fields for all activities",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text to ask the student"
+        },
+        "answer": {
+          "type": "string",
+          "description": "The answer text to display to the student"
+        }
+      },
+      "required": [
+        "question",
+        "answer"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentType": {
+      "description": "Content that can be text, image, or both",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MediaContentText"
+        },
+        {
+          "$ref": "#/$defs/MediaContentImage"
+        },
+        {
+          "$ref": "#/$defs/MediaContentTextAndImage"
+        }
+      ]
+    },
+    "UIStateChangeOperation": {
+      "type": "object",
+      "description": "Action parameter as a JSON object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of the action parameter",
+          "const": "state_change"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the action parameter"
+        },
+        "op": {
+          "type": "string",
+          "description": "Operation to perform on the action parameter",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "type_change",
+            "append"
+          ]
+        },
+        "value_type": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Accepted types for the value (any match is valid)",
+            "enum": [
+              "dict",
+              "array",
+              "string",
+              "char",
+              "boolean",
+              "integer",
+              "float",
+              "null",
+              "any"
+            ]
+          },
+          "minItems": 1,
+          "description": "List of acceptable types for the value (e.g., [\"integer\", \"number\"] allows either)"
+        },
+        "value": {
+          "description": "Value to set for the action parameter (filled by controller before sending, optional in JSON). Can be any type: string, number, boolean, null, object, or array.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "path",
+        "op",
+        "value_type"
+      ]
+    },
+    "MediaContentText": {
+      "type": "object",
+      "description": "Text-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentImage": {
+      "type": "object",
+      "description": "Image-only content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "image"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "image_url"
+      ],
+      "additionalProperties": false
+    },
+    "MediaContentTextAndImage": {
+      "type": "object",
+      "description": "Text and image content",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "text_and_image"
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "image_url"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/QuizData"
+}

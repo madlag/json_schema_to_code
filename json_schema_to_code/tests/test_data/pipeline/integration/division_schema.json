@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "long_division_state",
+  "type": "object",
+  "description": "Schema representing the state of a long division being computed by a human, so it may be incomplete or partially incorrect.",
+  "properties": {
+    "problem": {
+      "type": "object",
+      "description": "The long division problem being solved",
+      "properties": {
+        "dividend": {
+          "type": "integer",
+          "description": "The number being divided",
+          "minimum": 0
+        },
+        "divisor": {
+          "type": "integer",
+          "description": "The number dividing the dividend",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "dividend",
+        "divisor"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "description": "Current state of the long division computation",
+      "properties": {
+        "quotient_digits": {
+          "type": "array",
+          "description": "The digits of the quotient being built from left to right",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9
+          }
+        },
+        "subtraction_results": {
+          "type": "array",
+          "description": "Results of each subtraction step (divisor * quotient digit from dividend portion)",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "remainders": {
+          "type": "array",
+          "description": "Remainder after each subtraction step",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "brought_down_digits": {
+          "type": "array",
+          "description": "Digits brought down from the dividend at each step",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9
+          }
+        },
+        "working_dividends": {
+          "type": "array",
+          "description": "The working dividend at each step (remainder + brought down digit)",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "final_remainder": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "The final remainder after all division steps",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "quotient_digits",
+        "subtraction_results",
+        "remainders",
+        "brought_down_digits",
+        "working_dividends"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "problem",
+    "state"
+  ],
+  "additionalProperties": false
+}

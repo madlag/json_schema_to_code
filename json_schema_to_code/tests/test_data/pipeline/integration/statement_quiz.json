@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "/primitive/statement/activities/quiz/statement_quiz_schema",
+  "title": "Statement Quiz Activity Schema",
+  "x-csharp-using": [
+    "EduObject.Activities.Quiz"
+  ],
+  "$ref": "#/$defs/StatementQuizData",
+  "$defs": {
+    "StatementQuizProblem": {
+      "x-csharp-generate": false,
+      "description": "Quiz problem containing a statement and quiz question/answers. The statement provides the content being quizzed about.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/QuizProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "statement": {
+              "$ref": "#/$defs/StatementDataStatement",
+              "description": "The statement content being quizzed about"
+            }
+          },
+          "required": [
+            "statement"
+          ]
+        }
+      ]
+    },
+    "StatementQuizData": {
+      "x-csharp-generate": false,
+      "description": "Complete activity data for statement quiz. Contains the statement, quiz question/answers, student's state, and UI data.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/QuizData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/StatementQuizProblem",
+              "description": "The quiz problem with statement content"
+            }
+          }
+        }
+      ]
+    },
+    "QuizProblem": {
+      "x-csharp-generate": false,
+      "type": "object",
+      "description": "Quiz problem containing the question and answers",
+      "properties": {
+        "answers": {
+          "type": "array",
+          "description": "List of answer options",
+          "items": {
+            "$ref": "#/$defs/QuizAnswer"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "QuizData": {
+      "type": "object",
+      "description": "Complete quiz data with question, answers, and metadata",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "exercise/quiz"
+        },
+        "quiz": {
+          "$ref": "#/$defs/Quiz"
+        },
+        "question_text": {
+          "type": "string",
+          "description": "The question text (usually same as quiz.question)"
+        },
+        "correct_answer": {
+          "type": "string",
+          "description": "The correct answer text"
+        }
+      },
+      "required": [
+        "type",
+        "quiz",
+        "question_text",
+        "correct_answer"
+      ],
+      "additionalProperties": false
+    },
+    "StatementDataStatement": {
+      "type": "object",
+      "description": "The statement content: this will be question for the quiz or other activities",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The textual content of the statement"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "QuizAnswer": {
+      "type": "object",
+      "description": "A single answer option in a quiz",
+      "properties": {
+        "answer": {
+          "type": "string",
+          "description": "The answer text"
+        },
+        "valid": {
+          "type": "boolean",
+          "description": "Whether this is the correct answer"
+        }
+      },
+      "required": [
+        "answer",
+        "valid"
+      ],
+      "additionalProperties": false
+    },
+    "Quiz": {
+      "type": "object",
+      "description": "Quiz question and answers",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question text"
+        },
+        "answers": {
+          "type": "array",
+          "description": "List of answer options",
+          "items": {
+            "$ref": "#/$defs/QuizAnswer"
+          }
+        }
+      },
+      "required": [
+        "question",
+        "answers"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
