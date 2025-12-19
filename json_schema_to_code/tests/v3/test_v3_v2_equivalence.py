@@ -2,7 +2,7 @@
 V3 vs V2 equivalence tests.
 
 These tests verify that V3 (AST-based) produces equivalent output to V2 (Jinja-based)
-after black normalization for Python and whitespace normalization for C#.
+after ruff normalization for Python and whitespace normalization for C#.
 """
 
 from __future__ import annotations
@@ -18,20 +18,20 @@ from json_schema_to_code.pipeline import PipelineGenerator
 from json_schema_to_code.pipeline.config import CodeGeneratorConfig as V2Config
 from json_schema_to_code.pipeline_v3 import PipelineGeneratorV3
 from json_schema_to_code.pipeline_v3.config import CodeGeneratorConfig as V3Config
-from json_schema_to_code.pipeline_v3.formatters import BlackFormatter
+from json_schema_to_code.pipeline_v3.formatters import RuffFormatter
 
-# Check if black is available
-BLACK_AVAILABLE = BlackFormatter().is_available()
+# Check if ruff is available
+RUFF_AVAILABLE = RuffFormatter().is_available()
 
 
-def normalize_python_with_black(code: str) -> str:
-    """Normalize Python code using black."""
-    if not BLACK_AVAILABLE:
+def normalize_python_with_ruff(code: str) -> str:
+    """Normalize Python code using ruff."""
+    if not RUFF_AVAILABLE:
         return code
 
     from json_schema_to_code.pipeline_v3.config import FormatterConfig
 
-    formatter = BlackFormatter()
+    formatter = RuffFormatter()
     config = FormatterConfig(enabled=True, line_length=100, target_version="py312")
     return formatter.format(code, config)
 
@@ -196,10 +196,10 @@ def test_v3_python_same_classes_as_v2(test_case):
     assert class_name in v3_classes, f"Main class {class_name} not in V3 output"
 
 
-@pytest.mark.skipif(not BLACK_AVAILABLE, reason="black not installed")
+@pytest.mark.skipif(not RUFF_AVAILABLE, reason="ruff not installed")
 @pytest.mark.parametrize("test_case", discover_test_case_schemas(), ids=lambda tc: tc["name"])
-def test_v3_python_equivalent_to_v2_after_black(test_case):
-    """Test that V3 Python output equals V2 after black normalization."""
+def test_v3_python_equivalent_to_v2_after_ruff(test_case):
+    """Test that V3 Python output equals V2 after ruff normalization."""
     schema, config_dict = load_schema_and_config(test_case)
     v2_config = create_v2_config(config_dict)
     v3_config = create_v3_config(config_dict)
@@ -213,9 +213,9 @@ def test_v3_python_equivalent_to_v2_after_black(test_case):
     v3_gen = PipelineGeneratorV3(class_name, schema, v3_config, "python")
     v3_code = v3_gen.generate()
 
-    # Normalize with black
-    v2_normalized = normalize_python_with_black(v2_code)
-    v3_normalized = normalize_python_with_black(v3_code)
+    # Normalize with ruff
+    v2_normalized = normalize_python_with_ruff(v2_code)
+    v3_normalized = normalize_python_with_ruff(v3_code)
 
     # Compare
     if v2_normalized != v3_normalized:

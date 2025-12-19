@@ -5,9 +5,9 @@ Post-processing formatters for generated code.
 from __future__ import annotations
 
 from .base import Formatter
-from .black_formatter import BlackFormatter
+from .ruff_formatter import RuffFormatter
 
 __all__ = [
     "Formatter",
-    "BlackFormatter",
+    "RuffFormatter",
 ]

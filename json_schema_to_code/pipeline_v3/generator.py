@@ -14,7 +14,7 @@ from ..cli_utils import reconstruct_command_line
 from .analyzer import SchemaAnalyzer
 from .ast_backends import AstBackend, CSharpAstBackend, PythonAstBackend
 from .config import CodeGeneratorConfig, OutputMode
-from .formatters import BlackFormatter
+from .formatters import RuffFormatter
 from .merger import AtomicWriter, CodeMergeError, PythonAstMerger
 from .schema_ast import SchemaParser
 
@@ -28,7 +28,7 @@ class PipelineGeneratorV3:
     2. Analyze AST and build IR
     3. Generate language-native AST from IR
     4. Serialize AST to source code
-    5. (Optional) Format with black (Python only)
+    5. (Optional) Format with ruff (Python only)
     """
 
     def __init__(
@@ -56,7 +56,7 @@ class PipelineGeneratorV3:
         self.parser = SchemaParser()
         self.analyzer = SchemaAnalyzer(language, config)
         self.backend = self._create_backend()
-        self.formatter = BlackFormatter() if language == "python" else None
+        self.formatter = RuffFormatter() if language == "python" else None
 
     def _create_backend(self) -> AstBackend:
         """Create the appropriate AST backend for the language."""

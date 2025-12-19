@@ -40,7 +40,6 @@ setup(
         "dev": [
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",
-            "black>=23.0.0",
             "ruff>=0.1.0",
         ],
     },
