@@ -34,7 +34,6 @@ setup(
     python_requires=">=3.12",
     install_requires=[
         "click>=8.0.0",
-        "jinja2>=3.0.0",
     ],
     extras_require={
         "dev": [
@@ -50,7 +49,7 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "json_schema_to_code": ["templates/**/*.jinja2"],
+        "json_schema_to_code": ["validation_rules_*.json"],
     },
     zip_safe=False,
 )

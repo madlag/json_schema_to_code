@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/quiz/quiz_schema",
+  "$ref": "#/$defs/QuizData",
+  "$defs": {
+    "QuizProblem": {
+      "allOf": [
+        {"$ref": "/base_schema#/$defs/ActivityProblem"},
+        {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "required": ["question", "options"]
+        }
+      ]
+    },
+    "QuizState": {
+      "allOf": [
+        {"$ref": "/base_schema#/$defs/ActivityState"},
+        {
+          "type": "object",
+          "properties": {
+            "selected_answer": {
+              "type": "integer",
+              "default": null
+            }
+          }
+        }
+      ]
+    },
+    "QuizData": {
+      "allOf": [
+        {"$ref": "/base_schema#/$defs/ActivityData"},
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/QuizProblem"
+            },
+            "state": {
+              "$ref": "#/$defs/QuizState"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

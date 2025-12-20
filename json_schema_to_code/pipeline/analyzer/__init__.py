@@ -13,6 +13,7 @@ from .ir_nodes import (
     EnumDef,
     FieldDef,
     TypeAlias,
+    TypeKind,
     TypeRef,
 )
 
@@ -20,6 +21,7 @@ __all__ = [
     "ClassDef",
     "FieldDef",
     "TypeRef",
+    "TypeKind",
     "EnumDef",
     "TypeAlias",
     "IR",

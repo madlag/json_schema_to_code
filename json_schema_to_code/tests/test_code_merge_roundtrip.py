@@ -6,7 +6,7 @@ existing files produces identical output (i.e., the generated code matches
 what was already in the file for the generated portions, and custom code
 is preserved).
 
-Test data is in: test_data/v3/code_merge/<activity_name>/
+Test data is in: test_data/code_merge/<activity_name>/
 Each directory contains:
   - schema.json: The JSON schema
   - dataclass.py: The existing Python dataclass file
@@ -26,7 +26,7 @@ from json_schema_to_code.pipeline.merger import PythonAstMerger
 
 def discover_code_merge_test_cases():
     """Discover all code_merge test cases."""
-    code_merge_dir = Path(__file__).parent.parent / "test_data" / "v3" / "code_merge"
+    code_merge_dir = Path(__file__).parent / "test_data" / "code_merge"
     test_cases = []
 
     if not code_merge_dir.exists():

@@ -55,10 +55,6 @@ class TypeRef:
     # Whether this is a nullable type
     is_nullable: bool = False
 
-    # Type overrides from x-python-type and x-csharp-type directives
-    override_type_python: str | None = None
-    override_type_csharp: str | None = None
-
 
 @dataclass
 class FieldDef:

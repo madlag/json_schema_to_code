@@ -8,6 +8,35 @@ for backward compatibility.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class OutputMode(str, Enum):
+    """Output mode for code generation."""
+
+    ERROR_IF_EXISTS = "error_if_exists"  # Error if output file exists
+    FORCE = "force"  # Overwrite existing file
+    MERGE = "merge"  # Merge with existing file
+
+
+@dataclass
+class FormatterConfig:
+    """Configuration for code formatters."""
+
+    enabled: bool = True
+    line_length: int = 100
+    target_version: str = ""  # Python target version (e.g., "py313")
+    string_normalization: bool = True  # Normalize strings to double quotes
+    magic_trailing_comma: bool = True  # Add trailing comma to multi-line structures
+
+
+@dataclass
+class OutputConfig:
+    """Configuration for output handling."""
+
+    mode: OutputMode = OutputMode.MERGE
+    output_path: str = ""
+    validate_before_write: bool = True  # Validate generated code before writing
 
 
 @dataclass
@@ -56,6 +85,23 @@ class CodeGeneratorConfig:
     # External reference import configuration for Python
     external_ref_base_module: str = ""
     external_ref_schema_to_module: dict[str, str] = field(default_factory=dict)
+
+    # C# specific configuration
+    csharp_namespace: str = ""
+    csharp_additional_usings: list[str] = field(default_factory=list)
+
+    # Base path for resolving external schema $refs
+    # When set, the resolver will automatically load external schemas from disk
+    # The $ref path is resolved relative to this base path
+    # e.g., if base_path="/path/to/schemas" and $ref="/activities/quiz_schema#/$defs/Quiz"
+    # it will load "/path/to/schemas/activities/quiz_schema.jinja.json"
+    schema_base_path: str = ""
+
+    # Output configuration
+    output: OutputConfig = field(default_factory=OutputConfig)
+
+    # Formatter configuration
+    formatter: FormatterConfig = field(default_factory=FormatterConfig)
 
     @staticmethod
     def from_dict(d: dict) -> CodeGeneratorConfig:

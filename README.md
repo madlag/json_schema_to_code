@@ -22,7 +22,6 @@ pip install json_schema_to_code
 
 - Python 3.12+
 - Click (CLI interface)
-- Jinja2 (templating)
 
 ## Quick Start
 
@@ -49,6 +48,7 @@ json_schema_to_code schema.json output.cs --name MyRootClass
 - `--language, -l`: Target language (`cs` or `python`, default: `cs`)
 - `--config, -c`: Configuration file path (optional)
 - `--name, -n`: Root class name (optional, defaults to schema filename)
+- `--add-validation`: Add runtime validation code (optional)
 
 ## Configuration
 
@@ -208,7 +208,7 @@ class Circle(Shape):
 ## Python API Usage
 
 ```python
-from json_schema_to_code import CodeGenerator, CodeGeneratorConfig
+from json_schema_to_code import PipelineGenerator, CodeGeneratorConfig
 import json
 
 # Load schema
@@ -220,7 +220,7 @@ config = CodeGeneratorConfig()
 config.ignore_classes = ['TempClass']
 
 # Generate code
-generator = CodeGenerator('MySchema', schema, config, 'python')
+generator = PipelineGenerator('MySchema', schema, config, 'python')
 code = generator.generate()
 
 # Save to file
@@ -242,19 +242,16 @@ with open('output.py', 'w') as f:
 - Generates proper constructors with base class calls
 - Supports nullable reference types
 
-## Templates
+## Architecture
 
-The generator uses Jinja2 templates located in `templates/`:
+The generator uses an AST-based pipeline for code generation:
 
-- `templates/python/`: Python-specific templates
-  - `prefix.py.jinja2`: File header and imports
-  - `class.py.jinja2`: Class definition template
-  - `suffix.py.jinja2`: File footer
-
-- `templates/cs/`: C#-specific templates
-  - `prefix.cs.jinja2`: Using statements
-  - `class.cs.jinja2`: Class definition template
-  - `suffix.cs.jinja2`: File footer
+1. **Schema Parser**: Parses JSON Schema into an AST
+2. **Analyzer**: Resolves references and builds an intermediate representation (IR)
+3. **AST Backend**: Generates language-native AST from IR
+4. **Serializer**: Converts AST to source code
+5. **Formatter** (optional): Post-processing with ruff for Python
+6. **Merger** (optional): Merges with existing files to preserve custom code
 
 ## Development
 

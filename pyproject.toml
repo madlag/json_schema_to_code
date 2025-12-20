@@ -24,7 +24,6 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.0.0",
-    "jinja2>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +47,7 @@ Issues = "https://github.com/flagunas/json_schema_to_code/issues"
 include = ["json_schema_to_code*"]
 
 [tool.setuptools.package-data]
-json_schema_to_code = ["templates/**/*.jinja2"]
+json_schema_to_code = ["validation_rules_*.json"]
 
 [tool.ruff]
 line-length = 200
@@ -87,3 +86,28 @@ testpaths = ["json_schema_to_code/tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+# Coverage disabled temporarily due to SSL cert issues
+# addopts = "-v --tb=short --cov=json_schema_to_code --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["json_schema_to_code"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"

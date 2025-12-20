@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/activity_schema",
+  "$defs": {
+    "ActivityProblem": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": ["description"]
+    },
+    "ActivityState": {
+      "type": "object",
+      "properties": {
+        "completed": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "ActivityData": {
+      "type": "object",
+      "properties": {
+        "problem": {
+          "$ref": "#/$defs/ActivityProblem"
+        },
+        "state": {
+          "$ref": "#/$defs/ActivityState"
+        }
+      },
+      "required": ["problem", "state"]
+    }
+  }
+}

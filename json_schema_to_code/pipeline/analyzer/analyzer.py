@@ -94,7 +94,7 @@ class SchemaAnalyzer:
         """
         self.ast = ast
         self.name_mapping = self.name_resolver.resolve_names(ast)
-        self.ref_resolver = ReferenceResolver(ast, self.name_mapping.definition_names)
+        self.ref_resolver = ReferenceResolver(ast, self.name_mapping.definition_names, self.config.schema_base_path)
 
         ir = IR(root_name=ast.root_name)
         ir.name_mapping = self.name_mapping.definition_names.copy()
@@ -355,10 +355,17 @@ class SchemaAnalyzer:
             resolved = self.ref_resolver.resolve(allof.base_ref)
             class_def.base_class = resolved.target_name
 
+            # Register external import for base class (Python only)
+            if resolved.is_external and self.language == "python":
+                self._register_external_import(resolved)
+
             # Get base class properties to pass to constructor
             base_def = self.ref_resolver.get_definition(allof.base_ref.ref_path.split("/")[-1])
             if base_def and isinstance(base_def.body, ObjectNode):
                 class_def.base_fields = self._analyze_base_properties(base_def.body, allof.extension, class_name)
+            elif resolved.is_external and resolved.external_definition:
+                # Handle external base class - extract properties from raw dict
+                class_def.base_fields = self._analyze_external_base_properties(resolved.external_definition, allof.extension, class_name)
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
@@ -424,6 +431,73 @@ class SchemaAnalyzer:
             base_fields.append(field_def)
 
         return base_fields
+
+    def _analyze_external_base_properties(
+        self,
+        external_def: dict,
+        extension: ObjectNode | None,
+        class_name: str,
+    ) -> list[FieldDef]:
+        """Analyze base class properties from external schema definition (raw dict)."""
+        base_fields = []
+
+        properties = external_def.get("properties", {})
+        required = set(external_def.get("required", []))
+
+        for prop_name, prop_schema in properties.items():
+            # Check if this property is overridden with a const in extension
+            is_overridden_const = False
+            override_value = None
+            if extension:
+                for ext_prop in extension.properties:
+                    if ext_prop.name == prop_name:
+                        if isinstance(ext_prop.type_node, ConstNode):
+                            is_overridden_const = True
+                            override_value = ext_prop.type_node.value
+                        break
+
+            # Check if base property is a const
+            is_base_const = "const" in prop_schema
+
+            field_def = FieldDef(
+                name=prop_name,
+                original_name=prop_name,
+                is_required=prop_name in required,
+            )
+
+            # Set type_ref based on JSON schema type
+            field_def.type_ref = self._type_ref_from_json_schema(prop_schema, prop_name in required)
+
+            # Mark as const based on override or base status
+            if is_overridden_const:
+                field_def.default_value = override_value
+                field_def.has_default = True
+                field_def.is_const = True
+                field_def.is_overridden_const = True
+            elif is_base_const:
+                field_def.is_const = True
+                field_def.is_overridden_const = False
+
+            base_fields.append(field_def)
+
+        return base_fields
+
+    def _type_ref_from_json_schema(self, prop_schema: dict, is_required: bool) -> TypeRef:
+        """Create a TypeRef from a raw JSON schema property definition."""
+        schema_type = prop_schema.get("type", "any")
+
+        # Map JSON schema types to our type system
+        type_mapping = {
+            "string": "string",
+            "integer": "int",
+            "number": "float",
+            "boolean": "bool",
+            "array": "list",
+            "object": "dict",
+        }
+
+        type_name = type_mapping.get(schema_type, "any")
+        return TypeRef(kind=TypeKind.PRIMITIVE, name=type_name)
 
     def _analyze_object_definition(self, def_node: DefinitionNode, obj: ObjectNode, class_name: str) -> ClassDef:
         """Analyze an object type definition."""
@@ -1008,7 +1082,17 @@ class SchemaAnalyzer:
         """Build the list of required imports."""
         imports = []
 
-        # This will be populated by backends based on what's needed
+        # Group python_imports by module
+        module_to_names: dict[str, list[str]] = {}
+        for module, name in self.python_imports:
+            if module not in module_to_names:
+                module_to_names[module] = []
+            module_to_names[module].append(name)
+
+        # Convert to ImportDef objects
+        for module, names in module_to_names.items():
+            imports.append(ImportDef(module=module, names=sorted(names)))
+
         return imports
 
     def _generate_validation_code(self, obj: ObjectNode, class_def: ClassDef) -> list[str]:
