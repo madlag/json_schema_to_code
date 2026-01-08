@@ -67,14 +67,18 @@ class PythonAstMerger(AstMerger):
         gen_classes = {n.name: n for n in generated_tree.body if isinstance(n, ast.ClassDef)}
 
         new_body = []
-        seen_imports = set()
+        seen_imports = set()  # Full import statements (for plain imports)
+        module_imports: dict[str, ast.ImportFrom] = {}  # module -> ImportFrom node
 
         # Walk existing tree in order
         for node in existing_tree.body:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 # Keep existing import
                 new_body.append(node)
-                seen_imports.add(ast.unparse(node))
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    module_imports[node.module] = node
+                else:
+                    seen_imports.add(ast.unparse(node))
 
             elif isinstance(node, ast.ClassDef):
                 if node.name in gen_classes:
@@ -90,12 +94,26 @@ class PythonAstMerger(AstMerger):
                 # Other elements (docstrings, constants, etc.)
                 new_body.append(node)
 
-        # Add new imports from generated (not already present)
+        # Add new imports from generated (merge with existing or add new)
         insert_idx = self._find_import_insert_index_in_list(new_body)
         for imp in gen_imports:
-            if ast.unparse(imp) not in seen_imports:
-                new_body.insert(insert_idx, imp)
-                insert_idx += 1
+            if isinstance(imp, ast.ImportFrom) and imp.module:
+                # ImportFrom - merge names with existing import from same module
+                if imp.module in module_imports:
+                    # Merge new names into existing import
+                    new_names = self._get_imported_names(imp)
+                    self._merge_import_names(module_imports[imp.module], new_names)
+                else:
+                    # New module, add the import
+                    new_body.insert(insert_idx, imp)
+                    module_imports[imp.module] = imp
+                    insert_idx += 1
+            else:
+                # Plain import - use string comparison
+                if ast.unparse(imp) not in seen_imports:
+                    new_body.insert(insert_idx, imp)
+                    seen_imports.add(ast.unparse(imp))
+                    insert_idx += 1
 
         # Add new classes from generated at end
         for cls in gen_classes.values():
@@ -192,6 +210,27 @@ class PythonAstMerger(AstMerger):
     def _get_imports_list(self, tree: ast.Module) -> list:
         """Get list of import nodes."""
         return [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+
+    def _get_import_key(self, node: ast.ImportFrom) -> str | None:
+        """Get the module key for an ImportFrom node."""
+        if isinstance(node, ast.ImportFrom) and node.module:
+            return node.module
+        return None
+
+    def _get_imported_names(self, node: ast.ImportFrom) -> set[str]:
+        """Get set of names imported from an ImportFrom node."""
+        if isinstance(node, ast.ImportFrom):
+            return {alias.name for alias in node.names}
+        return set()
+
+    def _merge_import_names(self, existing: ast.ImportFrom, new_names: set[str]) -> ast.ImportFrom:
+        """Add new names to an existing ImportFrom node."""
+        existing_names = {alias.name for alias in existing.names}
+        all_names = existing_names | new_names
+        # Sort for consistent output
+        sorted_names = sorted(all_names)
+        existing.names = [ast.alias(name=n, asname=None) for n in sorted_names]
+        return existing
 
     def _find_import_insert_index_in_list(self, body: list) -> int:
         """Find index after last import in a body list."""
