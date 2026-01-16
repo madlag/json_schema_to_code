@@ -73,12 +73,22 @@ class PythonAstMerger(AstMerger):
         # Walk existing tree in order
         for node in existing_tree.body:
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                # Keep existing import
-                new_body.append(node)
                 if isinstance(node, ast.ImportFrom) and node.module:
-                    module_imports[node.module] = node
+                    if node.module in module_imports:
+                        # Already have import from this module - merge names into existing
+                        new_names = self._get_imported_names(node)
+                        self._merge_import_names(module_imports[node.module], new_names)
+                        # Don't add duplicate import to new_body
+                    else:
+                        # First import from this module
+                        new_body.append(node)
+                        module_imports[node.module] = node
                 else:
-                    seen_imports.add(ast.unparse(node))
+                    # Plain import - use string comparison
+                    unparsed = ast.unparse(node)
+                    if unparsed not in seen_imports:
+                        new_body.append(node)
+                        seen_imports.add(unparsed)
 
             elif isinstance(node, ast.ClassDef):
                 if node.name in gen_classes:

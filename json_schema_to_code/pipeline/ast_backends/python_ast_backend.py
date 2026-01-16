@@ -510,6 +510,12 @@ class PythonAstBackend(AstBackend):
             return f"Literal[{formatted}]"
 
         if type_ref.kind == TypeKind.ENUM:
+            # String enums with values become Literal types
+            if type_ref.enum_values and type_ref.name == "string":
+                self.python_imports.add(("typing", "Literal"))
+                formatted_values = ", ".join(self._format_literal_value(v) for v in type_ref.enum_values)
+                return f"Literal[{formatted_values}]"
+            # Fallback to base type for enums without values
             return self.TYPE_MAP.get(type_ref.name, type_ref.name)
 
         return "Any"

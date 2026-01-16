@@ -1,0 +1,99 @@
+[
+  {
+    "name": "string_enum_to_literal",
+    "description": "Test that string enums are converted to Literal types",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "sign": {
+              "type": "string",
+              "enum": ["+", "-"]
+            },
+            "status": {
+              "type": "string",
+              "enum": ["true", "false", "unknown"]
+            }
+          },
+          "required": ["sign"]
+        }
+      }
+    },
+    "expected_python": [
+      "from typing import Literal",
+      "sign: Literal['+', '-']",
+      "status: Literal['true', 'false', 'unknown'] | None = None"
+    ]
+  },
+  {
+    "name": "string_enum_with_default",
+    "description": "Test that string enums with default values work correctly",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "enum": ["left", "right", "up", "down"],
+              "default": "left"
+            }
+          }
+        }
+      }
+    },
+    "expected_python": [
+      "from typing import Literal",
+      "direction: Literal['left', 'right', 'up', 'down'] = 'left'"
+    ]
+  },
+  {
+    "name": "string_enum_single_value",
+    "description": "Test that single-value string enums become Literal with one value",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "enum": ["1.0"]
+            }
+          },
+          "required": ["version"]
+        }
+      }
+    },
+    "expected_python": [
+      "from typing import Literal",
+      "version: Literal['1.0']"
+    ]
+  },
+  {
+    "name": "string_enum_special_characters",
+    "description": "Test that string enums with special characters are properly escaped",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "operator": {
+              "type": "string",
+              "enum": ["==", "!=", ">=", "<=", "<", ">"]
+            }
+          },
+          "required": ["operator"]
+        }
+      }
+    },
+    "expected_python": [
+      "from typing import Literal",
+      "operator: Literal['==', '!=', '>=', '<=', '<', '>']"
+    ]
+  }
+]

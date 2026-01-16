@@ -114,11 +114,17 @@ class CSharpAstMerger(AstMerger):
         # Process existing file
         root = existing_tree.root_node
 
+        # Get the file's own namespace to avoid preserving self-imports
+        file_namespace = self._extract_file_namespace(generated_tree.root_node, generated_code)
+
         # Extract custom using statements
         for using in self._find_nodes(root, "using_directive"):
             using_text = self._get_node_text(using, existing_code)
             namespace = self._extract_namespace_from_using(using_text)
+            # Skip if: in generated usings, in standard usings, or is the file's own namespace
             if namespace and namespace not in generated_usings and namespace not in self.STANDARD_USINGS:
+                if file_namespace and namespace == file_namespace:
+                    continue  # Skip self-imports
                 custom.custom_imports.append(using_text)
 
         # Extract custom code from classes
@@ -301,6 +307,24 @@ class CSharpAstMerger(AstMerger):
             if namespace:
                 usings.add(namespace)
         return usings
+
+    def _extract_file_namespace(self, root: Any, code: str) -> str | None:
+        """Extract the file's namespace from namespace_declaration."""
+        for ns_node in self._find_nodes(root, "namespace_declaration"):
+            for child in ns_node.children:
+                if child.type == "identifier":
+                    return self._get_node_text(child, code)
+                # Handle qualified names like "EduObject.Maths.BasicOperations"
+                if child.type == "qualified_name":
+                    return self._get_node_text(child, code)
+        # Try file_scoped_namespace_declaration for C# 10+ style
+        for ns_node in self._find_nodes(root, "file_scoped_namespace_declaration"):
+            for child in ns_node.children:
+                if child.type == "identifier":
+                    return self._get_node_text(child, code)
+                if child.type == "qualified_name":
+                    return self._get_node_text(child, code)
+        return None
 
     def _extract_namespace_from_using(self, using_text: str) -> str | None:
         """Extract namespace from using statement."""

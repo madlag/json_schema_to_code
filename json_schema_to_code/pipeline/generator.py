@@ -28,7 +28,7 @@ class PipelineGenerator:
     2. Analyze AST and build IR
     3. Generate language-native AST from IR
     4. Serialize AST to source code
-    5. (Optional) Format with ruff (Python only)
+    5. (Optional) Format with ruff (Python only) - applied once at the end in generate_to_file()
     """
 
     def __init__(
@@ -86,11 +86,6 @@ class PipelineGenerator:
         # Phase 3 & 4: Generate code using AST backend
         code = self.backend.generate(ir)
 
-        # Phase 5: Format (Python only)
-        if self.formatter and self.config.formatter.enabled:
-            if self.formatter.is_available():
-                code = self.formatter.format(code, self.config.formatter)
-
         return code
 
     def _generate_comment(self) -> str:
@@ -134,54 +129,43 @@ class PipelineGenerator:
         output_config = self.config.output
         mode = output_config.mode
 
-        # Initialize writer
-        writer = AtomicWriter()
-
-        # Handle based on mode
+        # Determine final code based on mode
         if mode == OutputMode.ERROR_IF_EXISTS:
-            # Default: error if file exists
-            writer.write_if_not_exists(
-                output_path,
-                generated_code,
-                self._get_language_for_writer(),
-                validate=output_config.validate_before_write,
-            )
+            if output_path.exists():
+                raise FileExistsError(f"Output file already exists: {output_path}")
+            final_code = generated_code
 
         elif mode == OutputMode.FORCE:
-            # Force: overwrite without merging
-            writer.write(
-                output_path,
-                generated_code,
-                self._get_language_for_writer(),
-                validate=output_config.validate_before_write,
-            )
+            final_code = generated_code
 
         elif mode == OutputMode.MERGE:
-            # Merge: preserve custom code from existing file
             if output_path.exists():
                 existing_code = output_path.read_text(encoding="utf-8")
                 merger = self._create_merger()
                 try:
-                    merged_code = merger.merge_files(generated_code, existing_code)
+                    final_code = merger.merge_files(generated_code, existing_code)
                 except CodeMergeError:
                     raise
                 except Exception as e:
                     raise CodeMergeError(f"Failed to merge code: {e}") from e
-
-                writer.write(
-                    output_path,
-                    merged_code,
-                    self._get_language_for_writer(),
-                    validate=output_config.validate_before_write,
-                )
             else:
-                # No existing file, just write
-                writer.write(
-                    output_path,
-                    generated_code,
-                    self._get_language_for_writer(),
-                    validate=output_config.validate_before_write,
-                )
+                final_code = generated_code
+        else:
+            final_code = generated_code
+
+        # Format the final code (Python only)
+        if self.formatter and self.config.formatter.enabled:
+            if self.formatter.is_available():
+                final_code = self.formatter.format(final_code, self.config.formatter)
+
+        # Write to file
+        writer = AtomicWriter()
+        writer.write(
+            output_path,
+            final_code,
+            self._get_language_for_writer(),
+            validate=output_config.validate_before_write,
+        )
 
     def _get_language_for_writer(self) -> str:
         """Get the language string for the atomic writer."""

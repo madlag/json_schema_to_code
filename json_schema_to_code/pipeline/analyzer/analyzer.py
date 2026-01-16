@@ -698,6 +698,22 @@ class SchemaAnalyzer:
         """Analyze a primitive type."""
         type_name = node.type_name
 
+        # Check for string enum - should become Literal type
+        if type_name == "string" and "enum" in node.metadata:
+            self.required_imports.add("Literal")
+            type_ref = TypeRef(
+                kind=TypeKind.ENUM,
+                name="string",
+                enum_values=node.metadata["enum"],
+            )
+            # Handle default value
+            if "default" in node.metadata:
+                type_ref.has_default = True
+                type_ref.default_value = node.metadata["default"]
+            elif not is_required:
+                type_ref.is_nullable = True
+            return type_ref
+
         # Map to language type
         kind = TypeKind.PRIMITIVE
         if type_name == "object":

@@ -232,6 +232,47 @@ class Person:
         # Should have the new field
         assert "age: int" in merged
 
+    def test_merge_consolidates_duplicate_imports_from_same_module(self):
+        """Test that merge consolidates duplicate imports from the same module."""
+        merger = PythonAstMerger()
+
+        # Existing file has duplicate imports from same module (a common issue)
+        existing = """
+from __future__ import annotations
+from dataclasses import dataclass
+from mymodule import A, B, C
+from other import X
+from mymodule import A, B, C, D
+
+@dataclass
+class Person:
+    name: str
+"""
+
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass
+from mymodule import A, B, E
+
+@dataclass
+class Person:
+    name: str
+    age: int = 0
+"""
+
+        merged = merger.merge_files(generated, existing)
+
+        # Should consolidate into single import with all names
+        import_count = merged.count("from mymodule import")
+        assert import_count == 1, f"Expected 1 import from mymodule, got {import_count}"
+
+        # Should have all unique names from both imports
+        assert "A" in merged
+        assert "B" in merged
+        assert "C" in merged
+        assert "D" in merged
+        assert "E" in merged
+
     def test_merge_preserves_custom_methods(self):
         """Test that merge preserves custom methods."""
         merger = PythonAstMerger()
