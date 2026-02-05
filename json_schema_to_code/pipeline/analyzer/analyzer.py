@@ -74,6 +74,8 @@ class SchemaAnalyzer:
         # base -> [(name, discriminator), ...]
         self.subclasses: dict[str, list[tuple[str, str]]] = {}
         self.base_class: dict[str, str] = {}  # class -> base
+        # base -> discriminator JSON property name (e.g. "type", "action_type")
+        self.discriminator_property_by_base: dict[str, str] = {}
 
         # Track type aliases needed
         self.type_aliases: dict[str, TypeAlias] = {}
@@ -162,11 +164,17 @@ class SchemaAnalyzer:
         # Get this class's name
         class_name = self.name_mapping.definition_names.get(def_node.original_name, def_node.original_name)
 
-        # Find discriminator value from "type" const in extension
+        # Store discriminator property name for the base (from base definition's raw schema)
+        defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
+        base_original_name = allof.base_ref.ref_path.split("/")[-1]
+        disc_prop = defs.get(base_original_name, {}).get("discriminator", {}).get("propertyName", "type")
+        self.discriminator_property_by_base[base_class_name] = disc_prop
+
+        # Find discriminator value from const in extension (property name may be "type" or e.g. "action_type")
         discriminator = class_name
         if allof.extension:
             for prop in allof.extension.properties:
-                if prop.name == "type" and isinstance(prop.type_node, ConstNode):
+                if prop.name == disc_prop and isinstance(prop.type_node, ConstNode):
                     discriminator = prop.type_node.value
                     break
 
@@ -207,6 +215,11 @@ class SchemaAnalyzer:
         # This is a discriminated union - the base type name
         base_class_name = self.name_mapping.definition_names.get(def_node.original_name, def_node.original_name)
 
+        # Store discriminator property name from this definition's raw schema
+        defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
+        disc_prop = defs.get(def_node.original_name, {}).get("discriminator", {}).get("propertyName", "type")
+        self.discriminator_property_by_base[base_class_name] = disc_prop
+
         if base_class_name not in self.subclasses:
             self.subclasses[base_class_name] = []
 
@@ -218,12 +231,12 @@ class SchemaAnalyzer:
             resolved = self.ref_resolver.resolve(variant)
             subtype_name = resolved.target_name
 
-            # Find discriminator value by looking at the subtype's "type" const property
+            # Find discriminator value from subtype's const property (disc_prop, e.g. "type" or "action_type")
             discriminator = subtype_name
             subtype_def = self.ref_resolver.get_definition(variant.ref_path.split("/")[-1])
             if subtype_def and isinstance(subtype_def.body, ObjectNode):
                 for prop in subtype_def.body.properties:
-                    if prop.name == "type" and isinstance(prop.type_node, ConstNode):
+                    if prop.name == disc_prop and isinstance(prop.type_node, ConstNode):
                         discriminator = prop.type_node.value
                         break
 
@@ -332,10 +345,12 @@ class SchemaAnalyzer:
 
             # For C#, we still generate a base class if discriminated
             if self.language == "cs" and class_name in self.subclasses:
+                disc_prop = self.discriminator_property_by_base.get(class_name, "type")
                 return ClassDef(
                     name=class_name,
                     original_name=def_node.original_name,
                     subclasses=self.subclasses.get(class_name, []),
+                    discriminator_property=disc_prop,
                 )
 
             return None
@@ -369,6 +384,11 @@ class SchemaAnalyzer:
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
+
+        # If this class extends a discriminated base, inherit discriminator property name
+        # so the C# backend can emit a get-only property instead of const for serialization
+        if class_def.base_class:
+            class_def.discriminator_property = self.discriminator_property_by_base.get(class_def.base_class)
 
         # Analyze extension properties
         if allof.extension:
@@ -501,15 +521,22 @@ class SchemaAnalyzer:
 
     def _analyze_object_definition(self, def_node: DefinitionNode, obj: ObjectNode, class_name: str) -> ClassDef:
         """Analyze an object type definition."""
+        subclasses = self.subclasses.get(class_name, [])
+        disc_prop = self.discriminator_property_by_base.get(class_name, "type") if subclasses else None
         class_def = ClassDef(
             name=class_name,
             original_name=def_node.original_name,
-            subclasses=self.subclasses.get(class_name, []),
+            subclasses=subclasses,
+            discriminator_property=disc_prop,
         )
 
         # Check if this class is a subtype (from discriminated union or allOf)
         if class_name in self.base_class:
             class_def.base_class = self.base_class[class_name]
+            # Inherit discriminator property name so C# emits get-only property for serialization
+            base_name = class_def.base_class
+            if base_name in self.discriminator_property_by_base:
+                class_def.discriminator_property = self.discriminator_property_by_base[base_name]
 
         # C# interface implementation
         if obj.implements:

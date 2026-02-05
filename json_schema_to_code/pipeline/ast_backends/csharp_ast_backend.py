@@ -107,10 +107,11 @@ class CSharpAstBackend(AstBackend):
         # Subtype handling
         if class_def.subclasses:
             self.required_imports.add("JsonSubTypes")
+            disc_prop = class_def.discriminator_property or "type"
             cls.attributes.append(
                 CSharpAttribute(
                     name="JsonConverter",
-                    arguments=["typeof(JsonSubtypes)", '"type"'],
+                    arguments=["typeof(JsonSubtypes)", f'"{disc_prop}"'],
                 )
             )
             for subclass_name, discriminator in class_def.subclasses:
@@ -130,11 +131,18 @@ class CSharpAstBackend(AstBackend):
             cls.interfaces.append(class_def.implements)
 
         # Fields and properties
+        disc_prop_name = class_def.discriminator_property or "type"
         for field in class_def.fields:
             if field.is_const:
-                field_node = self._generate_field(field)
-                if field_node:
-                    cls.fields.append(field_node)
+                # Emit discriminator const as get-only property so JSON serialization includes it
+                if field.name == disc_prop_name:
+                    prop_node = self._generate_discriminator_property(field)
+                    if prop_node:
+                        cls.properties.append(prop_node)
+                else:
+                    field_node = self._generate_field(field)
+                    if field_node:
+                        cls.fields.append(field_node)
             else:
                 prop_node = self._generate_property(field)
                 if prop_node:
@@ -177,6 +185,24 @@ class CSharpAstBackend(AstBackend):
             field_node.comment = field.comment
 
         return field_node
+
+    def _generate_discriminator_property(self, field: FieldDef) -> CSharpProperty | None:
+        """Generate a get-only property for discriminator (so it serializes to JSON)."""
+        if not field.type_ref:
+            return None
+        type_str = self.translate_type(field.type_ref)
+        pascal_name = self._get_property_name(field)
+        prop = CSharpProperty(
+            name=pascal_name,
+            type_name=type_str,
+            has_setter=False,
+        )
+        prop.attributes.append(CSharpAttribute(name="JsonProperty", arguments=[f'"{field.name}"']))
+        if field.has_default:
+            prop.default_value = self.format_default_value(field.default_value, field.type_ref)
+        if field.comment:
+            prop.comment = field.comment
+        return prop
 
     def _generate_property(self, field: FieldDef) -> CSharpProperty | None:
         """Generate a property AST node."""

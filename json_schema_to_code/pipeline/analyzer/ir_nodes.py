@@ -117,6 +117,8 @@ class ClassDef:
     # Inheritance
     base_class: str | None = None  # Name of base class
     subclasses: list[tuple[str, str]] = field(default_factory=list)  # [(name, discriminator), ...]
+    # JSON property used for discriminator (e.g. "type", "action_type"). None => "type" in C# backend.
+    discriminator_property: str | None = None
 
     # Fields
     fields: list[FieldDef] = field(default_factory=list)
