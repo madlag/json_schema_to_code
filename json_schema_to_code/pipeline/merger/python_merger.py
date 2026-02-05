@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 
+from ..config import MergeStrategy
 from .base import AstMerger, CodeMergeError, CustomCode
 
 
@@ -53,7 +54,12 @@ class PythonAstMerger(AstMerger):
         """Not used in order-preserving merge. Kept for interface compatibility."""
         return generated_code
 
-    def merge_files(self, generated_code: str, existing_code: str) -> str:
+    def merge_files(
+        self,
+        generated_code: str,
+        existing_code: str,
+        merge_strategy: MergeStrategy = MergeStrategy.ERROR,
+    ) -> str:
         """Merge generated code into existing file, preserving order.
 
         Walks the existing file structure and updates elements from generated code.
@@ -61,6 +67,8 @@ class PythonAstMerger(AstMerger):
         """
         existing_tree = self.parse(existing_code)
         generated_tree = self.parse(generated_code)
+        if merge_strategy == MergeStrategy.ERROR:
+            self._raise_on_removed_value_members(existing_tree, generated_tree)
 
         # Build lookups for generated code
         gen_imports = self._get_imports_list(generated_tree)
@@ -92,8 +100,7 @@ class PythonAstMerger(AstMerger):
 
             elif isinstance(node, ast.ClassDef):
                 if node.name in gen_classes:
-                    # Merge class: existing structure, updated content
-                    merged = self._merge_class(node, gen_classes[node.name])
+                    merged = self._merge_class(node, gen_classes[node.name], merge_strategy)
                     new_body.append(merged)
                     del gen_classes[node.name]
                 else:
@@ -133,9 +140,50 @@ class PythonAstMerger(AstMerger):
         ast.fix_missing_locations(existing_tree)
         return ast.unparse(existing_tree)
 
-    def _merge_class(self, existing: ast.ClassDef, generated: ast.ClassDef) -> ast.ClassDef:
+    def _raise_on_removed_value_members(self, existing_tree: ast.Module, generated_tree: ast.Module) -> None:
+        """Raise when existing classes contain value members removed from generated code."""
+        existing_classes = {node.name: node for node in existing_tree.body if isinstance(node, ast.ClassDef)}
+        generated_classes = {node.name: node for node in generated_tree.body if isinstance(node, ast.ClassDef)}
+
+        for class_name, existing_class in existing_classes.items():
+            generated_class = generated_classes.get(class_name)
+            if generated_class is None:
+                continue
+
+            generated_members = self._get_class_value_members(generated_class)
+            for member_name, member_node in self._get_class_value_members(existing_class).items():
+                if member_name in generated_members:
+                    continue
+                line = getattr(member_node, "lineno", "?")
+                col = getattr(member_node, "col_offset", "?")
+                raise CodeMergeError(
+                    "Merge aborted: existing value member is not generated anymore. "
+                    "Use --merge-strategy merge to keep it, or --merge-strategy delete to remove it. "
+                    f"Location: class '{class_name}', member '{member_name}' at line {line}, column {col}."
+                )
+
+    def _get_class_value_members(self, class_node: ast.ClassDef) -> dict[str, ast.AST]:
+        """Return class value members (fields/constants), excluding functions."""
+        members: dict[str, ast.AST] = {}
+        for item in class_node.body:
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                members[item.target.id] = item
+                continue
+            if isinstance(item, ast.Assign):
+                if len(item.targets) != 1:
+                    continue
+                target = item.targets[0]
+                if isinstance(target, ast.Name):
+                    members[target.id] = item
+        return members
+
+    def _merge_class(
+        self,
+        existing: ast.ClassDef,
+        generated: ast.ClassDef,
+        merge_strategy: MergeStrategy,
+    ) -> ast.ClassDef:
         """Merge a class: preserve existing order, update content from generated."""
-        # Build lookups for generated class
         gen_fields = {}
         gen_methods = {}
         for item in generated.body:
@@ -148,23 +196,18 @@ class PythonAstMerger(AstMerger):
         seen_fields = set()
         seen_methods = set()
 
-        # Walk existing class body in order
         for item in existing.body:
             if isinstance(item, ast.Expr) and isinstance(item.value, ast.Constant):
-                # Docstring - keep it
                 new_body.append(item)
 
             elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                 field_name = item.target.id
                 if field_name in gen_fields:
-                    # Update field from generated, but preserve existing default if generated has none
                     gen_field = gen_fields[field_name]
                     if gen_field.value is None and item.value is not None:
-                        # Generated has no default, but existing does - keep existing default
                         gen_field.value = item.value
                     new_body.append(gen_field)
-                else:
-                    # Custom field, keep as-is
+                elif merge_strategy != MergeStrategy.DELETE:
                     new_body.append(item)
                 seen_fields.add(field_name)
 

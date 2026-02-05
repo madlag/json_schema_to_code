@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from json_schema_to_code.pipeline import CodeGeneratorConfig, OutputMode, PipelineGenerator
+from json_schema_to_code.pipeline import CodeGeneratorConfig, MergeStrategy, OutputMode, PipelineGenerator
 from json_schema_to_code.pipeline.merger import (
     AtomicWriter,
     CodeMergeError,
@@ -306,6 +306,77 @@ class Person:
         # Should have the new field
         assert "age: int" in merged
 
+    def test_merge_raises_when_existing_value_member_missing_in_generated(self):
+        """Test that merge fails when existing class has a removed value member."""
+        merger = PythonAstMerger()
+
+        existing = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+    legacy_value: int = 7
+"""
+
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+"""
+
+        with pytest.raises(CodeMergeError, match="legacy_value"):
+            merger.merge_files(generated, existing)
+
+    def test_merge_strategy_merge_keeps_removed_value_members(self):
+        merger = PythonAstMerger()
+        existing = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+    legacy_value: int = 7
+"""
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "legacy_value" in merged
+
+    def test_merge_strategy_delete_removes_extra_value_members(self):
+        merger = PythonAstMerger()
+        existing = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+    legacy_value: int = 7
+"""
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.DELETE)
+        assert "legacy_value" not in merged
+        assert "name: str" in merged
+
     def test_merge_empty_custom_code_returns_generated(self):
         """Test that merge with no custom code returns generated as-is."""
         merger = PythonAstMerger()
@@ -350,7 +421,6 @@ class ColorFlag(str, Enum):
 @dataclass
 class Person:
     name: str
-    color: ColorFlag = ColorFlag.NORMAL
 """
 
         generated = """
@@ -583,6 +653,165 @@ class TestCSharpMerger:
         except ImportError:
             # Also acceptable if the import itself fails
             pytest.skip("tree-sitter-c-sharp not installed")
+
+    def test_csharp_merge_does_not_duplicate_properties(self):
+        """Regression: merging with corrupted file (duplicate property) must not preserve duplicate."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+
+        generated = """
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class UIAction {
+        [JsonProperty("operations")]
+        public List<object> Operations { get; set; }
+        [JsonProperty("metadata")]
+        public object Metadata { get; set; }
+    }
+}
+"""
+
+        # Existing file corrupted by previous bad merge - has duplicate Metadata
+        existing = """
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class UIAction {
+        [JsonProperty("operations")]
+        public List<object> Operations { get; set; }
+        [JsonProperty("metadata")]
+        public object Metadata { get; set; }
+
+    [JsonProperty("metadata")]
+            public object Metadata { get; set; }
+    }
+}
+"""
+
+        merged = merger.merge_files(generated, existing)
+
+        # Must have exactly one Metadata property, not two
+        metadata_count = merged.count("public object Metadata { get; set; }")
+        assert metadata_count == 1, f"Expected 1 Metadata property, got {metadata_count}"
+
+    def test_csharp_merge_raises_when_existing_value_member_missing_in_generated(self):
+        """Test that C# merge fails when existing class has removed property."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+}
+"""
+
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("legacy_value")]
+        public int LegacyValue { get; set; }
+    }
+}
+"""
+
+        with pytest.raises(CodeMergeError, match="LegacyValue"):
+            merger.merge_files(generated, existing)
+
+    def test_csharp_merge_strategy_merge_keeps_removed_property(self):
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("legacy_value")]
+        public int LegacyValue { get; set; }
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "LegacyValue" in merged
+
+    def test_csharp_merge_strategy_delete_removes_extra_property(self):
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("legacy_value")]
+        public int LegacyValue { get; set; }
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.DELETE)
+        assert "LegacyValue" not in merged
+        assert "Name" in merged
 
 
 if __name__ == "__main__":

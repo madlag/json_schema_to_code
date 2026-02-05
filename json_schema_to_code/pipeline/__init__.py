@@ -14,7 +14,7 @@ code from JSON schemas using language-native AST representations:
 
 from __future__ import annotations
 
-from .config import CodeGeneratorConfig, FormatterConfig, OutputConfig, OutputMode
+from .config import CodeGeneratorConfig, FormatterConfig, MergeStrategy, OutputConfig, OutputMode
 from .generator import PipelineGenerator
 from .merger import AtomicWriter, CodeMergeError, PythonAstMerger
 
@@ -24,6 +24,7 @@ __all__ = [
     "FormatterConfig",
     "OutputConfig",
     "OutputMode",
+    "MergeStrategy",
     "CodeMergeError",
     "PythonAstMerger",
     "AtomicWriter",

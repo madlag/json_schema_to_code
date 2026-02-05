@@ -309,7 +309,6 @@ class ColorFlag(str, Enum):
 @dataclass
 class Person:
     name: str
-    color: ColorFlag = ColorFlag.NORMAL
 """
 
         generated = """

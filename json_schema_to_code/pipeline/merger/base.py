@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..config import MergeStrategy
+
 
 class CodeMergeError(Exception):
     """Raised when code merging fails.
@@ -140,7 +142,12 @@ class AstMerger(ABC):
         """
         pass
 
-    def merge_files(self, generated_code: str, existing_code: str) -> str:
+    def merge_files(
+        self,
+        generated_code: str,
+        existing_code: str,
+        merge_strategy: MergeStrategy = MergeStrategy.ERROR,
+    ) -> str:
         """High-level merge operation.
 
         Convenience method that performs the full merge workflow:
@@ -151,6 +158,7 @@ class AstMerger(ABC):
         Args:
             generated_code: The newly generated code
             existing_code: The existing file contents
+            merge_strategy: How to handle existing value members not in generated code
 
         Returns:
             Merged code string

@@ -143,7 +143,7 @@ class PipelineGenerator:
                 existing_code = output_path.read_text(encoding="utf-8")
                 merger = self._create_merger()
                 try:
-                    final_code = merger.merge_files(generated_code, existing_code)
+                    final_code = merger.merge_files(generated_code, existing_code, output_config.merge_strategy)
                 except CodeMergeError:
                     raise
                 except Exception as e:

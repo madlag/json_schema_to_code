@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..config import MergeStrategy
 from .base import AstMerger, CodeMergeError, CustomCode
 
 # Try to import tree-sitter
 try:
-    import tree_sitter_csharp as ts_csharp
+    import tree_sitter_c_sharp as ts_csharp
     from tree_sitter import Language, Node, Parser
 
     TREE_SITTER_AVAILABLE = True
@@ -78,25 +79,28 @@ class CSharpAstMerger(AstMerger):
 
         return tree
 
+    def merge_files(
+        self,
+        generated_code: str,
+        existing_code: str,
+        merge_strategy: MergeStrategy = MergeStrategy.ERROR,
+    ) -> str:
+        custom_code = self._extract_custom_code_with_strategy(existing_code, generated_code, merge_strategy)
+        if custom_code.is_empty():
+            return generated_code
+        merged = self.merge(generated_code, custom_code)
+        self.validate(merged)
+        return merged
+
     def extract_custom_code(self, existing_code: str, generated_code: str) -> CustomCode:
-        """Extract custom code elements from existing C# file.
+        return self._extract_custom_code_with_strategy(existing_code, generated_code, MergeStrategy.ERROR)
 
-        Identifies:
-        - Custom using statements (not in standard set)
-        - Custom methods in classes
-        - Custom properties not in schema
-        - Regions marked with // CUSTOM CODE comments
-
-        Args:
-            existing_code: The existing file contents
-            generated_code: The newly generated code
-
-        Returns:
-            CustomCode object with extracted elements
-
-        Raises:
-            CodeMergeError: If existing code cannot be parsed
-        """
+    def _extract_custom_code_with_strategy(
+        self,
+        existing_code: str,
+        generated_code: str,
+        merge_strategy: MergeStrategy,
+    ) -> CustomCode:
         existing_tree = self.parse(existing_code)
         generated_tree = self.parse(generated_code)
 
@@ -110,6 +114,7 @@ class CSharpAstMerger(AstMerger):
 
         # Get generated member names per class
         generated_members = self._extract_class_members(generated_tree.root_node, generated_code)
+        generated_value_members = self._extract_class_value_members(generated_tree.root_node, generated_code)
 
         # Process existing file
         root = existing_tree.root_node
@@ -145,10 +150,25 @@ class CSharpAstMerger(AstMerger):
             if not body:
                 continue
 
+            existing_value_members = self._extract_value_members_from_class_body(body, existing_code)
+            generated_value_names = generated_value_members.get(class_name, set())
+            for member_name, member_node in existing_value_members.items():
+                if member_name in generated_value_names:
+                    continue
+                if merge_strategy == MergeStrategy.ERROR:
+                    line = member_node.start_point[0] + 1
+                    column = member_node.start_point[1] + 1
+                    raise CodeMergeError(
+                        "Merge aborted: existing value member is not generated anymore. "
+                        "Use --merge-strategy merge to keep it, "
+                        "or --merge-strategy delete to remove it. "
+                        f"Location: class '{class_name}', member '{member_name}' "
+                        f"at line {line}, column {column}."
+                    )
+
             for member in body.children:
                 if member.type == "method_declaration":
                     method_name = self._get_method_name(member, existing_code)
-                    # Skip constructors and generated methods
                     if method_name and method_name not in gen_members:
                         if class_name not in custom.class_methods:
                             custom.class_methods[class_name] = []
@@ -157,6 +177,8 @@ class CSharpAstMerger(AstMerger):
                 elif member.type == "property_declaration":
                     prop_name = self._get_property_name(member, existing_code)
                     if prop_name and prop_name not in gen_members:
+                        if merge_strategy == MergeStrategy.DELETE:
+                            continue
                         if class_name not in custom.class_attributes:
                             custom.class_attributes[class_name] = []
                         custom.class_attributes[class_name].append(self._get_node_text(member, existing_code))
@@ -187,8 +209,9 @@ class CSharpAstMerger(AstMerger):
         current_class = None
         class_end_indices: dict[str, int] = {}
 
-        # First pass: identify class boundaries
+        # First pass: identify class boundaries and generated members
         tree = self.parse(generated_code)
+        generated_members = self._extract_class_members(tree.root_node, generated_code)
         for class_node in self._find_nodes(tree.root_node, "class_declaration"):
             class_name = self._get_class_name(class_node, generated_code)
             if class_name:
@@ -227,9 +250,14 @@ class CSharpAstMerger(AstMerger):
                 if i == class_end_indices[current_class]:
                     # Insert custom members before closing brace
                     indent = "    "  # 4 spaces for class members
+                    gen_members = generated_members.get(current_class, set())
 
                     if current_class in custom_code.class_attributes:
                         for attr in custom_code.class_attributes[current_class]:
+                            # Safeguard: skip if this would duplicate a generated property
+                            attr_prop_name = self._get_property_name_from_source(attr)
+                            if attr_prop_name and attr_prop_name in gen_members:
+                                continue
                             result_lines.append("")
                             for attr_line in attr.split("\n"):
                                 result_lines.append(indent + attr_line)
@@ -375,6 +403,47 @@ class CSharpAstMerger(AstMerger):
 
         return members
 
+    def _extract_class_value_members(self, root: Any, code: str) -> dict[str, set[str]]:
+        """Extract value member names (properties/fields) for each class."""
+        members: dict[str, set[str]] = {}
+        for class_node in self._find_nodes(root, "class_declaration"):
+            class_name = self._get_class_name(class_node, code)
+            if not class_name:
+                continue
+
+            body = None
+            for child in class_node.children:
+                if child.type == "declaration_list":
+                    body = child
+                    break
+            if body is None:
+                members[class_name] = set()
+                continue
+
+            value_members = self._extract_value_members_from_class_body(body, code)
+            members[class_name] = set(value_members.keys())
+        return members
+
+    def _extract_value_members_from_class_body(self, body: Any, code: str) -> dict[str, Any]:
+        """Extract value members and source nodes from a class declaration body."""
+        members: dict[str, Any] = {}
+        for member in body.children:
+            if member.type == "property_declaration":
+                prop_name = self._get_property_name(member, code)
+                if prop_name:
+                    members[prop_name] = member
+                continue
+            if member.type != "field_declaration":
+                continue
+            for variable in self._find_nodes(member, "variable_declarator"):
+                name_node = variable.child_by_field_name("name")
+                if not name_node:
+                    continue
+                field_name = self._get_node_text(name_node, code)
+                if field_name:
+                    members[field_name] = member
+        return members
+
     def _get_class_name(self, node: Any, code: str) -> str | None:
         """Get class name from class_declaration node."""
         for child in node.children:
@@ -389,11 +458,33 @@ class CSharpAstMerger(AstMerger):
                 return self._get_node_text(child, code)
         return None
 
+    def _get_property_name_from_source(self, attr_source: str) -> str | None:
+        """Extract property name from a property declaration source fragment.
+
+        Wraps the fragment in a minimal class and parses to get the property name.
+        Returns None if parsing fails (caller will include the attr as a safeguard).
+        """
+        wrapped = f"namespace __ {{ class __ {{{attr_source}}} }}"
+        try:
+            tree = self.parse(wrapped)
+            for prop in self._find_nodes(tree.root_node, "property_declaration"):
+                name = self._get_property_name(prop, wrapped)
+                if name:
+                    return name
+        except CodeMergeError:
+            pass
+        return None
+
     def _get_property_name(self, node: Any, code: str) -> str | None:
-        """Get property name from property_declaration node."""
-        for child in node.children:
-            if child.type == "identifier":
-                return self._get_node_text(child, code)
+        """Get property name from property_declaration node.
+
+        Uses child_by_field_name('name') per the tree-sitter grammar to reliably
+        get the property name rather than the first identifier (which could be
+        from the type, e.g. in explicit interface implementations).
+        """
+        name_node = node.child_by_field_name("name")
+        if name_node:
+            return self._get_node_text(name_node, code)
         return None
 
     def _get_method_name(self, node: Any, code: str) -> str | None:

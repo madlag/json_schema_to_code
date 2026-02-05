@@ -19,6 +19,14 @@ class OutputMode(str, Enum):
     MERGE = "merge"  # Merge with existing file
 
 
+class MergeStrategy(str, Enum):
+    """Strategy for handling existing value members not present in generated code."""
+
+    ERROR = "error"  # Raise error (default)
+    MERGE = "merge"  # Keep extra members from existing file
+    DELETE = "delete"  # Remove extra members from existing file
+
+
 @dataclass
 class FormatterConfig:
     """Configuration for code formatters."""
@@ -35,6 +43,7 @@ class OutputConfig:
     """Configuration for output handling."""
 
     mode: OutputMode = OutputMode.MERGE
+    merge_strategy: MergeStrategy = MergeStrategy.ERROR
     output_path: str = ""
     validate_before_write: bool = True  # Validate generated code before writing
 
