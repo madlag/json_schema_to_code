@@ -350,6 +350,63 @@ class Person:
         with pytest.raises(CodeMergeError):
             merger.validate(code)
 
+    def test_no_merge_marker_preserves_field(self):
+        """Field with # jstc-no-merge is kept as-is, ignoring generated version."""
+        merger = PythonAstMerger()
+
+        existing = (
+            "from __future__ import annotations\n"
+            "from dataclasses import dataclass, field\n"
+            "from dataclasses_json import config\n"
+            "\n"
+            "MY_CONFIG = config(encoder=lambda v: v)\n"
+            "\n"
+            "@dataclass\n"
+            "class Person:\n"
+            "    name: str = field(metadata=MY_CONFIG)  # jstc-no-merge\n"
+            "    age: int = 0\n"
+        )
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "field(metadata=MY_CONFIG)" in merged
+        assert "age: int" in merged
+
+    def test_field_metadata_preserved_without_marker(self):
+        """Field with field(metadata=...) is preserved automatically, no marker needed."""
+        merger = PythonAstMerger()
+
+        existing = (
+            "from __future__ import annotations\n"
+            "from dataclasses import dataclass, field\n"
+            "from dataclasses_json import config\n"
+            "\n"
+            "MY_CONFIG = config(encoder=lambda v: v)\n"
+            "\n"
+            "@dataclass\n"
+            "class Person:\n"
+            "    name: str = field(metadata=MY_CONFIG)\n"
+            "    age: int = 0\n"
+        )
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "field(metadata=MY_CONFIG)" in merged
+        assert "age: int" in merged
+
+    def test_normal_field_still_merges(self):
+        """Simple fields without metadata are merged normally from generated."""
+        merger = PythonAstMerger()
+
+        existing = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 99\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "age: int = 99" in merged
+
 
 class TestAtomicWriter:
     """Tests for AtomicWriter."""

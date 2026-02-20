@@ -16,6 +16,8 @@ from .base import AstMerger, CodeMergeError, CustomCode
 class PythonAstMerger(AstMerger):
     """Merger for Python source files using the built-in ast module."""
 
+    NO_MERGE_MARKER = "# jstc-no-merge"
+
     # Standard imports that are always generated - don't preserve these
     STANDARD_IMPORTS = {
         ("__future__", "annotations"),
@@ -67,6 +69,7 @@ class PythonAstMerger(AstMerger):
         """
         existing_tree = self.parse(existing_code)
         generated_tree = self.parse(generated_code)
+        existing_source_lines = existing_code.splitlines()
         if merge_strategy == MergeStrategy.ERROR:
             self._raise_on_removed_value_members(existing_tree, generated_tree)
 
@@ -100,7 +103,7 @@ class PythonAstMerger(AstMerger):
 
             elif isinstance(node, ast.ClassDef):
                 if node.name in gen_classes:
-                    merged = self._merge_class(node, gen_classes[node.name], merge_strategy)
+                    merged = self._merge_class(node, gen_classes[node.name], merge_strategy, existing_source_lines)
                     new_body.append(merged)
                     del gen_classes[node.name]
                 else:
@@ -177,11 +180,28 @@ class PythonAstMerger(AstMerger):
                     members[target.id] = item
         return members
 
+    def _has_no_merge_marker(self, source_lines: list[str], node: ast.AnnAssign) -> bool:
+        """Check if the source line for a node contains the jstc-no-merge marker."""
+        line_idx = node.lineno - 1
+        if line_idx < 0 or line_idx >= len(source_lines):
+            return False
+        return self.NO_MERGE_MARKER in source_lines[line_idx]
+
+    def _has_field_metadata(self, node: ast.AnnAssign) -> bool:
+        """Check if a field uses field() with a metadata= keyword argument."""
+        if node.value is None or not isinstance(node.value, ast.Call):
+            return False
+        func = node.value.func
+        if isinstance(func, ast.Name) and func.id == "field":
+            return any(kw.arg == "metadata" for kw in node.value.keywords)
+        return False
+
     def _merge_class(
         self,
         existing: ast.ClassDef,
         generated: ast.ClassDef,
         merge_strategy: MergeStrategy,
+        existing_source_lines: list[str],
     ) -> ast.ClassDef:
         """Merge a class: preserve existing order, update content from generated."""
         gen_fields = {}
@@ -203,10 +223,15 @@ class PythonAstMerger(AstMerger):
             elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                 field_name = item.target.id
                 if field_name in gen_fields:
-                    gen_field = gen_fields[field_name]
-                    if gen_field.value is None and item.value is not None:
-                        gen_field.value = item.value
-                    new_body.append(gen_field)
+                    if self._has_no_merge_marker(existing_source_lines, item):
+                        new_body.append(item)
+                    elif self._has_field_metadata(item):
+                        new_body.append(item)
+                    else:
+                        gen_field = gen_fields[field_name]
+                        if gen_field.value is None and item.value is not None:
+                            gen_field.value = item.value
+                        new_body.append(gen_field)
                 elif merge_strategy != MergeStrategy.DELETE:
                     new_body.append(item)
                 seen_fields.add(field_name)
