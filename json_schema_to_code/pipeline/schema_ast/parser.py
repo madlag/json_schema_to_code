@@ -139,11 +139,13 @@ class SchemaParser:
         )
 
     def _extract_metadata(self, schema: dict[str, Any]) -> dict[str, Any]:
-        """Extract x-* extension metadata from schema."""
+        """Extract x-* extension metadata and standard schema keywords from schema."""
         metadata = {}
         for key, value in schema.items():
             if key.startswith("x-"):
                 metadata[key] = value
+        if "default" in schema:
+            metadata["default"] = schema["default"]
         return metadata
 
     def _parse_ref_node(self, schema: dict[str, Any], path: str, metadata: dict[str, Any]) -> RefNode:

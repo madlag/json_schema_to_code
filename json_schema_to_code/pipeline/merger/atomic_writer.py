@@ -30,15 +30,18 @@ class AtomicWriter:
         self,
         validate_python: Callable[[str], None] | None = None,
         validate_csharp: Callable[[str], None] | None = None,
+        require_csharp_namespace: bool = False,
     ):
         """Initialize the atomic writer.
 
         Args:
             validate_python: Optional validation function for Python code
             validate_csharp: Optional validation function for C# code
+            require_csharp_namespace: Whether to require a namespace declaration in C# output
         """
         self._validate_python = validate_python or self._default_validate_python
         self._validate_csharp = validate_csharp or self._default_validate_csharp
+        self._require_csharp_namespace = require_csharp_namespace
 
     def write(
         self,
@@ -176,7 +179,7 @@ class AtomicWriter:
             CodeMergeError: If validation fails
         """
         # Basic structural checks (no full parsing without tree-sitter)
-        if "namespace " not in content:
+        if self._require_csharp_namespace and "namespace " not in content:
             raise CodeMergeError("Generated C# code is missing namespace declaration")
 
         if "class " not in content and "enum " not in content:

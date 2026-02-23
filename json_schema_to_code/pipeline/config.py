@@ -15,7 +15,7 @@ class OutputMode(str, Enum):
     """Output mode for code generation."""
 
     ERROR_IF_EXISTS = "error_if_exists"  # Error if output file exists
-    FORCE = "force"  # Overwrite existing file
+    OVERWRITE = "overwrite"  # Overwrite existing file
     MERGE = "merge"  # Merge with existing file
 
 
@@ -117,7 +117,12 @@ class CodeGeneratorConfig:
         """Create a config from a dictionary."""
         config = CodeGeneratorConfig()
         for k, v in d.items():
-            if hasattr(config, k):
+            if k == "output" and isinstance(v, dict):
+                if "mode" in v:
+                    config.output.mode = OutputMode(v["mode"])
+                if "merge_strategy" in v:
+                    config.output.merge_strategy = MergeStrategy(v["merge_strategy"])
+            elif hasattr(config, k):
                 setattr(config, k, v)
         return config
 

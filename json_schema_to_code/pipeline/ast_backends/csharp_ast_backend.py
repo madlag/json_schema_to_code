@@ -350,7 +350,8 @@ class CSharpAstBackend(AstBackend):
             return "Tuple<object>"
 
         if type_ref.kind == TypeKind.UNION:
-            # C# doesn't support inline unions, use object
+            # C# doesn't support inline unions; generate a named union type alias
+            # (e.g. int | string -> IntOrString) so callers can use the hand-written class.
             types = [self.translate_type(t) for t in type_ref.type_args]
             non_null = [t for t in types if t != "null"]
             has_null = len(types) != len(non_null)
@@ -360,7 +361,15 @@ class CSharpAstBackend(AstBackend):
                 if has_null and not base_type.endswith("?"):
                     return f"{base_type}?"
                 return base_type
-            return "object"
+
+            # Multiple non-null types: build a PascalCase "XOrY" name
+            def _pascal(s: str) -> str:
+                return s[0].upper() + s[1:] if s else s
+
+            alias_name = "Or".join(_pascal(t) for t in sorted(non_null))
+            if has_null:
+                alias_name = f"{alias_name}?"
+            return alias_name
 
         if type_ref.kind == TypeKind.CONST:
             return self.TYPE_MAP.get(type_ref.name, type_ref.name)

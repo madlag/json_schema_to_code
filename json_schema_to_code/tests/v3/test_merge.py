@@ -562,7 +562,7 @@ class TestGeneratorMerge:
     def test_generate_to_file_force_overwrites(self):
         """Test that force mode overwrites existing file."""
         config = CodeGeneratorConfig()
-        config.output.mode = OutputMode.FORCE
+        config.output.mode = OutputMode.OVERWRITE
         config.add_generation_comment = False
 
         gen = PipelineGenerator("Test", SIMPLE_SCHEMA, config, "python")

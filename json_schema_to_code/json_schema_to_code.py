@@ -44,9 +44,5 @@ def json_schema_to_code(name, config, language, add_validation, merge_strategy, 
     if name is None:
         name = Path(path).stem
 
-    # Use AST-based pipeline generator
     codegen = PipelineGenerator(name, schema, config, language)
-
-    out = codegen.generate()
-    with open(output, "w") as f:
-        f.write(out)
+    codegen.generate_to_file(Path(output))

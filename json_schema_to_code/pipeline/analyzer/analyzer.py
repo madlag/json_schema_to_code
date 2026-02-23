@@ -394,6 +394,25 @@ class SchemaAnalyzer:
         if allof.extension:
             class_def.fields = self._analyze_properties(allof.extension, class_name)
 
+        # When ignoreSubClassOverrides is set, remove from fields any field that
+        # is already covered by a base_field, UNLESS it is a const override of a
+        # non-const base field (e.g. the discriminator "type" const).
+        if self.config.ignoreSubClassOverrides and class_def.base_fields:
+            base_field_names = {f.name for f in class_def.base_fields}
+            filtered = []
+            for f in class_def.fields:
+                if f.name in base_field_names:
+                    # Keep const overrides (e.g. type = "DHMFoo") so the subclass
+                    # still emits a get-only discriminator property.
+                    # Drop non-const overrides (e.g. id with tighter constraints)
+                    # because the base class already declares that property.
+                    if f.is_const:
+                        filtered.append(f)
+                    # else: skip – base class handles it
+                else:
+                    filtered.append(f)
+            class_def.fields = filtered
+
         # Build constructor fields (non-const fields)
         class_def.constructor_fields = [f for f in class_def.fields if not f.is_const]
 
@@ -808,12 +827,8 @@ class SchemaAnalyzer:
             self.required_imports.add("list")
             if node.items:
                 if isinstance(node.items, list):
-                    # Variable length tuple -> use super type
-                    if self.config.use_array_of_super_type_for_variable_length_tuple:
-                        # Use first item type for simplicity
-                        item_type = self._analyze_type_for_array_item(node.items[0], field_name, parent_class)
-                    else:
-                        item_type = self._analyze_type_for_array_item(node.items[0], field_name, parent_class)
+                    # Variable length tuple -> compute super type across all items
+                    item_type = self._compute_super_type(node.items, field_name, parent_class)
                 else:
                     item_type = self._analyze_type_for_array_item(node.items, field_name, parent_class)
             else:
@@ -833,6 +848,39 @@ class SchemaAnalyzer:
             type_ref.is_nullable = True
 
         return type_ref
+
+    def _compute_super_type(
+        self,
+        items: list[SchemaNode],
+        field_name: str,
+        parent_class: str,
+    ) -> TypeRef:
+        """Compute the super type of a list of item schemas (for variable-length tuples).
+
+        Collects all distinct primitive type names across all items and returns a
+        union TypeRef when there are multiple distinct types, or a single TypeRef
+        when all items share the same type.
+        """
+        type_names: set[str] = set()
+        for item in items:
+            if isinstance(item, PrimitiveNode):
+                type_names.add(item.type_name)
+            elif isinstance(item, UnionNode):
+                for variant in item.variants:
+                    if isinstance(variant, PrimitiveNode):
+                        type_names.add(variant.type_name)
+
+        # Remove null from the set - nullability is handled separately
+        type_names.discard("null")
+
+        if len(type_names) <= 1:
+            # Single type (or empty) - fall back to first item
+            return self._analyze_type_for_array_item(items[0], field_name, parent_class)
+
+        # Multiple types - build a union TypeRef
+        sorted_names = sorted(type_names)
+        type_args = [TypeRef(kind=TypeKind.PRIMITIVE, name=n) for n in sorted_names]
+        return TypeRef(kind=TypeKind.UNION, name="union", type_args=type_args)
 
     def _analyze_type_for_array_item(
         self,

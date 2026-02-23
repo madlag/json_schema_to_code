@@ -110,7 +110,7 @@ class PipelineGenerator:
 
         Handles output modes:
         - ERROR_IF_EXISTS: Raises FileExistsError if output file exists
-        - FORCE: Overwrites existing file without merging
+        - OVERWRITE: Overwrites existing file without merging
         - MERGE: Merges custom code from existing file
 
         Uses atomic writes to prevent data corruption from interrupted operations.
@@ -135,7 +135,7 @@ class PipelineGenerator:
                 raise FileExistsError(f"Output file already exists: {output_path}")
             final_code = generated_code
 
-        elif mode == OutputMode.FORCE:
+        elif mode == OutputMode.OVERWRITE:
             final_code = generated_code
 
         elif mode == OutputMode.MERGE:
@@ -153,13 +153,20 @@ class PipelineGenerator:
         else:
             final_code = generated_code
 
+        # Re-prepend generation comment if the merger stripped it
+        comment = self._generate_comment()
+        if comment and not final_code.startswith(comment):
+            final_code = comment + "\n\n" + final_code
+
         # Format the final code (Python only)
         if self.formatter and self.config.formatter.enabled:
             if self.formatter.is_available():
                 final_code = self.formatter.format(final_code, self.config.formatter)
 
         # Write to file
-        writer = AtomicWriter()
+        writer = AtomicWriter(
+            require_csharp_namespace=bool(self.config.csharp_namespace),
+        )
         writer.write(
             output_path,
             final_code,

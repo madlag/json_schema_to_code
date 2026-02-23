@@ -283,6 +283,9 @@ class PythonAstBackend(AstBackend):
         if not field.type_ref:
             return None
 
+        # Determine default first — may mutate field.type_ref.is_nullable
+        value = self._get_field_default(field)
+
         type_str = self.translate_type(field.type_ref)
 
         # Build type annotation
@@ -291,9 +294,6 @@ class PythonAstBackend(AstBackend):
         except SyntaxError:
             # Fallback to string annotation
             type_annotation = ast.Constant(value=type_str)
-
-        # Determine if we need a default value
-        value = self._get_field_default(field)
 
         return ast.AnnAssign(
             target=ast.Name(id=field.name, ctx=ast.Store()),
@@ -310,11 +310,12 @@ class PythonAstBackend(AstBackend):
         if has_explicit_default:
             default_val = field.default_value if field.has_default else field.type_ref.default_value
 
-            # Special case: null default on $ref means auto-initialize with default_factory
+            # null default on $ref: only valid for optional fields — makes the type nullable
             if default_val is None and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-                clean_type = field.type_ref.name.strip('"')
-                self.python_imports.add(("dataclasses", "field"))
-                return self._parse_expr(f"field(default_factory=lambda: {clean_type}())")
+                if field.is_required:
+                    raise ValueError(f"Field '{field.name}' is required but has 'default: null' — " "a required $ref field cannot have a null default")
+                field.type_ref.is_nullable = True
+                return self._format_default_expr(None, field.type_ref)
 
             return self._format_default_expr(default_val, field.type_ref)
 
@@ -577,30 +578,13 @@ class PythonAstBackend(AstBackend):
 
     def _post_process_code(self, code: str, generation_comment: str) -> str:
         """Post-process the generated code for formatting."""
+        # Strip placeholder pass statements (used for blank lines between imports)
         lines = code.split("\n")
-        result = []
+        stripped = [line for i, line in enumerate(lines) if not (line.strip() == "pass" and i > 0 and not lines[i - 1].strip().startswith("class"))]
+        code = "\n".join(stripped)
 
-        # Add generation comment at the top
+        # Prepend generation comment (ruff will handle all PEP 8 spacing)
         if generation_comment:
-            result.append(generation_comment)
-            result.append("")
+            code = generation_comment + "\n\n" + code
 
-        # Process lines
-        for i, line in enumerate(lines):
-            # Skip placeholder pass statements (used for blank lines)
-            if line.strip() == "pass" and i > 0 and not lines[i - 1].strip().startswith("class"):
-                result.append("")
-                continue
-
-            # Add blank lines before class definitions
-            if line.startswith("@dataclass") or line.startswith("class "):
-                if result and result[-1].strip() != "":
-                    result.append("")
-
-            result.append(line)
-
-        # Ensure file ends with newline
-        if result and result[-1] != "":
-            result.append("")
-
-        return "\n".join(result)
+        return code
