@@ -335,6 +335,14 @@ class CSharpAstBackend(AstBackend):
         if type_ref.kind == TypeKind.ANY:
             return "object"
 
+        if type_ref.kind == TypeKind.DICT:
+            self.required_imports.add("System.Collections.Generic")
+            if len(type_ref.type_args) == 2:
+                key_type = self.translate_type(type_ref.type_args[0])
+                value_type = self.translate_type(type_ref.type_args[1])
+                return f"Dictionary<{key_type}, {value_type}>"
+            return "Dictionary<string, object>"
+
         if type_ref.kind == TypeKind.ARRAY:
             self.required_imports.add("System.Collections.Generic")
             if type_ref.type_args:

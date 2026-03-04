@@ -352,6 +352,12 @@ class SchemaParser:
             )
             properties.append(prop_def)
 
+        # Parse typed additionalProperties (dict schema, not boolean)
+        additional_properties = None
+        additional_props_value = schema.get("additionalProperties")
+        if isinstance(additional_props_value, dict):
+            additional_properties = self._parse_schema_node(additional_props_value, f"{path}/additionalProperties")
+
         # Extract C# interface info
         implements = schema.get("x-csharp-implements")
         interface_properties = schema.get("x-csharp-properties", {})
@@ -359,6 +365,7 @@ class SchemaParser:
         return ObjectNode(
             properties=properties,
             required=required_fields,
+            additional_properties=additional_properties,
             implements=implements,
             interface_properties=interface_properties,
             source_path=path,

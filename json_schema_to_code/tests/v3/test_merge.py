@@ -8,6 +8,7 @@ including preservation of custom imports, methods, and __post_init__.
 from __future__ import annotations
 
 import tempfile
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -812,6 +813,339 @@ namespace Test {
         merged = merger.merge_files(generated, existing, MergeStrategy.DELETE)
         assert "LegacyValue" not in merged
         assert "Name" in merged
+
+    def test_csharp_no_merge_marker_preserves_property_type(self):
+        """Property with // jstc-no-merge keeps existing type, ignoring generated version."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class BinaryBlob {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+        [JsonProperty("data")]
+        public string Data { get; set; }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class BinaryBlob {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+        [JsonProperty("data")]
+        public byte[] Data { get; set; } // jstc-no-merge
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing)
+        assert "byte[] Data" in merged
+        assert "string Data" not in merged
+        assert 'JsonProperty("data")' in merged
+        assert "string Id" in merged
+
+    def test_csharp_no_merge_marker_preserves_constructor(self):
+        """Constructor with // jstc-no-merge keeps existing signature."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class BinaryBlob {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+        [JsonProperty("data")]
+        public string Data { get; set; }
+        public BinaryBlob(string id, string data)
+        {
+            this.Id = id;
+            this.Data = data;
+        }
+        public BinaryBlob() { }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class BinaryBlob {
+        [JsonProperty("id")]
+        public string Id { get; set; }
+        [JsonProperty("data")]
+        public byte[] Data { get; set; } // jstc-no-merge
+        public BinaryBlob(string id, byte[] data) // jstc-no-merge
+        {
+            this.Id = id;
+            this.Data = data;
+        }
+        public BinaryBlob() { }
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing)
+        assert "byte[] Data" in merged
+        assert "byte[] data" in merged
+        assert "string Data" not in merged
+        assert "string data" not in merged
+        assert "BinaryBlob() { }" in merged
+
+    def test_csharp_custom_constructor_overload_preserved(self):
+        """Constructor with different param count than generated is preserved as custom."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+        public Person(string name)
+        {
+            this.Name = name;
+        }
+        public Person() { }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+        public Person(string name)
+        {
+            this.Name = name;
+        }
+        public Person() { }
+        public Person(string name, int age)
+        {
+            this.Name = name;
+        }
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "Person(string name, int age)" in merged
+        assert "Person(string name)" in merged
+        assert "Person() { }" in merged
+
+    def test_csharp_custom_property_preserves_preceding_attribute(self):
+        """Custom property (not in generated) preserves its preceding [JsonProperty] attribute."""
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+        merger = CSharpAstMerger()
+        generated = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+}
+"""
+        existing = """
+using System;
+using Newtonsoft.Json;
+
+namespace Test {
+    public class Person {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+        [JsonProperty("data")]
+        public byte[] Data { get; set; }
+    }
+}
+"""
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "byte[] Data" in merged
+        assert 'JsonProperty("data")' in merged
+
+
+class TestPythonFutureImportOrdering:
+    """Tests that from __future__ import annotations is always placed first."""
+
+    def test_future_import_added_at_top_when_missing_from_existing(self):
+        """When existing file lacks __future__ import, merger should add it at position 0."""
+        merger = PythonAstMerger()
+
+        existing = """
+import random
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
+
+@dataclass_json
+@dataclass(kw_only=True)
+class Person:
+    name: str
+"""
+
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
+
+@dataclass_json
+@dataclass(kw_only=True)
+class Person:
+    name: str
+    age: int = 0
+"""
+
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+
+        lines = [line for line in merged.splitlines() if line.strip()]
+        future_idx = next(i for i, line in enumerate(lines) if "__future__" in line)
+        first_other_import = next(i for i, line in enumerate(lines) if ("import " in line or "from " in line) and "__future__" not in line)
+        assert future_idx < first_other_import, f"__future__ import at line {future_idx} should be before " f"first other import at line {first_other_import}"
+
+    def test_future_import_stays_first_when_already_present(self):
+        """When existing file already has __future__ at top, order is preserved."""
+        merger = PythonAstMerger()
+
+        existing = """
+from __future__ import annotations
+import random
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+"""
+
+        generated = """
+from __future__ import annotations
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+    age: int = 0
+"""
+
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+
+        lines = [line for line in merged.splitlines() if line.strip()]
+        future_idx = next(i for i, line in enumerate(lines) if "__future__" in line)
+        assert future_idx == 0, f"__future__ should be the first line, but was at index {future_idx}"
+
+
+class TestPythonNoMergeMarkerPersistence:
+    """Tests that # jstc-no-merge markers survive multiple merge round-trips."""
+
+    def test_no_merge_marker_preserved_after_unparse(self):
+        """Field type and marker survive ast.unparse() round-trip."""
+        merger = PythonAstMerger()
+        generated = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: str
+                final: bool
+        """)
+        existing = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: bytes  # jstc-no-merge
+                final: bool
+        """)
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "data: bytes" in merged
+        assert "# jstc-no-merge" in merged
+        assert "data: str" not in merged
+
+    def test_no_merge_marker_survives_two_consecutive_merges(self):
+        """Marker and type override survive two consecutive merge cycles."""
+        merger = PythonAstMerger()
+        generated = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: str
+                final: bool
+        """)
+        existing = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: bytes  # jstc-no-merge
+                final: bool
+        """)
+        merged_once = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        assert "data: bytes" in merged_once
+        assert "# jstc-no-merge" in merged_once
+
+        merged_twice = merger.merge_files(generated, merged_once, MergeStrategy.MERGE)
+        assert "data: bytes" in merged_twice
+        assert "# jstc-no-merge" in merged_twice
+        assert "data: str" not in merged_twice
+
+    def test_no_merge_marker_only_on_marked_fields(self):
+        """Marker is only re-added to fields that originally had it."""
+        merger = PythonAstMerger()
+        generated = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: str
+                final: bool
+        """)
+        existing = textwrap.dedent("""\
+            from __future__ import annotations
+            from dataclasses import dataclass
+            @dataclass(kw_only=True)
+            class BinaryBlob:
+                blobId: str
+                data: bytes  # jstc-no-merge
+                final: bool
+        """)
+        merged = merger.merge_files(generated, existing, MergeStrategy.MERGE)
+        for line in merged.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("blobId:") or stripped.startswith("final:"):
+                assert "jstc-no-merge" not in line
 
 
 if __name__ == "__main__":

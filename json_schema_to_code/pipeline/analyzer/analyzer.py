@@ -683,15 +683,26 @@ class SchemaAnalyzer:
             return self._analyze_array_type(node, field_name, parent_class, is_required)
 
         if isinstance(node, ObjectNode):
+            # Objects with additionalProperties schema become dict[str, T]
+            if node.additional_properties and not node.properties:
+                value_type = self._analyze_type(node.additional_properties, field_name, parent_class, True)
+                type_ref = TypeRef(
+                    kind=TypeKind.DICT,
+                    name="dict",
+                    type_args=[TypeRef(kind=TypeKind.PRIMITIVE, name="string"), value_type],
+                )
+                has_default = "default" in node.metadata
+                if not is_required and not has_default:
+                    type_ref.is_nullable = True
+                self._apply_type_overrides(type_ref, node.metadata)
+                return type_ref
             # Objects without properties become Any (matching original codegen.py)
             if not node.properties:
                 self.required_imports.add("Any")
                 type_ref = TypeRef(kind=TypeKind.ANY, name="Any")
-                # Check if there's a default value - if so, don't make nullable
                 has_default = "default" in node.metadata
                 if not is_required and not has_default:
                     type_ref.is_nullable = True
-                # Check for type overrides
                 self._apply_type_overrides(type_ref, node.metadata)
                 return type_ref
             return self._analyze_inline_object_type(node, field_name, parent_class, is_required)

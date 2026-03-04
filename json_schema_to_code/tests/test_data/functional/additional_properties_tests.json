@@ -1,0 +1,133 @@
+[
+  {
+    "name": "additional_properties_integer",
+    "description": "Object with additionalProperties: {type: integer} should generate dict[str, int]",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "links": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "default": {}
+            }
+          },
+          "required": ["links"]
+        }
+      }
+    },
+    "expected_python": [
+      "links: dict[str, int]"
+    ],
+    "expected_cs": [
+      "Dictionary<string, int>"
+    ]
+  },
+  {
+    "name": "additional_properties_string",
+    "description": "Object with additionalProperties: {type: string} should generate dict[str, str]",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["metadata"]
+        }
+      }
+    },
+    "expected_python": [
+      "metadata: dict[str, str]"
+    ],
+    "expected_cs": [
+      "Dictionary<string, string>"
+    ]
+  },
+  {
+    "name": "additional_properties_boolean_false_still_generates_any",
+    "description": "Object with additionalProperties: false and no properties still generates Any",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "blob": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": ["blob"]
+        }
+      }
+    },
+    "expected_python": [
+      "blob: Any"
+    ]
+  },
+  {
+    "name": "additional_properties_optional_with_default",
+    "description": "Optional dict field with default {} should not be nullable",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            }
+          }
+        }
+      }
+    },
+    "expected_python": [
+      "tags: dict[str, str]"
+    ],
+    "expected_not_contains": [
+      "tags: dict[str, str] | None"
+    ]
+  },
+  {
+    "name": "additional_properties_number",
+    "description": "Object with additionalProperties: {type: number} should generate dict[str, float]",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "scores": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            }
+          },
+          "required": ["scores"]
+        }
+      }
+    },
+    "expected_python": [
+      "scores: dict[str, float]"
+    ],
+    "expected_cs": [
+      "Dictionary<string, float>"
+    ]
+  }
+]

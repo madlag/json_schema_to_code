@@ -44,6 +44,8 @@ class CSharpAstMerger(AstMerger):
     CUSTOM_CODE_START = "// CUSTOM CODE START"
     CUSTOM_CODE_END = "// CUSTOM CODE END"
 
+    NO_MERGE_MARKER = "// jstc-no-merge"
+
     def __init__(self):
         """Initialize the C# merger.
 
@@ -85,54 +87,56 @@ class CSharpAstMerger(AstMerger):
         existing_code: str,
         merge_strategy: MergeStrategy = MergeStrategy.ERROR,
     ) -> str:
-        custom_code = self._extract_custom_code_with_strategy(existing_code, generated_code, merge_strategy)
-        if custom_code.is_empty():
+        custom_code, no_merge_overrides = self._extract_all(existing_code, generated_code, merge_strategy)
+        if custom_code.is_empty() and not no_merge_overrides:
             return generated_code
-        merged = self.merge(generated_code, custom_code)
+        merged = self.merge(generated_code, custom_code) if not custom_code.is_empty() else generated_code
+        if no_merge_overrides:
+            merged = self._apply_no_merge_overrides(merged, no_merge_overrides)
         self.validate(merged)
         return merged
 
     def extract_custom_code(self, existing_code: str, generated_code: str) -> CustomCode:
-        return self._extract_custom_code_with_strategy(existing_code, generated_code, MergeStrategy.ERROR)
+        custom, _ = self._extract_all(existing_code, generated_code, MergeStrategy.ERROR)
+        return custom
 
-    def _extract_custom_code_with_strategy(
+    def _extract_all(
         self,
         existing_code: str,
         generated_code: str,
         merge_strategy: MergeStrategy,
-    ) -> CustomCode:
+    ) -> tuple[CustomCode, dict[str, list[tuple[str, str, str]]]]:
+        """Single-pass extraction of custom code and no-merge overrides.
+
+        Returns:
+            Tuple of (custom_code, no_merge_overrides).
+            no_merge_overrides maps class_name -> [(member_type, member_name, full_source)].
+        """
         existing_tree = self.parse(existing_code)
         generated_tree = self.parse(generated_code)
 
         custom = CustomCode()
+        overrides: dict[str, list[tuple[str, str, str]]] = {}
 
-        # Get generated using statements
         generated_usings = self._extract_usings(generated_tree.root_node, generated_code)
-
-        # Get generated class/enum names
         generated_types = self._extract_type_names(generated_tree.root_node, generated_code)
-
-        # Get generated member names per class
         generated_members = self._extract_class_members(generated_tree.root_node, generated_code)
         generated_value_members = self._extract_class_value_members(generated_tree.root_node, generated_code)
+        gen_ctor_counts = self._get_all_constructor_param_counts(generated_tree.root_node, generated_code)
 
-        # Process existing file
         root = existing_tree.root_node
-
-        # Get the file's own namespace to avoid preserving self-imports
         file_namespace = self._extract_file_namespace(generated_tree.root_node, generated_code)
 
-        # Extract custom using statements
+        # Custom using statements
         for using in self._find_nodes(root, "using_directive"):
             using_text = self._get_node_text(using, existing_code)
             namespace = self._extract_namespace_from_using(using_text)
-            # Skip if: in generated usings, in standard usings, or is the file's own namespace
             if namespace and namespace not in generated_usings and namespace not in self.STANDARD_USINGS:
                 if file_namespace and namespace == file_namespace:
-                    continue  # Skip self-imports
+                    continue
                 custom.custom_imports.append(using_text)
 
-        # Extract custom code from classes
+        # Class members
         for class_node in self._find_nodes(root, "class_declaration"):
             class_name = self._get_class_name(class_node, existing_code)
             if not class_name or class_name not in generated_types:
@@ -140,16 +144,15 @@ class CSharpAstMerger(AstMerger):
 
             gen_members = generated_members.get(class_name, set())
 
-            # Find class body
             body = None
             for child in class_node.children:
                 if child.type == "declaration_list":
                     body = child
                     break
-
             if not body:
                 continue
 
+            # Validate removed value members
             existing_value_members = self._extract_value_members_from_class_body(body, existing_code)
             generated_value_names = generated_value_members.get(class_name, set())
             for member_name, member_node in existing_value_members.items():
@@ -166,95 +169,85 @@ class CSharpAstMerger(AstMerger):
                         f"at line {line}, column {column}."
                     )
 
+            class_ctor_counts = gen_ctor_counts.get(class_name, set())
+            prev_attr_nodes: list = []
+
             for member in body.children:
+                if member.type == "attribute_list":
+                    prev_attr_nodes.append(member)
+                    continue
+
+                has_marker = self._has_no_merge_marker(member, existing_code)
+
                 if member.type == "method_declaration":
                     method_name = self._get_method_name(member, existing_code)
                     if method_name and method_name not in gen_members:
-                        if class_name not in custom.class_methods:
-                            custom.class_methods[class_name] = []
-                        custom.class_methods[class_name].append(self._get_node_text(member, existing_code))
+                        custom.class_methods.setdefault(class_name, []).append(self._get_node_text(member, existing_code))
 
                 elif member.type == "property_declaration":
                     prop_name = self._get_property_name(member, existing_code)
-                    if prop_name and prop_name not in gen_members:
+                    if prop_name and has_marker and prop_name in gen_members:
+                        full_text = self._get_text_with_preceding_attributes(prev_attr_nodes, member, existing_code)
+                        overrides.setdefault(class_name, []).append(("property", prop_name, full_text))
+                    elif prop_name and prop_name not in gen_members and not has_marker:
                         if merge_strategy == MergeStrategy.DELETE:
+                            prev_attr_nodes = []
                             continue
-                        if class_name not in custom.class_attributes:
-                            custom.class_attributes[class_name] = []
-                        custom.class_attributes[class_name].append(self._get_node_text(member, existing_code))
+                        full_text = self._get_text_with_preceding_attributes(prev_attr_nodes, member, existing_code)
+                        custom.class_attributes.setdefault(class_name, []).append(full_text)
 
-        # Extract custom code sections marked with comments
+                elif member.type == "constructor_declaration":
+                    if has_marker:
+                        full_text = self._get_text_with_preceding_attributes(prev_attr_nodes, member, existing_code)
+                        overrides.setdefault(class_name, []).append(("constructor", class_name, full_text))
+                    elif self._count_constructor_params(member) not in class_ctor_counts:
+                        custom.class_methods.setdefault(class_name, []).append(self._get_node_text(member, existing_code))
+
+                prev_attr_nodes = []
+
         custom.raw_sections = self._extract_marked_sections(existing_code)
-
-        return custom
+        return custom, overrides
 
     def merge(self, generated_code: str, custom_code: CustomCode) -> str:
-        """Merge custom code into generated C# code.
-
-        Args:
-            generated_code: The newly generated code
-            custom_code: Custom code elements to preserve
-
-        Returns:
-            Merged code string
-
-        Raises:
-            CodeMergeError: If merge fails
-        """
+        """Merge custom code into generated C# code."""
         lines = generated_code.split("\n")
         result_lines = []
 
-        # Track where we've inserted custom code
         usings_added = False
         current_class = None
         class_end_indices: dict[str, int] = {}
 
-        # First pass: identify class boundaries and generated members
         tree = self.parse(generated_code)
         generated_members = self._extract_class_members(tree.root_node, generated_code)
         for class_node in self._find_nodes(tree.root_node, "class_declaration"):
             class_name = self._get_class_name(class_node, generated_code)
             if class_name:
-                # Find the closing brace line
-                end_line = class_node.end_point[0]
-                class_end_indices[class_name] = end_line
+                class_end_indices[class_name] = class_node.end_point[0]
 
-        # Second pass: merge
         for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # Add custom using statements after standard usings
             if stripped.startswith("using ") and not usings_added:
                 result_lines.append(line)
-                # Check if next line is not a using
                 if i + 1 < len(lines) and not lines[i + 1].strip().startswith("using "):
                     for custom_using in custom_code.custom_imports:
                         result_lines.append(custom_using)
                     usings_added = True
                 continue
 
-            # Track namespace entry
-            if stripped.startswith("namespace "):
-                pass
-
-            # Track class entry
             if "class " in stripped and stripped.endswith("{") or ("class " in stripped and i + 1 < len(lines) and lines[i + 1].strip() == "{"):
-                # Extract class name
                 for class_name in class_end_indices:
                     if f"class {class_name}" in stripped:
                         current_class = class_name
                         break
 
-            # Add custom methods/properties before class closing brace
             if current_class and current_class in class_end_indices:
                 if i == class_end_indices[current_class]:
-                    # Insert custom members before closing brace
-                    indent = "    "  # 4 spaces for class members
+                    indent = "    "
                     gen_members = generated_members.get(current_class, set())
 
                     if current_class in custom_code.class_attributes:
                         for attr in custom_code.class_attributes[current_class]:
-                            # Safeguard: skip if this would duplicate a generated property
                             attr_prop_name = self._get_property_name_from_source(attr)
                             if attr_prop_name and attr_prop_name in gen_members:
                                 continue
@@ -272,12 +265,9 @@ class CSharpAstMerger(AstMerger):
 
             result_lines.append(line)
 
-        # Add any raw custom sections at the end (before final closing brace)
         if custom_code.raw_sections:
-            # Find last closing brace (namespace end)
             for i in range(len(result_lines) - 1, -1, -1):
                 if result_lines[i].strip() == "}":
-                    # Insert before this
                     for section in custom_code.raw_sections:
                         result_lines.insert(i, "")
                         for section_line in section.split("\n"):
@@ -287,25 +277,15 @@ class CSharpAstMerger(AstMerger):
         return "\n".join(result_lines)
 
     def validate(self, code: str) -> None:
-        """Validate that merged C# code is syntactically correct.
-
-        Args:
-            code: The merged code to validate
-
-        Raises:
-            CodeMergeError: If validation fails
-        """
+        """Validate that merged C# code is syntactically correct."""
         self.parse(code)
-
-        # Check for basic structure
-        if "namespace " not in code:
-            raise CodeMergeError("Merged C# code is missing namespace declaration")
 
         if "class " not in code and "enum " not in code:
             raise CodeMergeError("Merged C# code has no type definitions")
 
+    # -- Tree helpers --
+
     def _find_errors(self, node: Any) -> list[Any]:
-        """Find all ERROR nodes in the tree."""
         errors = []
         if node.type == "ERROR":
             errors.append(node)
@@ -314,7 +294,6 @@ class CSharpAstMerger(AstMerger):
         return errors
 
     def _find_nodes(self, node: Any, node_type: str) -> list[Any]:
-        """Find all nodes of a given type in the tree."""
         results = []
         if node.type == node_type:
             results.append(node)
@@ -323,11 +302,11 @@ class CSharpAstMerger(AstMerger):
         return results
 
     def _get_node_text(self, node: Any, code: str) -> str:
-        """Get the source text for a node."""
         return code[node.start_byte : node.end_byte]
 
+    # -- Extraction helpers --
+
     def _extract_usings(self, root: Any, code: str) -> set[str]:
-        """Extract using statement namespaces."""
         usings = set()
         for using in self._find_nodes(root, "using_directive"):
             text = self._get_node_text(using, code)
@@ -337,33 +316,23 @@ class CSharpAstMerger(AstMerger):
         return usings
 
     def _extract_file_namespace(self, root: Any, code: str) -> str | None:
-        """Extract the file's namespace from namespace_declaration."""
         for ns_node in self._find_nodes(root, "namespace_declaration"):
             for child in ns_node.children:
-                if child.type == "identifier":
+                if child.type in ("identifier", "qualified_name"):
                     return self._get_node_text(child, code)
-                # Handle qualified names like "EduObject.Maths.BasicOperations"
-                if child.type == "qualified_name":
-                    return self._get_node_text(child, code)
-        # Try file_scoped_namespace_declaration for C# 10+ style
         for ns_node in self._find_nodes(root, "file_scoped_namespace_declaration"):
             for child in ns_node.children:
-                if child.type == "identifier":
-                    return self._get_node_text(child, code)
-                if child.type == "qualified_name":
+                if child.type in ("identifier", "qualified_name"):
                     return self._get_node_text(child, code)
         return None
 
     def _extract_namespace_from_using(self, using_text: str) -> str | None:
-        """Extract namespace from using statement."""
-        # "using System.Collections.Generic;" -> "System.Collections.Generic"
         text = using_text.strip()
         if text.startswith("using ") and text.endswith(";"):
             return text[6:-1].strip()
         return None
 
     def _extract_type_names(self, root: Any, code: str) -> set[str]:
-        """Extract class and enum names."""
         names = set()
         for node in self._find_nodes(root, "class_declaration"):
             name = self._get_class_name(node, code)
@@ -376,7 +345,6 @@ class CSharpAstMerger(AstMerger):
         return names
 
     def _extract_class_members(self, root: Any, code: str) -> dict[str, set[str]]:
-        """Extract member names for each class."""
         members = {}
         for class_node in self._find_nodes(root, "class_declaration"):
             class_name = self._get_class_name(class_node, code)
@@ -397,14 +365,13 @@ class CSharpAstMerger(AstMerger):
                             if method_name:
                                 class_members.add(method_name)
                         elif member.type == "constructor_declaration":
-                            class_members.add(class_name)  # Constructor
+                            class_members.add(class_name)
 
             members[class_name] = class_members
 
         return members
 
     def _extract_class_value_members(self, root: Any, code: str) -> dict[str, set[str]]:
-        """Extract value member names (properties/fields) for each class."""
         members: dict[str, set[str]] = {}
         for class_node in self._find_nodes(root, "class_declaration"):
             class_name = self._get_class_name(class_node, code)
@@ -425,7 +392,6 @@ class CSharpAstMerger(AstMerger):
         return members
 
     def _extract_value_members_from_class_body(self, body: Any, code: str) -> dict[str, Any]:
-        """Extract value members and source nodes from a class declaration body."""
         members: dict[str, Any] = {}
         for member in body.children:
             if member.type == "property_declaration":
@@ -444,26 +410,45 @@ class CSharpAstMerger(AstMerger):
                     members[field_name] = member
         return members
 
+    def _get_all_constructor_param_counts(self, root: Any, code: str) -> dict[str, set[int]]:
+        """Get constructor parameter counts for all classes in the tree."""
+        result: dict[str, set[int]] = {}
+        for class_node in self._find_nodes(root, "class_declaration"):
+            name = self._get_class_name(class_node, code)
+            if not name:
+                continue
+            counts: set[int] = set()
+            for child in class_node.children:
+                if child.type != "declaration_list":
+                    continue
+                for member in child.children:
+                    if member.type == "constructor_declaration":
+                        counts.add(self._count_constructor_params(member))
+            result[name] = counts
+        return result
+
+    # -- Node name helpers --
+
     def _get_class_name(self, node: Any, code: str) -> str | None:
-        """Get class name from class_declaration node."""
         for child in node.children:
             if child.type == "identifier":
                 return self._get_node_text(child, code)
         return None
 
     def _get_enum_name(self, node: Any, code: str) -> str | None:
-        """Get enum name from enum_declaration node."""
         for child in node.children:
             if child.type == "identifier":
                 return self._get_node_text(child, code)
         return None
 
-    def _get_property_name_from_source(self, attr_source: str) -> str | None:
-        """Extract property name from a property declaration source fragment.
+    def _get_property_name(self, node: Any, code: str) -> str | None:
+        name_node = node.child_by_field_name("name")
+        if name_node:
+            return self._get_node_text(name_node, code)
+        return None
 
-        Wraps the fragment in a minimal class and parses to get the property name.
-        Returns None if parsing fails (caller will include the attr as a safeguard).
-        """
+    def _get_property_name_from_source(self, attr_source: str) -> str | None:
+        """Extract property name from a property declaration source fragment."""
         wrapped = f"namespace __ {{ class __ {{{attr_source}}} }}"
         try:
             tree = self.parse(wrapped)
@@ -475,24 +460,87 @@ class CSharpAstMerger(AstMerger):
             pass
         return None
 
-    def _get_property_name(self, node: Any, code: str) -> str | None:
-        """Get property name from property_declaration node.
-
-        Uses child_by_field_name('name') per the tree-sitter grammar to reliably
-        get the property name rather than the first identifier (which could be
-        from the type, e.g. in explicit interface implementations).
-        """
-        name_node = node.child_by_field_name("name")
-        if name_node:
-            return self._get_node_text(name_node, code)
-        return None
-
     def _get_method_name(self, node: Any, code: str) -> str | None:
-        """Get method name from method_declaration node."""
         for child in node.children:
             if child.type == "identifier":
                 return self._get_node_text(child, code)
         return None
+
+    # -- No-merge and attribute helpers --
+
+    def _has_no_merge_marker(self, node: Any, code: str) -> bool:
+        """Check if any source line of the node contains the jstc-no-merge marker.
+
+        Tree-sitter nodes don't include trailing comments in their byte range,
+        so we check the full source lines.
+        """
+        source_lines = code.splitlines()
+        for line_idx in range(node.start_point[0], node.end_point[0] + 1):
+            if line_idx < len(source_lines) and self.NO_MERGE_MARKER in source_lines[line_idx]:
+                return True
+        return False
+
+    def _get_text_with_preceding_attributes(self, prev_attr_nodes: list, member_node: Any, code: str) -> str:
+        """Get member source text including preceding attribute_list nodes and trailing comments."""
+        start = prev_attr_nodes[0].start_byte if prev_attr_nodes else member_node.start_byte
+        line_end = code.find("\n", member_node.end_byte)
+        end = line_end if line_end != -1 else len(code)
+        return code[start:end]
+
+    def _count_constructor_params(self, ctor_node: Any) -> int:
+        for child in ctor_node.children:
+            if child.type == "parameter_list":
+                return len([c for c in child.children if c.type == "parameter"])
+        return 0
+
+    # -- No-merge override application --
+
+    def _apply_no_merge_overrides(self, merged_code: str, overrides: dict[str, list[tuple[str, str, str]]]) -> str:
+        """Replace generated members with no-merge override versions."""
+        tree = self.parse(merged_code)
+        root = tree.root_node
+        replacements: list[tuple[int, int, str]] = []
+
+        for class_node in self._find_nodes(root, "class_declaration"):
+            class_name = self._get_class_name(class_node, merged_code)
+            if not class_name or class_name not in overrides:
+                continue
+
+            class_overrides = overrides[class_name]
+
+            body = None
+            for child in class_node.children:
+                if child.type == "declaration_list":
+                    body = child
+                    break
+            if not body:
+                continue
+
+            prop_overrides = {name: text for mtype, name, text in class_overrides if mtype == "property"}
+            ctor_overrides = [text for mtype, _, text in class_overrides if mtype == "constructor"]
+
+            prev_attr_nodes: list = []
+            for member in body.children:
+                if member.type == "attribute_list":
+                    prev_attr_nodes.append(member)
+                    continue
+
+                if member.type == "property_declaration":
+                    name = self._get_property_name(member, merged_code)
+                    if name and name in prop_overrides:
+                        start = prev_attr_nodes[0].start_byte if prev_attr_nodes else member.start_byte
+                        replacements.append((start, member.end_byte, prop_overrides[name]))
+
+                elif member.type == "constructor_declaration" and ctor_overrides:
+                    if self._count_constructor_params(member) > 0:
+                        replacements.append((member.start_byte, member.end_byte, ctor_overrides.pop(0)))
+
+                prev_attr_nodes = []
+
+        for start, end, text in sorted(replacements, key=lambda r: r[0], reverse=True):
+            merged_code = merged_code[:start] + text + merged_code[end:]
+
+        return merged_code
 
     def _extract_marked_sections(self, code: str) -> list[str]:
         """Extract code sections marked with // CUSTOM CODE comments."""

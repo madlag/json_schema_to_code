@@ -95,6 +95,9 @@ class ObjectNode(SchemaNode):
     properties: list[PropertyDef] = field(default_factory=list)
     required: list[str] = field(default_factory=list)
 
+    # Typed additionalProperties (e.g. {"type": "integer"} -> dict[str, int])
+    additional_properties: SchemaNode | None = None
+
     # C# interface implementation
     implements: str | None = None
     interface_properties: dict[str, str] = field(default_factory=dict)

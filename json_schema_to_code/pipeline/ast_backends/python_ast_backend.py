@@ -475,6 +475,13 @@ class PythonAstBackend(AstBackend):
             self.python_imports.add(("typing", "Any"))
             return "Any"
 
+        if type_ref.kind == TypeKind.DICT:
+            if len(type_ref.type_args) == 2:
+                key_type = self.translate_type(type_ref.type_args[0])
+                value_type = self.translate_type(type_ref.type_args[1])
+                return f"dict[{key_type}, {value_type}]"
+            return "dict"
+
         if type_ref.kind == TypeKind.ARRAY:
             if type_ref.type_args:
                 item_type = self.translate_type(type_ref.type_args[0])

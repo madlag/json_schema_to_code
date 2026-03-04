@@ -73,6 +73,8 @@ class PythonAstMerger(AstMerger):
         if merge_strategy == MergeStrategy.ERROR:
             self._raise_on_removed_value_members(existing_tree, generated_tree)
 
+        no_merge_fields = self._collect_no_merge_fields(existing_tree, existing_source_lines)
+
         # Build lookups for generated code
         gen_imports = self._get_imports_list(generated_tree)
         gen_classes = {n.name: n for n in generated_tree.body if isinstance(n, ast.ClassDef)}
@@ -124,10 +126,15 @@ class PythonAstMerger(AstMerger):
                     new_names = self._get_imported_names(imp)
                     self._merge_import_names(module_imports[imp.module], new_names)
                 else:
-                    # New module, add the import
-                    new_body.insert(insert_idx, imp)
-                    module_imports[imp.module] = imp
-                    insert_idx += 1
+                    # __future__ imports must always be first
+                    if imp.module == "__future__":
+                        new_body.insert(0, imp)
+                        module_imports[imp.module] = imp
+                        insert_idx += 1
+                    else:
+                        new_body.insert(insert_idx, imp)
+                        module_imports[imp.module] = imp
+                        insert_idx += 1
             else:
                 # Plain import - use string comparison
                 if ast.unparse(imp) not in seen_imports:
@@ -141,7 +148,12 @@ class PythonAstMerger(AstMerger):
 
         existing_tree.body = new_body
         ast.fix_missing_locations(existing_tree)
-        return ast.unparse(existing_tree)
+        merged_code = ast.unparse(existing_tree)
+
+        if no_merge_fields:
+            merged_code = self._restore_no_merge_markers(merged_code, no_merge_fields)
+
+        return merged_code
 
     def _raise_on_removed_value_members(self, existing_tree: ast.Module, generated_tree: ast.Module) -> None:
         """Raise when existing classes contain value members removed from generated code."""
@@ -186,6 +198,41 @@ class PythonAstMerger(AstMerger):
         if line_idx < 0 or line_idx >= len(source_lines):
             return False
         return self.NO_MERGE_MARKER in source_lines[line_idx]
+
+    def _collect_no_merge_fields(self, tree: ast.Module, source_lines: list[str]) -> set[tuple[str, str]]:
+        """Collect (class_name, field_name) pairs that have a no-merge marker."""
+        result: set[tuple[str, str]] = set()
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for item in node.body:
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                    if self._has_no_merge_marker(source_lines, item):
+                        result.add((node.name, item.target.id))
+        return result
+
+    def _restore_no_merge_markers(self, code: str, no_merge_fields: set[tuple[str, str]]) -> str:
+        """Re-inject # jstc-no-merge comments on fields that had them.
+
+        ast.unparse() strips all comments, so we need to re-add them after unparse.
+        """
+        lines = code.splitlines()
+        current_class: str | None = None
+
+        for i, line in enumerate(lines):
+            stripped = line.lstrip()
+            if stripped.startswith("class "):
+                paren = stripped.find("(")
+                colon = stripped.find(":")
+                end = paren if paren != -1 and (colon == -1 or paren < colon) else colon
+                if end != -1:
+                    current_class = stripped[len("class ") : end].strip()
+            elif current_class and ":" in stripped and not stripped.startswith(("def ", "class ", "@", "#")):
+                field_name = stripped.split(":")[0].strip()
+                if (current_class, field_name) in no_merge_fields:
+                    lines[i] = line + "  " + self.NO_MERGE_MARKER
+
+        return "\n".join(lines)
 
     def _has_field_metadata(self, node: ast.AnnAssign) -> bool:
         """Check if a field uses field() with a metadata= keyword argument."""
