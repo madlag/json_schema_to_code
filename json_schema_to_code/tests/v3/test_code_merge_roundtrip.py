@@ -216,6 +216,11 @@ class TestCodeMergeRoundtrip:
         assert "$defs" in schema or "definitions" in schema or "properties" in schema, f"Schema for {test_case['name']} has no definitions or properties"
 
 
+_V3_CODE_MERGE_DIR = Path(__file__).parent.parent / "test_data" / "v3" / "code_merge"
+_HAS_V3_CODE_MERGE_DATA = _V3_CODE_MERGE_DIR.exists() and any(_V3_CODE_MERGE_DIR.iterdir()) if _V3_CODE_MERGE_DIR.exists() else False
+
+
+@pytest.mark.skipif(not _HAS_V3_CODE_MERGE_DATA, reason="No v3/code_merge test data directory")
 class TestCodeMergeDiscovery:
     """Tests for test case discovery."""
 

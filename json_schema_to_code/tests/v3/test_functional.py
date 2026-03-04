@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
+from json_schema_to_code.pipeline.merger import PythonAstMerger
 
 
 def load_all_test_cases():
@@ -56,6 +57,27 @@ def _load_schema(test_case, test_data_dir):
         raise ValueError("Test case must have either 'schema' or 'schema_file'")
 
 
+def _run_merge_test(test_case):
+    """Run a merge-type test case (existing_lines + generated_lines)."""
+    existing_code = "\n".join(test_case["existing_lines"])
+    generated_code = "\n".join(test_case["generated_lines"])
+    round_trips = test_case.get("round_trips", 1)
+
+    merger = PythonAstMerger()
+    merged = merger.merge_files(generated_code, existing_code)
+
+    for _ in range(round_trips - 1):
+        merged = merger.merge_files(generated_code, merged)
+
+    if "expected_contains" in test_case:
+        for pattern in test_case["expected_contains"]:
+            assert pattern in merged, f"Expected pattern '{pattern}' not found in merged output"
+
+    if "expected_not_contains" in test_case:
+        for pattern in test_case["expected_not_contains"]:
+            assert pattern not in merged, f"Unexpected pattern '{pattern}' found in merged output"
+
+
 @pytest.mark.parametrize("test_case", load_all_test_cases())
 def test_functional_generation(test_case):
     """Unified test for all JSON test cases using a single pattern."""
@@ -67,9 +89,22 @@ def test_functional_generation(test_case):
     print(f"\nTesting: {name} (from {source_file})")
     print(f"Description: {description}")
 
+    if "existing_lines" in test_case:
+        _run_merge_test(test_case)
+        return
+
     # Load schema
     test_data_dir = Path(__file__).parent.parent / "test_data"
     schema = _load_schema(test_case, test_data_dir)
+
+    # Test expected_error: generation should raise with a matching message
+    if "expected_error" in test_case:
+        language = test_case.get("test_language", "python")
+        error_pattern = test_case["expected_error"]
+        with pytest.raises(Exception) as exc_info:
+            _generate_code(schema, config, language)
+        assert error_pattern in str(exc_info.value), f"Expected error containing '{error_pattern}', got: {exc_info.value}"
+        return
 
     # Test Python generation if specified
     if "expected_python" in test_case:

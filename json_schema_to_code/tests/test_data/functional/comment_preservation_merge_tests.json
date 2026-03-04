@@ -1,0 +1,290 @@
+[
+  {
+    "name": "inline_field_comment",
+    "description": "Inline comment on a field is preserved through merge",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str  # Person's full name",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "expected_contains": ["# Person's full name"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "standalone_comment_before_field",
+    "description": "Standalone comment line before a field is preserved",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    # Required identity field",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "expected_contains": ["# Required identity field"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "multiline_comment_block_before_field",
+    "description": "Multi-line comment block before a field is preserved",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    # This is the person's name.",
+      "    # It should be their full legal name.",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "expected_contains": [
+      "# This is the person's name.",
+      "# It should be their full legal name."
+    ],
+    "expected_not_contains": []
+  },
+  {
+    "name": "comments_on_multiple_fields",
+    "description": "Comments on different fields in the same class are all preserved",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str  # full name",
+      "    age: int = 0  # in years",
+      "    email: str = ''"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0",
+      "    email: str = ''"
+    ],
+    "expected_contains": ["# full name", "# in years"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "comment_before_class",
+    "description": "Standalone comment before a class decorator is preserved",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "# Main data class for people",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "expected_contains": ["# Main data class for people"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "comments_in_multiple_classes",
+    "description": "Comments in separate classes are preserved with correct association",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str  # person name",
+      "",
+      "@dataclass",
+      "class Address:",
+      "    street: str  # street name"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "",
+      "@dataclass",
+      "class Address:",
+      "    street: str"
+    ],
+    "expected_contains": ["# person name", "# street name"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "same_field_name_different_classes",
+    "description": "Same field name in different classes gets the right comment",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str  # person name",
+      "",
+      "@dataclass",
+      "class Company:",
+      "    name: str  # company name"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "",
+      "@dataclass",
+      "class Company:",
+      "    name: str"
+    ],
+    "expected_contains": ["# person name", "# company name"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "generation_comment_not_duplicated",
+    "description": "The generation header comment is not preserved (it is re-added by the generator)",
+    "existing_lines": [
+      "# Generated by json_schema_to_code v1.0.0 : some command",
+      "",
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str"
+    ],
+    "expected_contains": [],
+    "expected_not_contains": ["# Generated by json_schema_to_code v1.0.0"]
+  },
+  {
+    "name": "no_merge_marker_not_duplicated",
+    "description": "The jstc-no-merge marker is not duplicated (handled separately)",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class BinaryBlob:",
+      "    data: bytes  # jstc-no-merge",
+      "    final: bool"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class BinaryBlob:",
+      "    data: str",
+      "    final: bool"
+    ],
+    "expected_contains": ["# jstc-no-merge"],
+    "expected_not_contains": ["# jstc-no-merge  # jstc-no-merge"]
+  },
+  {
+    "name": "comment_survives_two_merges",
+    "description": "Comments survive two consecutive merge cycles",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str  # full name",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "round_trips": 2,
+    "expected_contains": ["# full name"],
+    "expected_not_contains": []
+  },
+  {
+    "name": "section_comment_between_field_groups",
+    "description": "A section comment separating groups of fields is preserved",
+    "existing_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    # Identity",
+      "    name: str",
+      "    # Demographics",
+      "    age: int = 0"
+    ],
+    "generated_lines": [
+      "from __future__ import annotations",
+      "from dataclasses import dataclass",
+      "",
+      "@dataclass",
+      "class Person:",
+      "    name: str",
+      "    age: int = 0"
+    ],
+    "expected_contains": ["# Identity", "# Demographics"],
+    "expected_not_contains": []
+  }
+]

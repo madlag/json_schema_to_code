@@ -378,9 +378,10 @@ class SchemaAnalyzer:
             base_def = self.ref_resolver.get_definition(allof.base_ref.ref_path.split("/")[-1])
             if base_def and isinstance(base_def.body, ObjectNode):
                 class_def.base_fields = self._analyze_base_properties(base_def.body, allof.extension, class_name)
-            elif resolved.is_external and resolved.external_definition:
-                # Handle external base class - extract properties from raw dict
-                class_def.base_fields = self._analyze_external_base_properties(resolved.external_definition, allof.extension, class_name)
+            elif resolved.is_external:
+                ext_def = self.ref_resolver.load_external_definition(resolved.external_path, resolved.class_name_in_external)
+                if ext_def:
+                    class_def.base_fields = self._analyze_external_base_properties(ext_def, allof.extension, class_name)
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])

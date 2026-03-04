@@ -24,7 +24,12 @@ except ImportError:
 def get_csharp_test_files():
     """Get all C# test files for roundtrip testing."""
     test_dir = Path(__file__).parent.parent / "test_data" / "v3" / "csharp_roundtrip"
+    if not test_dir.exists():
+        return []
     return list(test_dir.glob("*.cs"))
+
+
+_CSHARP_TEST_FILES = get_csharp_test_files()
 
 
 @pytest.fixture
@@ -56,7 +61,7 @@ def normalize_whitespace(code: str) -> str:
 
 
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter-c-sharp not installed")
-@pytest.mark.parametrize("test_file", get_csharp_test_files(), ids=lambda f: f.stem)
+@pytest.mark.parametrize("test_file", _CSHARP_TEST_FILES, ids=[f.stem for f in _CSHARP_TEST_FILES])
 def test_csharp_parse_valid(csharp_parser, test_file):
     """Test that C# test files are valid and can be parsed."""
     code = test_file.read_text()
@@ -69,7 +74,7 @@ def test_csharp_parse_valid(csharp_parser, test_file):
 
 
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter-c-sharp not installed")
-@pytest.mark.parametrize("test_file", get_csharp_test_files(), ids=lambda f: f.stem)
+@pytest.mark.parametrize("test_file", _CSHARP_TEST_FILES, ids=[f.stem for f in _CSHARP_TEST_FILES])
 def test_csharp_parse_structure(csharp_parser, test_file):
     """Test that parsed C# has expected structure."""
     code = test_file.read_text()

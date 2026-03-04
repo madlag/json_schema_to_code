@@ -22,7 +22,6 @@ class ResolvedRef:
     is_external: bool = False  # Whether this is an external $ref
     external_path: str = ""  # External schema path (if external)
     class_name_in_external: str = ""  # Class name in external schema
-    external_definition: dict | None = None  # The raw definition dict from external schema
 
 
 @dataclass
@@ -105,7 +104,12 @@ class ReferenceResolver:
         )
 
     def _resolve_external_ref(self, ref_node: RefNode) -> ResolvedRef:
-        """Resolve an external $ref (doesn't start with #)."""
+        """Resolve an external $ref (doesn't start with #).
+
+        Class name and import path are derived from the $ref string.
+        No file I/O is performed here; external definitions are loaded
+        lazily via load_external_definition() when actually needed.
+        """
         ref_path = ref_node.ref_path
 
         # Parse: "/path/to/schema#/$defs/ClassName"
@@ -122,23 +126,22 @@ class ReferenceResolver:
         if ref_node.class_name_override:
             class_name = ref_node.class_name_override
 
-        # Try to load external definition if schema_base_path is set
-        external_definition = None
-        if self.schema_base_path:
-            external_definition = self._load_external_definition(path_part, class_name)
-
         return ResolvedRef(
             target_name=class_name,
             target_node=None,  # External, not in our AST
             is_external=True,
             external_path=path_part,
             class_name_in_external=class_name,
-            external_definition=external_definition,
         )
 
-    def _load_external_definition(self, schema_path: str, class_name: str) -> dict | None:
-        """Load a definition from an external schema file."""
-        # Try different file extensions
+    def load_external_definition(self, schema_path: str, class_name: str) -> dict | None:
+        """Load a definition from an external schema file.
+
+        Called by the analyzer only when base class properties are needed (allOf).
+        """
+        if not self.schema_base_path:
+            return None
+
         base_path = schema_path.lstrip("/")
         possible_paths = [
             self.schema_base_path / f"{base_path}.jinja.json",
@@ -150,7 +153,6 @@ class ReferenceResolver:
         schema_data = None
         for path in possible_paths:
             if path.exists():
-                # Use cache
                 cache_key = str(path)
                 if cache_key not in self._external_schema_cache:
                     with open(path) as f:
@@ -161,7 +163,6 @@ class ReferenceResolver:
         if not schema_data:
             return None
 
-        # Extract the definition
         defs = schema_data.get("$defs") or schema_data.get("definitions") or {}
         return defs.get(class_name)
 

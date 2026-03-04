@@ -310,10 +310,8 @@ class PythonAstBackend(AstBackend):
         if has_explicit_default:
             default_val = field.default_value if field.has_default else field.type_ref.default_value
 
-            # null default on $ref: only valid for optional fields — makes the type nullable
+            # null default on $ref: infer nullable — `default: null` means the field can be null
             if default_val is None and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-                if field.is_required:
-                    raise ValueError(f"Field '{field.name}' is required but has 'default: null' — " "a required $ref field cannot have a null default")
                 field.type_ref.is_nullable = True
                 return self._format_default_expr(None, field.type_ref)
 

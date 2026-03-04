@@ -1061,6 +1061,37 @@ class Person:
         assert future_idx == 0, f"__future__ should be the first line, but was at index {future_idx}"
 
 
+class TestPythonCommentPreservation:
+    """Tests that Python comments survive merge round-trips."""
+
+    @staticmethod
+    def _load_comment_preservation_tests():
+        import json
+
+        test_file = Path(__file__).parent.parent / "test_data" / "functional" / "comment_preservation_merge_tests.json"
+        with open(test_file) as f:
+            return json.load(f)
+
+    @pytest.fixture(params=_load_comment_preservation_tests.__func__(), ids=lambda t: t["name"])
+    def test_case(self, request):
+        return request.param
+
+    def test_comment_preservation(self, test_case):
+        merger = PythonAstMerger()
+        existing = "\n".join(test_case["existing_lines"])
+        generated = "\n".join(test_case["generated_lines"])
+        round_trips = test_case.get("round_trips", 1)
+
+        merged = existing
+        for _ in range(round_trips):
+            merged = merger.merge_files(generated, merged, MergeStrategy.MERGE)
+
+        for expected in test_case["expected_contains"]:
+            assert expected in merged, f"Expected '{expected}' in merged output:\n{merged}"
+        for not_expected in test_case["expected_not_contains"]:
+            assert not_expected not in merged, f"Did not expect '{not_expected}' in merged output:\n{merged}"
+
+
 class TestPythonNoMergeMarkerPersistence:
     """Tests that # jstc-no-merge markers survive multiple merge round-trips."""
 

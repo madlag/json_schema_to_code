@@ -20,6 +20,8 @@ from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
 def discover_integration_schemas():
     """Discover all integration test schemas."""
     integration_dir = Path(__file__).parent.parent / "test_data" / "pipeline" / "integration"
+    if not integration_dir.exists():
+        return []
     schemas = []
 
     for schema_file in sorted(integration_dir.glob("*.json")):
@@ -31,6 +33,9 @@ def discover_integration_schemas():
         )
 
     return schemas
+
+
+_INTEGRATION_SCHEMAS = discover_integration_schemas()
 
 
 def get_class_name(name: str) -> str:
@@ -53,7 +58,7 @@ def extract_csharp_classes(code: str) -> set[str]:
     return set(re.findall(pattern, code))
 
 
-@pytest.mark.parametrize("test_case", discover_integration_schemas(), ids=lambda tc: tc["name"])
+@pytest.mark.parametrize("test_case", _INTEGRATION_SCHEMAS, ids=[tc["name"] for tc in _INTEGRATION_SCHEMAS])
 def test_v3_generates_valid_python_integration(test_case):
     """Test that V3 generates valid Python code for integration schemas."""
     with open(test_case["schema_file"]) as f:
@@ -74,7 +79,7 @@ def test_v3_generates_valid_python_integration(test_case):
         pytest.fail(f"V3 failed for {test_case['name']}: {e}")
 
 
-@pytest.mark.parametrize("test_case", discover_integration_schemas(), ids=lambda tc: tc["name"])
+@pytest.mark.parametrize("test_case", _INTEGRATION_SCHEMAS, ids=[tc["name"] for tc in _INTEGRATION_SCHEMAS])
 def test_v3_generates_valid_csharp_integration(test_case):
     """Test that V3 generates valid C# code for integration schemas."""
     with open(test_case["schema_file"]) as f:
@@ -96,7 +101,7 @@ def test_v3_generates_valid_csharp_integration(test_case):
         pytest.fail(f"V3 C# failed for {test_case['name']}: {e}")
 
 
-@pytest.mark.parametrize("test_case", discover_integration_schemas(), ids=lambda tc: tc["name"])
+@pytest.mark.parametrize("test_case", _INTEGRATION_SCHEMAS, ids=[tc["name"] for tc in _INTEGRATION_SCHEMAS])
 def test_v3_generates_classes_integration(test_case):
     """Test that V3 generates at least one class for each schema."""
     with open(test_case["schema_file"]) as f:

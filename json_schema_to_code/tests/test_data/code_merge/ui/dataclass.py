@@ -46,7 +46,6 @@ class UIAction:
 @dataclass(kw_only=True)
 class UIDataCommonFields:
     question: str = field(default="")
-    hint: str = field(default="")
     answer: str = field(default="")
 
 

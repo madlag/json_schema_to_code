@@ -224,7 +224,7 @@
     },
     "expected_python": [
       "className: str = ''",
-      "style: Style | None = field(default_factory=lambda: Style())"
+      "style: Style | None = None"
     ],
     "expected_python_v1": [
       "className: str = \"\"",

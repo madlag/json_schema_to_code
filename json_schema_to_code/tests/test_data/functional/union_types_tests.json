@@ -271,5 +271,123 @@
       "class UIElement(Component",
       "class UIElement(Style"
     ]
+  },
+  {
+    "name": "csharp_class_union_generates_valid_alias",
+    "description": "C# union of two classes generates a valid PascalCase alias (e.g. ComponentOrStyle)",
+    "test_language": "cs",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Component": {
+          "type": "object",
+          "properties": { "id": {"type": "string"} }
+        },
+        "Style": {
+          "type": "object",
+          "properties": { "color": {"type": "string"} }
+        },
+        "Container": {
+          "type": "object",
+          "properties": {
+            "child": {
+              "anyOf": [
+                {"$ref": "#/definitions/Component"},
+                {"$ref": "#/definitions/Style"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "ComponentOrStyle"
+    ]
+  },
+  {
+    "name": "csharp_class_and_array_union_raises_error",
+    "description": "C# union of a class and an array (e.g. PitchNote | List<PitchedNote>) raises an error because the generated alias name is not a valid C# identifier",
+    "test_language": "cs",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "PitchedNote": {
+          "type": "object",
+          "properties": { "note": {"type": "string"} }
+        },
+        "PitchNote": {
+          "type": "object",
+          "properties": { "note": {"type": "string"} }
+        },
+        "ScoreNote": {
+          "type": "object",
+          "properties": {
+            "pitch": {
+              "anyOf": [
+                {"$ref": "#/definitions/PitchNote"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/PitchedNote"}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_error": "not a valid C# identifier"
+  },
+  {
+    "name": "csharp_primitive_union_generates_valid_alias",
+    "description": "C# union of primitives generates a valid alias (e.g. FloatOrString)",
+    "test_language": "cs",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "anyOf": [
+                {"type": "string"},
+                {"type": "number"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_contains": [
+      "FloatOrString"
+    ]
+  },
+  {
+    "name": "csharp_enum_and_array_union_raises_error",
+    "description": "C# union of an enum and an array raises an error because List<T> in a union name is invalid",
+    "test_language": "cs",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Clef": {
+          "type": "string",
+          "enum": ["treble", "bass"]
+        },
+        "Score": {
+          "type": "object",
+          "properties": {
+            "clef": {
+              "anyOf": [
+                {"$ref": "#/definitions/Clef"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/definitions/Clef"}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "expected_error": "not a valid C# identifier"
   }
 ]
