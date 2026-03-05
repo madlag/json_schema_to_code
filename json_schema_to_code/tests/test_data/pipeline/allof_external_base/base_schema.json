@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/base_schema",
+  "$defs": {
+    "UIData": {
+      "type": "object",
+      "description": "Base type for UI data"
+    },
+    "ActivityUIData": {
+      "description": "Activity UI data with common fields",
+      "allOf": [
+        { "$ref": "#/$defs/UIData" },
+        {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "default": ""
+            },
+            "hint": {
+              "type": "string",
+              "default": ""
+            },
+            "is_complete": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

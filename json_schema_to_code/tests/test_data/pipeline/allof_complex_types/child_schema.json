@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/child/child_schema",
+  "$ref": "#/$defs/ChildUIData",
+  "$defs": {
+    "ChildUIData": {
+      "description": "UI data that inherits complex base fields",
+      "allOf": [
+        { "$ref": "/base_schema#/$defs/ActivityUIData" },
+        {
+          "type": "object",
+          "properties": {
+            "extra_field": {
+              "type": "string",
+              "default": ""
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -378,10 +378,12 @@ class SchemaAnalyzer:
             base_def = self.ref_resolver.get_definition(allof.base_ref.ref_path.split("/")[-1])
             if base_def and isinstance(base_def.body, ObjectNode):
                 class_def.base_fields = self._analyze_base_properties(base_def.body, allof.extension, class_name)
+            elif base_def and isinstance(base_def.body, AllOfNode):
+                class_def.base_fields = self._analyze_allof_base_properties(base_def.body, allof.extension, class_name)
             elif resolved.is_external:
                 ext_def = self.ref_resolver.load_external_definition(resolved.external_path, resolved.class_name_in_external)
                 if ext_def:
-                    class_def.base_fields = self._analyze_external_base_properties(ext_def, allof.extension, class_name)
+                    class_def.base_fields = self._analyze_external_base_properties(ext_def, allof.extension, class_name, resolved.external_path)
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
@@ -472,17 +474,80 @@ class SchemaAnalyzer:
 
         return base_fields
 
+    def _analyze_allof_base_properties(
+        self,
+        allof_node: AllOfNode,
+        extension: ObjectNode | None,
+        class_name: str,
+    ) -> list[FieldDef]:
+        """Analyze base class properties when the base itself uses allOf (inheritance).
+
+        Recursively collects properties from the allOf chain:
+        the extension ObjectNode's properties plus any ancestor properties
+        reached via the allOf's own base_ref.
+        """
+        base_fields: list[FieldDef] = []
+
+        if allof_node.base_ref:
+            ancestor_def = self.ref_resolver.get_definition(allof_node.base_ref.ref_path.split("/")[-1])
+            if ancestor_def and isinstance(ancestor_def.body, ObjectNode):
+                base_fields.extend(self._analyze_base_properties(ancestor_def.body, extension, class_name))
+            elif ancestor_def and isinstance(ancestor_def.body, AllOfNode):
+                base_fields.extend(self._analyze_allof_base_properties(ancestor_def.body, extension, class_name))
+
+        if allof_node.extension:
+            base_fields.extend(self._analyze_base_properties(allof_node.extension, extension, class_name))
+
+        return base_fields
+
+    def _collect_external_properties(
+        self,
+        external_def: dict,
+        schema_defs: dict,
+    ) -> tuple[dict[str, dict], set[str]]:
+        """Recursively collect all properties from an external schema definition.
+
+        Handles allOf chains by resolving local $ref within the same external
+        schema and merging properties from the entire inheritance hierarchy.
+
+        Returns (properties, required) where properties maps name -> schema dict.
+        """
+        properties: dict[str, dict] = {}
+        required: set[str] = set()
+
+        if "allOf" in external_def:
+            for item in external_def["allOf"]:
+                if "$ref" in item:
+                    ref_path = item["$ref"]
+                    if ref_path.startswith("#/$defs/") or ref_path.startswith("#/definitions/"):
+                        ref_name = ref_path.split("/")[-1]
+                        ref_def = schema_defs.get(ref_name)
+                        if ref_def:
+                            parent_props, parent_req = self._collect_external_properties(ref_def, schema_defs)
+                            properties.update(parent_props)
+                            required.update(parent_req)
+                else:
+                    sub_props, sub_req = self._collect_external_properties(item, schema_defs)
+                    properties.update(sub_props)
+                    required.update(sub_req)
+
+        properties.update(external_def.get("properties", {}))
+        required.update(external_def.get("required", []))
+
+        return properties, required
+
     def _analyze_external_base_properties(
         self,
         external_def: dict,
         extension: ObjectNode | None,
         class_name: str,
+        schema_path: str,
     ) -> list[FieldDef]:
         """Analyze base class properties from external schema definition (raw dict)."""
         base_fields = []
 
-        properties = external_def.get("properties", {})
-        required = set(external_def.get("required", []))
+        schema_defs = self.ref_resolver.load_external_schema_defs(schema_path)
+        properties, required = self._collect_external_properties(external_def, schema_defs)
 
         for prop_name, prop_schema in properties.items():
             # Check if this property is overridden with a const in extension
@@ -524,20 +589,52 @@ class SchemaAnalyzer:
 
     def _type_ref_from_json_schema(self, prop_schema: dict, is_required: bool) -> TypeRef:
         """Create a TypeRef from a raw JSON schema property definition."""
-        schema_type = prop_schema.get("type", "any")
+        if "$ref" in prop_schema and "type" not in prop_schema:
+            return TypeRef(kind=TypeKind.ANY)
 
-        # Map JSON schema types to our type system
-        type_mapping = {
+        if ("anyOf" in prop_schema or "oneOf" in prop_schema) and "type" not in prop_schema:
+            return TypeRef(kind=TypeKind.ANY)
+
+        schema_type = prop_schema.get("type")
+        if schema_type is None:
+            return TypeRef(kind=TypeKind.ANY)
+
+        if isinstance(schema_type, list):
+            non_null = [t for t in schema_type if t != "null"]
+            if not non_null:
+                return TypeRef(kind=TypeKind.ANY)
+            result = self._type_ref_from_json_schema({**prop_schema, "type": non_null[0]}, is_required)
+            if "null" in schema_type:
+                result.is_nullable = True
+            return result
+
+        primitive_mapping = {
             "string": "string",
             "integer": "int",
             "number": "float",
             "boolean": "bool",
-            "array": "list",
-            "object": "dict",
         }
+        if schema_type in primitive_mapping:
+            return TypeRef(kind=TypeKind.PRIMITIVE, name=primitive_mapping[schema_type])
 
-        type_name = type_mapping.get(schema_type, "any")
-        return TypeRef(kind=TypeKind.PRIMITIVE, name=type_name)
+        if schema_type == "array":
+            items_schema = prop_schema.get("items")
+            if items_schema:
+                item_type = self._type_ref_from_json_schema(items_schema, True)
+            else:
+                item_type = TypeRef(kind=TypeKind.ANY)
+            return TypeRef(kind=TypeKind.ARRAY, type_args=[item_type])
+
+        if schema_type == "object":
+            additional = prop_schema.get("additionalProperties")
+            key_type = TypeRef(kind=TypeKind.PRIMITIVE, name="string")
+            if additional and isinstance(additional, dict):
+                value_type = self._type_ref_from_json_schema(additional, True)
+            else:
+                value_type = TypeRef(kind=TypeKind.ANY)
+            return TypeRef(kind=TypeKind.DICT, type_args=[key_type, value_type])
+
+        return TypeRef(kind=TypeKind.ANY)
 
     def _analyze_object_definition(self, def_node: DefinitionNode, obj: ObjectNode, class_name: str) -> ClassDef:
         """Analyze an object type definition."""

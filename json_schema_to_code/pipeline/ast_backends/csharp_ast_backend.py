@@ -244,6 +244,11 @@ class CSharpAstBackend(AstBackend):
 
     def _generate_constructor(self, class_def: ClassDef) -> CSharpConstructor | None:
         """Generate a constructor AST node."""
+        # Skip pure pass-through constructors: subclass adds no fields, no validation,
+        # and no const overrides that need forwarding to base.
+        if class_def.base_class and not class_def.constructor_fields and not class_def.validation_code and not any(f.is_const for f in class_def.base_fields):
+            return None
+
         # Build parameters
         params: list[CSharpParameter] = []
         body: list[str] = []
@@ -370,18 +375,15 @@ class CSharpAstBackend(AstBackend):
                     return f"{base_type}?"
                 return base_type
 
+            if "object" in non_null:
+                return "object"
+
             def _pascal(s: str) -> str:
                 return s[0].upper() + s[1:] if s else s
 
             alias_name = "Or".join(_pascal(t) for t in sorted(non_null))
             if not alias_name.isidentifier():
-                offending = ", ".join(sorted(non_null))
-                raise ValueError(
-                    f"Cannot generate a valid C# union type name from [{offending}]. "
-                    f"The generated alias '{alias_name}' is not a valid C# identifier. "
-                    f"Simplify the schema to avoid mixing generic types (e.g. List<T>) "
-                    f"or primitives in anyOf/oneOf unions targeting C#."
-                )
+                return "object"
             if has_null:
                 alias_name = f"{alias_name}?"
             return alias_name

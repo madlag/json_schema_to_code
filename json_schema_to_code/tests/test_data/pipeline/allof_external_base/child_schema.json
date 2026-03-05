@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/classify/classify_schema",
+  "$ref": "#/$defs/ClassifyUIData",
+  "$defs": {
+    "ClassifyUIData": {
+      "description": "UI data for classify activity",
+      "allOf": [
+        { "$ref": "/base_schema#/$defs/ActivityUIData" },
+        {
+          "type": "object",
+          "properties": {
+            "buckets": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "items": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
+            }
+          },
+          "required": ["buckets", "items"]
+        }
+      ]
+    }
+  }
+}

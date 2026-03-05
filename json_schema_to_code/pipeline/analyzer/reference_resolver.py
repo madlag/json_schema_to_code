@@ -134,11 +134,8 @@ class ReferenceResolver:
             class_name_in_external=class_name,
         )
 
-    def load_external_definition(self, schema_path: str, class_name: str) -> dict | None:
-        """Load a definition from an external schema file.
-
-        Called by the analyzer only when base class properties are needed (allOf).
-        """
+    def _load_external_schema(self, schema_path: str) -> dict | None:
+        """Load and cache an external schema file, returning the full schema dict."""
         if not self.schema_base_path:
             return None
 
@@ -150,21 +147,38 @@ class ReferenceResolver:
             self.schema_base_path / f"{base_path}_schema.json",
         ]
 
-        schema_data = None
         for path in possible_paths:
             if path.exists():
                 cache_key = str(path)
                 if cache_key not in self._external_schema_cache:
                     with open(path) as f:
                         self._external_schema_cache[cache_key] = json.load(f)
-                schema_data = self._external_schema_cache[cache_key]
-                break
+                return self._external_schema_cache[cache_key]
 
+        return None
+
+    def load_external_definition(self, schema_path: str, class_name: str) -> dict | None:
+        """Load a definition from an external schema file.
+
+        Called by the analyzer only when base class properties are needed (allOf).
+        """
+        schema_data = self._load_external_schema(schema_path)
         if not schema_data:
             return None
 
         defs = schema_data.get("$defs") or schema_data.get("definitions") or {}
         return defs.get(class_name)
+
+    def load_external_schema_defs(self, schema_path: str) -> dict:
+        """Load all $defs from an external schema file.
+
+        Used to resolve local $ref chains within an external schema
+        (e.g. when an external base class itself uses allOf).
+        """
+        schema_data = self._load_external_schema(schema_path)
+        if not schema_data:
+            return {}
+        return schema_data.get("$defs") or schema_data.get("definitions") or {}
 
     def get_definition(self, name: str) -> DefinitionNode | None:
         """Get a definition by original name."""

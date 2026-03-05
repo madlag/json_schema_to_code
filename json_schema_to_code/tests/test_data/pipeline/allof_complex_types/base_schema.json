@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/activities/base_schema",
+  "$defs": {
+    "UIData": {
+      "type": "object",
+      "description": "Base type for UI data"
+    },
+    "ShowImage": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" }
+      }
+    },
+    "ActivityUIData": {
+      "description": "Activity UI data with complex fields",
+      "allOf": [
+        { "$ref": "#/$defs/UIData" },
+        {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "default": ""
+            },
+            "items": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "links": {
+              "type": "object",
+              "additionalProperties": { "type": "integer" },
+              "default": {}
+            },
+            "image": {
+              "anyOf": [
+                { "$ref": "#/$defs/ShowImage" },
+                { "type": "null" }
+              ],
+              "default": null
+            },
+            "action_template": {
+              "$ref": "#/$defs/ShowImage"
+            },
+            "tags": {
+              "type": "array",
+              "default": []
+            },
+            "nullable_count": {
+              "type": ["integer", "null"],
+              "default": null
+            }
+          }
+        }
+      ]
+    }
+  }
+}
