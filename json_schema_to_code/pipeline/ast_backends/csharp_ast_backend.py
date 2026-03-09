@@ -58,10 +58,14 @@ class CSharpAstBackend(AstBackend):
 
         # Build enum value to member mapping
         self.enum_value_to_member = {}
+        # Build class field map for object initializer defaults
+        self.class_field_map: dict[str, dict[str, FieldDef]] = {}
         for class_def in ir.classes:
             if class_def.is_enum and class_def.enum_def:
                 value_to_member = {v: k for k, v in class_def.enum_def.members.items()}
                 self.enum_value_to_member[class_def.name] = value_to_member
+            else:
+                self.class_field_map[class_def.name] = {f.original_name or f.name: f for f in class_def.fields}
 
         # Build AST
         file = CSharpFile()
@@ -435,14 +439,8 @@ class CSharpAstBackend(AstBackend):
         if len(value) == 0:
             return f"new {type_name}()"
 
-        items = []
-        for item in value:
-            if isinstance(item, str):
-                items.append(f'"{item}"')
-            elif isinstance(item, bool):
-                items.append("true" if item else "false")
-            else:
-                items.append(str(item))
+        element_type = type_ref.type_args[0] if type_ref.type_args else None
+        items = [self.format_default_value(item, element_type) for item in value]
 
         return f"new {type_name} {{{', '.join(items)}}}"
 
@@ -452,6 +450,9 @@ class CSharpAstBackend(AstBackend):
 
         if len(value) == 0:
             return f"new {type_name}()"
+
+        if type_ref and type_ref.kind == TypeKind.CLASS:
+            return self._format_object_initializer(value, type_ref)
 
         items = []
         for k, v in value.items():
@@ -465,3 +466,18 @@ class CSharpAstBackend(AstBackend):
             items.append(f"[{key_str}] = {val_str}")
 
         return f"new {type_name} {{{', '.join(items)}}}"
+
+    def _format_object_initializer(self, value: dict, type_ref: TypeRef) -> str:
+        """Format a dict as a C# object initializer (for CLASS-typed defaults)."""
+        type_name = self.translate_type(type_ref)
+        field_map = self.class_field_map.get(type_ref.name, {})
+
+        items = []
+        for k, v in value.items():
+            field_def = field_map.get(k)
+            prop_name = self._snake_to_pascal(k)
+            field_type = field_def.type_ref if field_def else None
+            val_str = self.format_default_value(v, field_type)
+            items.append(f"{prop_name} = {val_str}")
+
+        return f"new {type_name} {{ {', '.join(items)} }}"

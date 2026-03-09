@@ -268,5 +268,46 @@
       "public object EmptyDict { get; set; } = new object();",
       "public object PopulatedDict { get; set; }"
     ]
+  },
+  {
+    "name": "enum_list_default_and_nullable_enum_ref",
+    "description": "Test that list defaults with enum items use enum member names (not strings), and $ref to enum with default: null produces a nullable type",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Clef": {
+          "type": "string",
+          "enum": ["treble", "bass"]
+        },
+        "DynamicMark": {
+          "type": "string",
+          "enum": ["p", "mf", "f"]
+        },
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "clef": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/Clef" },
+              "default": ["treble"]
+            },
+            "dynamics": {
+              "$ref": "#/definitions/DynamicMark",
+              "default": null
+            },
+            "barline": {
+              "$ref": "#/definitions/Clef",
+              "default": "bass"
+            }
+          },
+          "required": ["clef", "dynamics", "barline"]
+        }
+      }
+    },
+    "expected_cs": [
+      "public List<Clef> Clef { get; set; } = new List<Clef> {Clef.Treble};",
+      "public DynamicMark? Dynamics { get; set; } = null;",
+      "public Clef Barline { get; set; } = Clef.Bass;"
+    ]
   }
 ]

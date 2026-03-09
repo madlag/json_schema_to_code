@@ -737,9 +737,11 @@ class SchemaAnalyzer:
 
             # If field has a non-null default value, it shouldn't be nullable
             # The default provides the value, so no need for null
-            # But if default is None/null, keep nullable
+            # But if default is None/null, ensure nullable (e.g. $ref with default: null)
             if prop.has_default and field_def.type_ref and prop.default_value is not None:
                 field_def.type_ref.is_nullable = False
+            elif prop.has_default and field_def.type_ref and prop.default_value is None:
+                field_def.type_ref.is_nullable = True
 
             # Check for const type
             if isinstance(prop.type_node, ConstNode):

@@ -310,10 +310,13 @@ class PythonAstBackend(AstBackend):
         if has_explicit_default:
             default_val = field.default_value if field.has_default else field.type_ref.default_value
 
-            # null default on $ref: infer nullable — `default: null` means the field can be null
             if default_val is None and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-                field.type_ref.is_nullable = True
-                return self._format_default_expr(None, field.type_ref)
+                if is_nullable:
+                    return self._format_default_expr(None, field.type_ref)
+                else:
+                    clean_type = field.type_ref.name.strip('"')
+                    self.python_imports.add(("dataclasses", "field"))
+                    return self._parse_expr(f"field(default_factory=lambda: {clean_type}())")
 
             return self._format_default_expr(default_val, field.type_ref)
 
