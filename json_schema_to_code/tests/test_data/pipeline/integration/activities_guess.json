@@ -156,8 +156,7 @@
         },
         "actionTemplate": {
           "$ref": "#/$defs/UIAction",
-          "description": "Template action for selecting an item",
-          "default": null
+          "description": "Template action for selecting an item"
         }
       },
       "required": [
@@ -179,12 +178,10 @@
         },
         "state": {
           "$ref": "#/$defs/GuessState",
-          "default": null,
           "description": "Current student guess state"
         },
         "ui_data": {
           "$ref": "#/$defs/GuessUIData",
-          "default": null,
           "description": "UI rendering data"
         }
       },

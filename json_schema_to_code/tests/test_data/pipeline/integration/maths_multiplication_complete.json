@@ -126,13 +126,11 @@
         },
         "multiplicand_row": {
           "$ref": "#/$defs/OperandRowState",
-          "description": "The multiplicand row (top number)",
-          "default": null
+          "description": "The multiplicand row (top number)"
         },
         "multiplier_row": {
           "$ref": "#/$defs/OperandRowState",
-          "description": "The multiplier row (bottom number with \u00d7 sign)",
-          "default": null
+          "description": "The multiplier row (bottom number with \u00d7 sign)"
         },
         "partial_product_carry_rows": {
           "type": "array",
@@ -152,13 +150,11 @@
         },
         "final_carry_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "Carry row for the final sum",
-          "default": null
+          "description": "Carry row for the final sum"
         },
         "final_sum_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "Final sum row",
-          "default": null
+          "description": "Final sum row"
         }
       },
       "required": [
@@ -181,12 +177,10 @@
           "$ref": "#/$defs/MultiplicationCompleteProblem"
         },
         "state": {
-          "$ref": "#/$defs/MultiplicationCompleteState",
-          "default": null
+          "$ref": "#/$defs/MultiplicationCompleteState"
         },
         "ui_data": {
-          "$ref": "#/$defs/MultiplicationCompleteUIData",
-          "default": null
+          "$ref": "#/$defs/MultiplicationCompleteUIData"
         }
       },
       "required": [

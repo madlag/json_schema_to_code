@@ -14,7 +14,9 @@
           "description": "The correct answer (true or false)"
         }
       },
-      "required": ["correct_answer"],
+      "required": [
+        "correct_answer"
+      ],
       "additionalProperties": false
     },
     "TrueFalseState": {
@@ -23,7 +25,10 @@
       "description": "State tracking student work",
       "properties": {
         "selected_answer": {
-          "type": ["boolean", "null"],
+          "type": [
+            "boolean",
+            "null"
+          ],
           "description": "Student's selected answer, null if not selected",
           "default": null
         }
@@ -54,11 +59,15 @@
           "default": false
         },
         "action": {
-          "$ref": "/activities/ui_schema#/$defs/UIAction",
-          "default": null
+          "$ref": "/activities/ui_schema#/$defs/UIAction"
         }
       },
-      "required": ["text", "value", "is_selected", "action"],
+      "required": [
+        "text",
+        "value",
+        "is_selected",
+        "action"
+      ],
       "additionalProperties": false
     },
     "TrueFalseUIData": {
@@ -66,8 +75,7 @@
       "description": "UI data for rendering",
       "properties": {
         "common": {
-          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields",
-          "default": null
+          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields"
         },
         "answers": {
           "type": "array",
@@ -80,7 +88,10 @@
           "default": []
         }
       },
-      "required": ["common", "answers"],
+      "required": [
+        "common",
+        "answers"
+      ],
       "additionalProperties": false
     },
     "TrueFalseData": {
@@ -92,15 +103,17 @@
           "$ref": "#/$defs/TrueFalseProblem"
         },
         "state": {
-          "$ref": "#/$defs/TrueFalseState",
-          "default": null
+          "$ref": "#/$defs/TrueFalseState"
         },
         "ui_data": {
-          "$ref": "#/$defs/TrueFalseUIData",
-          "default": null
+          "$ref": "#/$defs/TrueFalseUIData"
         }
       },
-      "required": ["problem", "state", "ui_data"],
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
       "additionalProperties": false
     }
   },

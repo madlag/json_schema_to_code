@@ -2,7 +2,9 @@
   "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$id": "/activities/match_pairs/match_pairs_schema",
   "title": "Match Pairs Activity Schema",
-  "x-csharp-using": ["EduObject.Activities.MediaContentTypes"],
+  "x-csharp-using": [
+    "EduObject.Activities.MediaContentTypes"
+  ],
   "type": "object",
   "$defs": {
     "MatchPair": {
@@ -19,7 +21,10 @@
           "description": "Right side content"
         }
       },
-      "required": ["left", "right"],
+      "required": [
+        "left",
+        "right"
+      ],
       "additionalProperties": false
     },
     "MatchPairsProblem": {
@@ -36,7 +41,9 @@
           "minItems": 2
         }
       },
-      "required": ["correct_pairs"],
+      "required": [
+        "correct_pairs"
+      ],
       "additionalProperties": false
     },
     "IntegerPair": {
@@ -52,7 +59,10 @@
           "description": "Index of right item in correct_pairs"
         }
       },
-      "required": ["left_index", "right_index"],
+      "required": [
+        "left_index",
+        "right_index"
+      ],
       "additionalProperties": false
     },
     "MatchPairsState": {
@@ -69,7 +79,9 @@
           "default": []
         }
       },
-      "required": ["pairs"],
+      "required": [
+        "pairs"
+      ],
       "additionalProperties": false
     },
     "MatchPairsUIItem": {
@@ -85,7 +97,10 @@
           "description": "The content to display"
         }
       },
-      "required": ["index", "content"],
+      "required": [
+        "index",
+        "content"
+      ],
       "additionalProperties": false
     },
     "MatchPairsUIRow": {
@@ -101,7 +116,10 @@
           "description": "Right side item"
         }
       },
-      "required": ["left", "right"],
+      "required": [
+        "left",
+        "right"
+      ],
       "additionalProperties": false
     },
     "MatchPairsUIData": {
@@ -109,8 +127,7 @@
       "description": "UI data for rendering",
       "properties": {
         "common": {
-          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields",
-          "default": null
+          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields"
         },
         "rows": {
           "type": "array",
@@ -122,11 +139,14 @@
         },
         "action": {
           "$ref": "/activities/ui_schema#/$defs/UIAction",
-          "description": "Action template for swapping pairs (MOVE operation)",
-          "default": null
+          "description": "Action template for swapping pairs (MOVE operation)"
         }
       },
-      "required": ["common", "rows", "action"],
+      "required": [
+        "common",
+        "rows",
+        "action"
+      ],
       "additionalProperties": false
     },
     "MatchPairsData": {
@@ -140,16 +160,18 @@
         },
         "state": {
           "$ref": "#/$defs/MatchPairsState",
-          "default": null,
           "description": "Current pairing state"
         },
         "ui_data": {
           "$ref": "#/$defs/MatchPairsUIData",
-          "default": null,
           "description": "UI rendering data"
         }
       },
-      "required": ["problem", "state", "ui_data"],
+      "required": [
+        "problem",
+        "state",
+        "ui_data"
+      ],
       "additionalProperties": false
     }
   },

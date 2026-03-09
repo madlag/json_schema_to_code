@@ -102,28 +102,23 @@
         },
         "minuend_row": {
           "$ref": "#/$defs/OperandRowState",
-          "description": "The minuend (top number) row",
-          "default": null
+          "description": "The minuend (top number) row"
         },
         "subtrahend_row": {
           "$ref": "#/$defs/OperandRowState",
-          "description": "The subtrahend (bottom number) row with minus sign",
-          "default": null
+          "description": "The subtrahend (bottom number) row with minus sign"
         },
         "borrowing_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "The borrowing row where users mark borrowing operations",
-          "default": null
+          "description": "The borrowing row where users mark borrowing operations"
         },
         "adjusted_minuend_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "The adjusted minuend row showing digits after borrowing",
-          "default": null
+          "description": "The adjusted minuend row showing digits after borrowing"
         },
         "result_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "The result row where users enter the final answer",
-          "default": null
+          "description": "The result row where users enter the final answer"
         }
       },
       "required": [
@@ -145,12 +140,10 @@
           "$ref": "#/$defs/SubtractionCompleteProblem"
         },
         "state": {
-          "$ref": "#/$defs/SubtractionCompleteState",
-          "default": null
+          "$ref": "#/$defs/SubtractionCompleteState"
         },
         "ui_data": {
-          "$ref": "#/$defs/SubtractionCompleteUIData",
-          "default": null
+          "$ref": "#/$defs/SubtractionCompleteUIData"
         }
       },
       "required": [

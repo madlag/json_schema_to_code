@@ -59,8 +59,7 @@
           "default": false
         },
         "action": {
-          "$ref": "#/$defs/UIAction",
-          "default": null
+          "$ref": "#/$defs/UIAction"
         }
       },
       "required": [
@@ -76,8 +75,7 @@
       "description": "UI data for rendering",
       "properties": {
         "common": {
-          "$ref": "#/$defs/UIDataCommonFields",
-          "default": null
+          "$ref": "#/$defs/UIDataCommonFields"
         },
         "answers": {
           "type": "array",
@@ -105,12 +103,10 @@
           "$ref": "#/$defs/TrueFalseProblem"
         },
         "state": {
-          "$ref": "#/$defs/TrueFalseState",
-          "default": null
+          "$ref": "#/$defs/TrueFalseState"
         },
         "ui_data": {
-          "$ref": "#/$defs/TrueFalseUIData",
-          "default": null
+          "$ref": "#/$defs/TrueFalseUIData"
         }
       },
       "required": [

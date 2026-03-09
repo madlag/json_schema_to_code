@@ -271,7 +271,7 @@
   },
   {
     "name": "enum_list_default_and_nullable_enum_ref",
-    "description": "Test that list defaults with enum items use enum member names (not strings), and $ref to enum with default: null produces a nullable type",
+    "description": "Test that list defaults with enum items use enum member names (not strings), and oneOf with null + $ref to enum produces a nullable type",
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "definitions": {
@@ -292,7 +292,10 @@
               "default": ["treble"]
             },
             "dynamics": {
-              "$ref": "#/definitions/DynamicMark",
+              "oneOf": [
+                { "$ref": "#/definitions/DynamicMark" },
+                { "type": "null" }
+              ],
               "default": null
             },
             "barline": {

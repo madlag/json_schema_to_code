@@ -18,28 +18,23 @@
         },
         "text": {
           "type": "string",
-          "description": "Text content of the object (for text objects)",
-          "default": null
+          "description": "Text content of the object (for text objects)"
         },
         "image_url": {
           "type": "string",
-          "description": "URL of the image (for image objects)",
-          "default": null
+          "description": "URL of the image (for image objects)"
         },
         "hint": {
           "type": "string",
-          "description": "Hint text for the object",
-          "default": null
+          "description": "Hint text for the object"
         },
         "explanation": {
           "type": "string",
-          "description": "Explanation text for the object",
-          "default": null
+          "description": "Explanation text for the object"
         },
         "mnemonic": {
           "type": "string",
-          "description": "Mnemonic text for the object",
-          "default": null
+          "description": "Mnemonic text for the object"
         },
         "additional_properties": {
           "type": "object",
@@ -214,17 +209,14 @@
       "description": "Schema representing the state of a classification activity being completed by a human, so it may be incomplete or partially incorrect.",
       "properties": {
         "problem": {
-          "$ref": "#/$defs/ClassifyProblem",
-          "default": null
+          "$ref": "#/$defs/ClassifyProblem"
         },
         "state": {
-          "$ref": "#/$defs/ClassifyState",
-          "default": null
+          "$ref": "#/$defs/ClassifyState"
         },
         "ui_data": {
           "$ref": "#/$defs/ClassifyUIData",
-          "description": "UI state for the classify activity",
-          "default": null
+          "description": "UI state for the classify activity"
         }
       },
       "required": [

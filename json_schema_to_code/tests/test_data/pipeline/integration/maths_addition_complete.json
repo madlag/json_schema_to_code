@@ -90,13 +90,11 @@
         },
         "carry_over_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "The carry-over row where users enter carried digits",
-          "default": null
+          "description": "The carry-over row where users enter carried digits"
         },
         "result_row": {
           "$ref": "#/$defs/InputRowState",
-          "description": "The result row where users enter the final answer",
-          "default": null
+          "description": "The result row where users enter the final answer"
         }
       },
       "required": [
@@ -116,12 +114,10 @@
           "$ref": "#/$defs/AdditionCompleteProblem"
         },
         "state": {
-          "$ref": "#/$defs/AdditionCompleteState",
-          "default": null
+          "$ref": "#/$defs/AdditionCompleteState"
         },
         "ui_data": {
-          "$ref": "#/$defs/AdditionCompleteUIData",
-          "default": null
+          "$ref": "#/$defs/AdditionCompleteUIData"
         }
       },
       "required": [

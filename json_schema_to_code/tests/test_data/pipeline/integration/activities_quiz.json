@@ -78,8 +78,7 @@
           "default": false
         },
         "action": {
-          "$ref": "#/$defs/UIAction",
-          "default": null
+          "$ref": "#/$defs/UIAction"
         }
       },
       "required": [
@@ -94,8 +93,7 @@
       "description": "UI data for quiz activity rendering",
       "properties": {
         "common": {
-          "$ref": "#/$defs/UIDataCommonFields",
-          "default": null
+          "$ref": "#/$defs/UIDataCommonFields"
         },
         "answers": {
           "type": "array",
@@ -123,12 +121,10 @@
         },
         "state": {
           "$ref": "#/$defs/QuizState",
-          "default": null,
           "description": "Current student selection state"
         },
         "ui_data": {
           "$ref": "#/$defs/QuizUIData",
-          "default": null,
           "description": "UI rendering data"
         }
       },

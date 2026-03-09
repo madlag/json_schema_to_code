@@ -77,12 +77,10 @@
         },
         "state": {
           "$ref": "#/$defs/MatchPairsState",
-          "default": null,
           "description": "Current pairing state"
         },
         "ui_data": {
           "$ref": "#/$defs/MatchPairsUIData",
-          "default": null,
           "description": "UI rendering data"
         }
       },
@@ -150,8 +148,7 @@
       "description": "UI data for rendering",
       "properties": {
         "common": {
-          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields",
-          "default": null
+          "$ref": "/activities/ui_schema#/$defs/UIDataCommonFields"
         },
         "rows": {
           "type": "array",
@@ -163,8 +160,7 @@
         },
         "action": {
           "$ref": "/activities/ui_schema#/$defs/UIAction",
-          "description": "Action template for swapping pairs (MOVE operation)",
-          "default": null
+          "description": "Action template for swapping pairs (MOVE operation)"
         }
       },
       "required": [

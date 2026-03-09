@@ -584,20 +584,117 @@ class Person:
 class TestCSharpMerger:
     """Tests for CSharpAstMerger."""
 
-    def test_csharp_merger_requires_tree_sitter(self):
-        """Test that C# merger checks for tree-sitter availability."""
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         try:
             from json_schema_to_code.pipeline.merger import CSharpAstMerger
 
-            # If we get here, tree-sitter is available
-            merger = CSharpAstMerger()
-            assert merger is not None
-        except CodeMergeError as e:
-            # Expected if tree-sitter not installed
-            assert "tree-sitter" in str(e)
-        except ImportError:
-            # Also acceptable if the import itself fails
+            self.merger = CSharpAstMerger()
+        except (CodeMergeError, ImportError):
             pytest.skip("tree-sitter-c-sharp not installed")
+
+    def test_csharp_merger_requires_tree_sitter(self):
+        """Test that C# merger checks for tree-sitter availability."""
+        assert self.merger is not None
+
+    def test_merge_preserves_comment_before_generated_constructor(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    [Serializable]\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public Bar(string name)\n"
+            "        {\n"
+            "        }\n"
+            "        // Parameterless constructor for Unity\n"
+            "        public Bar() { }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    [Serializable]\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public Bar(string name)\n"
+            "        {\n"
+            "        }\n"
+            "        public Bar() { }\n"
+            "    }\n"
+            "}\n"
+        )
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Parameterless constructor for Unity" in merged
+        assert "public Bar() { }" in merged
+
+    def test_merge_preserves_comment_before_generated_property(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Person\n"
+            "    {\n"
+            "        // Full legal name\n"
+            "        public string Name { get; set; }\n"
+            "        public int Age { get; set; }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = (
+            "using System;\n" "namespace Foo\n" "{\n" "    public class Person\n" "    {\n" "        public string Name { get; set; }\n" "        public int Age { get; set; }\n" "    }\n" "}\n"
+        )
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Full legal name" in merged
+        assert "public string Name" in merged
+
+    def test_merge_preserves_multiple_comment_lines(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        // First line of comment\n"
+            "        // Second line of comment\n"
+            "        public string Name { get; set; }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert "// First line of comment" in merged
+        assert "// Second line of comment" in merged
+
+    def test_merge_preserves_comment_before_custom_method(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public string Name { get; set; }\n"
+            "        // Custom helper for serialization\n"
+            "        public string ToJson()\n"
+            "        {\n"
+            "            return Name;\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Custom helper for serialization" in merged
+        assert "public string ToJson()" in merged
+
+    def test_no_comment_no_change(self):
+        existing = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "        public int Age { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert merged == generated
 
 
 if __name__ == "__main__":

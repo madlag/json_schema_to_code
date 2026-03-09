@@ -5,7 +5,9 @@
   "$defs": {
     "QuizProblem": {
       "allOf": [
-        {"$ref": "/base_schema#/$defs/ActivityProblem"},
+        {
+          "$ref": "/base_schema#/$defs/ActivityProblem"
+        },
         {
           "type": "object",
           "properties": {
@@ -14,22 +16,28 @@
             },
             "options": {
               "type": "array",
-              "items": {"type": "string"}
+              "items": {
+                "type": "string"
+              }
             }
           },
-          "required": ["question", "options"]
+          "required": [
+            "question",
+            "options"
+          ]
         }
       ]
     },
     "QuizState": {
       "allOf": [
-        {"$ref": "/base_schema#/$defs/ActivityState"},
+        {
+          "$ref": "/base_schema#/$defs/ActivityState"
+        },
         {
           "type": "object",
           "properties": {
             "selected_answer": {
-              "type": "integer",
-              "default": null
+              "type": "integer"
             }
           }
         }
@@ -37,7 +45,9 @@
     },
     "QuizData": {
       "allOf": [
-        {"$ref": "/base_schema#/$defs/ActivityData"},
+        {
+          "$ref": "/base_schema#/$defs/ActivityData"
+        },
         {
           "type": "object",
           "properties": {

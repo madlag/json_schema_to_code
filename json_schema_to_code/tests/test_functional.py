@@ -100,5 +100,55 @@ def test_functional_generation(test_case):
             assert pattern not in generated_code, f"Unexpected pattern '{pattern}' found in {language} output"
 
 
+def test_default_null_on_non_nullable_ref_raises_error():
+    """'default: null' on a non-nullable $ref must raise a schema error."""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+            "Inner": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+            },
+            "TestClass": {
+                "type": "object",
+                "properties": {
+                    "child": {
+                        "$ref": "#/definitions/Inner",
+                        "default": None,
+                    }
+                },
+                "required": ["child"],
+            },
+        },
+    }
+    with pytest.raises(ValueError, match="default: null.*non-nullable"):
+        _generate_code(schema, {}, "python")
+
+
+def test_default_null_on_nullable_ref_is_allowed():
+    """'default: null' on a nullable oneOf [$ref, null] is fine."""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+            "Inner": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+            },
+            "TestClass": {
+                "type": "object",
+                "properties": {
+                    "child": {
+                        "oneOf": [{"$ref": "#/definitions/Inner"}, {"type": "null"}],
+                        "default": None,
+                    }
+                },
+                "required": ["child"],
+            },
+        },
+    }
+    code = _generate_code(schema, {}, "python")
+    assert "child: Inner | None = None" in code
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -105,8 +105,7 @@
               "default": "Full"
             },
             "element_properties": {
-              "$ref": "#/$defs/ElementProperties",
-              "default": null
+              "$ref": "#/$defs/ElementProperties"
             }
           },
           "required": [
@@ -123,8 +122,7 @@
       "properties": {
         "guess_state": {
           "$ref": "#/$defs/GuessState",
-          "description": "Generic guess state (selected_item_ids = selected_element_indices, item_states = element_states)",
-          "default": null
+          "description": "Generic guess state (selected_item_ids = selected_element_indices, item_states = element_states)"
         },
         "confirmed_element_properties": {
           "type": "array",
@@ -318,8 +316,7 @@
         },
         "actionTemplate": {
           "$ref": "/activities/ui_schema#/$defs/UIAction",
-          "description": "Template action for selecting an item",
-          "default": null
+          "description": "Template action for selecting an item"
         }
       },
       "required": [
@@ -341,12 +338,10 @@
         },
         "state": {
           "$ref": "#/$defs/GuessState",
-          "default": null,
           "description": "Current student guess state"
         },
         "ui_data": {
           "$ref": "#/$defs/GuessUIData",
-          "default": null,
           "description": "UI rendering data"
         }
       },
