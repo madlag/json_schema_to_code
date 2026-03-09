@@ -169,8 +169,57 @@ When `output.mode = "merge"`, the generator preserves custom code from the exist
 |-----------|-------|-------------|
 | `x-enum-members` | Enum definition | Maps enum values to custom Python member names |
 | `x-ref-class-name` | `$ref` | Override the resolved class name |
+| `x-csharp-generate` | Schema root or `$defs` entry | Control whether C# code is generated (default: `true`) |
+| `x-csharp-using` | Schema root | Add custom `using` statements to generated C# files |
 | `x-csharp-implements` | Object | C# interface to implement |
 | `x-csharp-properties` | Object | C# interface property mappings |
+
+### `x-csharp-generate`
+
+Controls C# code generation at two levels:
+
+**Schema root** -- skip C# generation for the entire schema:
+```json
+{
+    "x-csharp-generate": false,
+    "$defs": { "GeneratorConfig": { ... } }
+}
+```
+Python dataclasses are still generated. Use for backend-only schemas, generator configs, or objects sharing a generic C# prefab.
+
+**Individual `$defs` entries** -- selectively exclude definitions from C#:
+```json
+{
+    "$defs": {
+        "ActivityData": { "x-csharp-generate": false, ... },
+        "Problem":      { "x-csharp-generate": false, ... },
+        "State":        { "x-csharp-generate": false, ... },
+        "UIData":       { ... }
+    }
+}
+```
+Only `UIData` generates a C# class; Python gets all four. This is the standard pattern for activity schemas where the agent sends only UI data to Unity.
+
+### `x-csharp-using`
+
+Array of strings added as `using` statements in the generated C# file. Supports both namespace imports and type aliases:
+
+```json
+{
+    "x-csharp-using": [
+        "EduObject.Activities.Quiz",
+        "QuizModel = EduObject.Exercise.Quiz.Quiz"
+    ]
+}
+```
+
+Generates:
+```csharp
+using EduObject.Activities.Quiz;
+using QuizModel = EduObject.Exercise.Quiz.Quiz;
+```
+
+The generator also auto-detects common usings (`Newtonsoft.Json`, `System.Collections.Generic`, etc.).
 
 ## Inheritance
 
