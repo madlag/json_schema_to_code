@@ -131,7 +131,7 @@ class CSharpAstMerger(AstMerger):
         for using in self._find_nodes(root, "using_directive"):
             using_text = self._get_node_text(using, existing_code)
             namespace = self._extract_namespace_from_using(using_text)
-            if namespace and namespace not in generated_usings and namespace not in self.STANDARD_USINGS:
+            if namespace and namespace not in generated_usings:
                 if file_namespace and namespace == file_namespace:
                     continue
                 custom.custom_imports.append(using_text)
