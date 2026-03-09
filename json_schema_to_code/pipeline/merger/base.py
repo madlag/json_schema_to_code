@@ -53,6 +53,7 @@ class CustomCode:
     class_docstrings: dict[str, str] = field(default_factory=dict)
     method_docstrings: dict[tuple[str, str], str] = field(default_factory=dict)
     module_docstring: str | None = None
+    member_leading_comments: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Check if there's any custom code to preserve."""
@@ -67,6 +68,7 @@ class CustomCode:
             and not self.class_docstrings
             and not self.method_docstrings
             and self.module_docstring is None
+            and not self.member_leading_comments
         )
 
 

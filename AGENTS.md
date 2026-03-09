@@ -221,6 +221,28 @@ using QuizModel = EduObject.Exercise.Quiz.Quiz;
 
 The generator also auto-detects common usings (`Newtonsoft.Json`, `System.Collections.Generic`, etc.).
 
+## Schema validation errors
+
+The analyzer raises fatal errors for invalid schema patterns:
+
+**`default: null` on non-nullable types:** If a property has `"default": null` but the type does not allow null, the analyzer raises `ValueError`. Fix by either making the type nullable or removing `"default": null`:
+
+```json
+// WRONG: $ref is not nullable, but default is null
+{ "action": { "$ref": "#/$defs/UIAction", "default": null } }
+
+// CORRECT: use oneOf to make it nullable
+{ "action": { "oneOf": [{"$ref": "#/$defs/UIAction"}, {"type": "null"}], "default": null } }
+
+// CORRECT: remove default if it shouldn't be nullable
+{ "action": { "$ref": "#/$defs/UIAction" } }
+
+// CORRECT: primitive nullable type
+{ "count": { "type": ["integer", "null"], "default": null } }
+```
+
+**C# union alias with invalid identifier:** In C#, union types are represented as named type aliases (e.g., `IntOrString`). If the generated alias name contains characters invalid in C# identifiers (e.g., `List<T>` from an array union member), the backend raises `ValueError`. This happens with `anyOf`/`oneOf` unions containing array types.
+
 ## Inheritance
 
 `allOf` with a `$ref` + extension object maps to class inheritance:

@@ -93,6 +93,8 @@ class CSharpAstMerger(AstMerger):
         merged = self.merge(generated_code, custom_code) if not custom_code.is_empty() else generated_code
         if no_merge_overrides:
             merged = self._apply_no_merge_overrides(merged, no_merge_overrides)
+        if custom_code.member_leading_comments:
+            merged = self._inject_member_comments(merged, custom_code.member_leading_comments)
         self.validate(merged)
         return merged
 
@@ -171,18 +173,24 @@ class CSharpAstMerger(AstMerger):
 
             class_ctor_counts = gen_ctor_counts.get(class_name, set())
             prev_attr_nodes: list = []
+            prev_comment_nodes: list = []
 
             for member in body.children:
+                if member.type == "comment":
+                    prev_comment_nodes.append(member)
+                    continue
                 if member.type == "attribute_list":
                     prev_attr_nodes.append(member)
                     continue
 
                 has_marker = self._has_no_merge_marker(member, existing_code)
+                is_custom = False
 
                 if member.type == "method_declaration":
                     method_name = self._get_method_name(member, existing_code)
                     if method_name and method_name not in gen_members:
-                        custom.class_methods.setdefault(class_name, []).append(self._get_node_text(member, existing_code))
+                        is_custom = True
+                        custom.class_methods.setdefault(class_name, []).append(self._get_text_with_preceding_comments(prev_comment_nodes, member, existing_code))
 
                 elif member.type == "property_declaration":
                     prop_name = self._get_property_name(member, existing_code)
@@ -192,8 +200,10 @@ class CSharpAstMerger(AstMerger):
                     elif prop_name and prop_name not in gen_members and not has_marker:
                         if merge_strategy == MergeStrategy.DELETE:
                             prev_attr_nodes = []
+                            prev_comment_nodes = []
                             continue
                         full_text = self._get_text_with_preceding_attributes(prev_attr_nodes, member, existing_code)
+                        is_custom = True
                         custom.class_attributes.setdefault(class_name, []).append(full_text)
 
                 elif member.type == "constructor_declaration":
@@ -201,9 +211,17 @@ class CSharpAstMerger(AstMerger):
                         full_text = self._get_text_with_preceding_attributes(prev_attr_nodes, member, existing_code)
                         overrides.setdefault(class_name, []).append(("constructor", class_name, full_text))
                     elif self._count_constructor_params(member) not in class_ctor_counts:
-                        custom.class_methods.setdefault(class_name, []).append(self._get_node_text(member, existing_code))
+                        is_custom = True
+                        custom.class_methods.setdefault(class_name, []).append(self._get_text_with_preceding_comments(prev_comment_nodes, member, existing_code))
+
+                if not is_custom and prev_comment_nodes:
+                    key = self._member_key(member, existing_code, class_name)
+                    if key:
+                        comments = [self._get_node_text(c, existing_code) for c in prev_comment_nodes]
+                        custom.member_leading_comments.setdefault(class_name, {})[key] = comments
 
                 prev_attr_nodes = []
+                prev_comment_nodes = []
 
         custom.raw_sections = self._extract_marked_sections(existing_code)
         return custom, overrides
@@ -466,6 +484,32 @@ class CSharpAstMerger(AstMerger):
                 return self._get_node_text(child, code)
         return None
 
+    # -- Member key and comment helpers --
+
+    def _member_key(self, member_node: Any, code: str, class_name: str) -> str | None:
+        """Compute a stable key for a class member node, used to match members between existing and merged code."""
+        if member_node.type == "constructor_declaration":
+            return f"ctor_{self._count_constructor_params(member_node)}"
+        elif member_node.type == "method_declaration":
+            name = self._get_method_name(member_node, code)
+            return f"method_{name}" if name else None
+        elif member_node.type == "property_declaration":
+            name = self._get_property_name(member_node, code)
+            return f"prop_{name}" if name else None
+        elif member_node.type == "field_declaration":
+            for var in self._find_nodes(member_node, "variable_declarator"):
+                name_node = var.child_by_field_name("name")
+                if name_node:
+                    return f"field_{self._get_node_text(name_node, code)}"
+        return None
+
+    def _get_text_with_preceding_comments(self, comment_nodes: list, member_node: Any, code: str) -> str:
+        """Get member source text including preceding comment nodes."""
+        if not comment_nodes:
+            return self._get_node_text(member_node, code)
+        start = comment_nodes[0].start_byte
+        return code[start : member_node.end_byte]
+
     # -- No-merge and attribute helpers --
 
     def _has_no_merge_marker(self, node: Any, code: str) -> bool:
@@ -539,6 +583,53 @@ class CSharpAstMerger(AstMerger):
 
         for start, end, text in sorted(replacements, key=lambda r: r[0], reverse=True):
             merged_code = merged_code[:start] + text + merged_code[end:]
+
+        return merged_code
+
+    def _inject_member_comments(self, merged_code: str, member_comments: dict[str, dict[str, list[str]]]) -> str:
+        """Inject preserved leading comments before matching members in the merged code."""
+        tree = self.parse(merged_code)
+        insertions: list[tuple[int, str]] = []
+
+        for class_node in self._find_nodes(tree.root_node, "class_declaration"):
+            class_name = self._get_class_name(class_node, merged_code)
+            if not class_name or class_name not in member_comments:
+                continue
+
+            class_comments = member_comments[class_name]
+            body = None
+            for child in class_node.children:
+                if child.type == "declaration_list":
+                    body = child
+                    break
+            if not body:
+                continue
+
+            prev_attr_nodes: list = []
+            for member in body.children:
+                if member.type in ("{", "}", "comment"):
+                    continue
+                if member.type == "attribute_list":
+                    prev_attr_nodes.append(member)
+                    continue
+
+                key = self._member_key(member, merged_code, class_name)
+                if key and key in class_comments:
+                    insert_before = prev_attr_nodes[0] if prev_attr_nodes else member
+                    line_start = merged_code.rfind("\n", 0, insert_before.start_byte)
+                    indent = ""
+                    if line_start >= 0:
+                        raw = merged_code[line_start + 1 : insert_before.start_byte]
+                        if raw.isspace() or raw == "":
+                            indent = raw
+
+                    comment_lines = "\n".join(indent + c.strip() for c in class_comments[key]) + "\n"
+                    insertions.append((insert_before.start_byte, comment_lines))
+
+                prev_attr_nodes = []
+
+        for offset, text in sorted(insertions, key=lambda t: t[0], reverse=True):
+            merged_code = merged_code[:offset] + text + merged_code[offset:]
 
         return merged_code
 

@@ -387,7 +387,7 @@ class CSharpAstBackend(AstBackend):
 
             alias_name = "Or".join(_pascal(t) for t in sorted(non_null))
             if not alias_name.isidentifier():
-                return "object"
+                raise ValueError(f"Union alias '{alias_name}' is not a valid C# identifier. " f"Union of types {non_null} cannot be represented as a named type in C#.")
             if has_null:
                 alias_name = f"{alias_name}?"
             return alias_name
