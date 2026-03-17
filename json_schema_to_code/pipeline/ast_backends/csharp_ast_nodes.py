@@ -78,11 +78,17 @@ class CSharpField(CSharpNode):
 
 @dataclass
 class CSharpProperty(CSharpNode):
-    """Represents a class property with get/set."""
+    """Represents a class property with get/set.
+
+    For polymorphic discriminator properties: use is_virtual on base and is_override
+    on subclasses so the discriminator is correct when accessed via base type.
+    """
 
     name: str = ""
     type_name: str = ""
     access: AccessModifier = AccessModifier.PUBLIC
+    is_virtual: bool = False
+    is_override: bool = False
     has_getter: bool = True
     has_setter: bool = True
     default_value: str | None = None

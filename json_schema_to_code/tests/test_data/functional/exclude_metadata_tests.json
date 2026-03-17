@@ -244,5 +244,61 @@
       "optional_field: str | None = field(default=None, metadata=config(exclude=lambda x: x is None))",
       "optional_with_default: int = field(default=42, metadata=config(exclude=lambda x: x == 42))"
     ]
+  },
+  {
+    "name": "optional_field_helper_inline",
+    "description": "Test that optional_field_in_json helper is emitted inline when optional_field_helper_module is empty string",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "str_field": {"type": "string", "default": "hello"},
+            "int_field": {"type": "integer", "default": 0},
+            "bool_field": {"type": "boolean", "default": false},
+            "null_field": {"type": ["string", "null"], "default": null}
+          },
+          "required": []
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true,
+      "optional_field_helper_module": ""
+    },
+    "expected_python": [
+      "def optional_field_in_json",
+      "str_field: str = optional_field_in_json(default='hello')",
+      "int_field: int = optional_field_in_json(default=0)",
+      "bool_field: bool = optional_field_in_json(default=False)",
+      "null_field: str | None = optional_field_in_json(default=None)"
+    ]
+  },
+  {
+    "name": "optional_field_helper_import",
+    "description": "Test that optional_field_in_json is imported from the specified module",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "str_field": {"type": "string", "default": "hello"},
+            "int_field": {"type": "integer", "default": 0}
+          },
+          "required": []
+        }
+      }
+    },
+    "config": {
+      "exclude_default_value_from_json": true,
+      "optional_field_helper_module": "mypackage.utils"
+    },
+    "expected_python": [
+      "from mypackage.utils import optional_field_in_json",
+      "str_field: str = optional_field_in_json(default='hello')",
+      "int_field: int = optional_field_in_json(default=0)"
+    ]
   }
 ]

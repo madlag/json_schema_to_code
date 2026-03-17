@@ -32,11 +32,23 @@ class PythonAstBackend(AstBackend):
         "tuple": "tuple",
     }
 
+    _OPTIONAL_FIELD_HELPER_BODY = """\
+def optional_field_in_json(*args, default=None, **kwargs):
+    existing_metadata = kwargs.pop("metadata", {})
+    if default is None or isinstance(default, bool):
+        exclude_fn = lambda x, d=default: x is d
+    else:
+        exclude_fn = lambda x, d=default: x == d
+    kwargs["metadata"] = {**existing_metadata, **config(exclude=exclude_fn)}
+    return field(*args, default=default, **kwargs)
+"""
+
     def __init__(self, config: CodeGeneratorConfig):
         super().__init__(config)
         self.python_imports: set[tuple[str, str]] = set()
         self.needs_re_import = False
         self.type_aliases: set[str] = set()
+        self.needs_optional_field_helper = False
 
     def generate(self, ir: IR) -> str:
         """Generate Python code from IR using AST."""
@@ -44,6 +56,7 @@ class PythonAstBackend(AstBackend):
         self.python_imports = set()
         self.needs_re_import = False
         self.type_aliases = set()
+        self.needs_optional_field_helper = False
 
         # Build the module body
         body: list[ast.stmt] = []
@@ -92,6 +105,14 @@ class PythonAstBackend(AstBackend):
         # Assemble imports
         import_nodes = self._generate_imports()
         body.extend(import_nodes)
+
+        # Inject optional_field_in_json helper if used
+        if self.needs_optional_field_helper:
+            module = self.config.optional_field_helper_module
+            if module == "":
+                helper_nodes = ast.parse(self._OPTIONAL_FIELD_HELPER_BODY).body
+                body.extend(helper_nodes)
+            # import case handled in _generate_imports via python_imports
 
         # Add simple type aliases before classes
         for alias in sorted(simple_aliases):
@@ -215,6 +236,8 @@ class PythonAstBackend(AstBackend):
             bases.append(ast.Name(id="ABC", ctx=ast.Load()))
         elif class_def.base_class:
             bases.append(ast.Name(id=class_def.base_class, ctx=ast.Load()))
+        for extra_base in class_def.extra_base_classes:
+            bases.append(ast.Name(id=extra_base, ctx=ast.Load()))
 
         # Build class body
         body: list[ast.stmt] = []
@@ -334,9 +357,24 @@ class PythonAstBackend(AstBackend):
 
         return None
 
+    def _use_optional_field_helper(self) -> bool:
+        """Return True when the compact helper syntax should be used."""
+        return self.config.exclude_default_value_from_json and self.config.optional_field_helper_module is not None
+
+    def _emit_helper_call(self, default_repr: str) -> ast.expr:
+        """Emit optional_field_in_json(default=X) and mark helper as needed."""
+        self.python_imports.add(("dataclasses", "field"))
+        self.python_imports.add(("dataclasses_json", "config"))
+        self.needs_optional_field_helper = True
+        if self.config.optional_field_helper_module:
+            self.python_imports.add((self.config.optional_field_helper_module, "optional_field_in_json"))
+        return self._parse_expr(f"optional_field_in_json(default={default_repr})")
+
     def _format_default_expr(self, value: Any, type_ref: TypeRef | None) -> ast.expr:
         """Format a default value as an AST expression."""
         if value is None:
+            if self._use_optional_field_helper():
+                return self._emit_helper_call("None")
             if self.config.exclude_default_value_from_json:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
@@ -344,6 +382,8 @@ class PythonAstBackend(AstBackend):
             return ast.Constant(value=None)
 
         if isinstance(value, bool):
+            if self._use_optional_field_helper():
+                return self._emit_helper_call("True" if value else "False")
             if self.config.exclude_default_value_from_json:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
@@ -352,6 +392,9 @@ class PythonAstBackend(AstBackend):
             return ast.Constant(value=value)
 
         if isinstance(value, str):
+            if self._use_optional_field_helper():
+                escaped = value.replace('"', '\\"')
+                return self._emit_helper_call(f'"{escaped}"')
             if self.config.exclude_default_value_from_json:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
@@ -360,6 +403,8 @@ class PythonAstBackend(AstBackend):
             return ast.Constant(value=value)
 
         if isinstance(value, (int, float)):
+            if self._use_optional_field_helper():
+                return self._emit_helper_call(repr(value))
             if self.config.exclude_default_value_from_json:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))

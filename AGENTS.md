@@ -173,6 +173,7 @@ When `output.mode = "merge"`, the generator preserves custom code from the exist
 | `x-csharp-using` | Schema root | Add custom `using` statements to generated C# files |
 | `x-csharp-implements` | Object | C# interface to implement |
 | `x-csharp-properties` | Object | C# interface property mappings |
+| `x-csharp-known-subtypes` | Object definition | Declare cross-schema polymorphic subtypes for C# `JsonSubtypes` |
 
 ### `x-csharp-generate`
 
@@ -220,6 +221,24 @@ using QuizModel = EduObject.Exercise.Quiz.Quiz;
 ```
 
 The generator also auto-detects common usings (`Newtonsoft.Json`, `System.Collections.Generic`, etc.).
+
+### `x-csharp-known-subtypes`
+
+Declares polymorphic subtypes that live in **other schema files**. The generator emits `[JsonConverter(typeof(JsonSubtypes), "...")]` and `[JsonSubtypes.KnownSubType(...)]` attributes on the base class, plus `using` directives for each subtype's namespace.
+
+```json
+{
+    "WidgetData": {
+        "discriminator": { "propertyName": "type" },
+        "x-csharp-known-subtypes": [
+            { "class": "ImageWidgetData", "value": "image", "using": "EduObject.Widgets.Image" },
+            { "class": "TextWidgetData", "value": "text", "using": "EduObject.Widgets.Text" }
+        ]
+    }
+}
+```
+
+Each entry requires `class` (C# class name) and `value` (discriminator value). `using` is optional (omit if the subtype is in the same namespace). **When adding a new widget type, you must add an entry to this list** in the base schema so the code generator emits the correct `JsonSubtypes` registration.
 
 ## Schema validation errors
 

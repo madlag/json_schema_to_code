@@ -222,33 +222,37 @@ class SchemaParser:
         return node
 
     def _parse_allof_node(self, schema: dict[str, Any], path: str, metadata: dict[str, Any]) -> AllOfNode:
-        """Parse an allOf node (inheritance)."""
+        """Parse an allOf node (inheritance).
+
+        Supports multiple $ref entries for multiple inheritance (Python only).
+        The first $ref becomes base_ref, subsequent $refs go into extra_refs,
+        and the first non-$ref object becomes the extension.
+        """
         allof = schema["allOf"]
 
-        # First element should be a $ref to base class
-        base_ref = None
+        refs: list[RefNode] = []
         extension = None
 
-        if len(allof) >= 1 and "$ref" in allof[0]:
-            base_ref = RefNode(
-                ref_path=allof[0]["$ref"],
-                source_path=f"{path}/allOf/0",
-            )
+        for i, entry in enumerate(allof):
+            entry_path = f"{path}/allOf/{i}"
+            if "$ref" in entry:
+                refs.append(RefNode(ref_path=entry["$ref"], source_path=entry_path))
+            elif extension is None:
+                extension_node = self._parse_schema_node(entry, entry_path)
+                if isinstance(extension_node, ObjectNode):
+                    extension = extension_node
+                else:
+                    extension = ObjectNode(
+                        source_path=entry_path,
+                        metadata=extension_node.metadata,
+                    )
 
-        if len(allof) >= 2:
-            ext_schema = allof[1]
-            extension_node = self._parse_schema_node(ext_schema, f"{path}/allOf/1")
-            if isinstance(extension_node, ObjectNode):
-                extension = extension_node
-            else:
-                # Wrap non-object extension in ObjectNode
-                extension = ObjectNode(
-                    source_path=f"{path}/allOf/1",
-                    metadata=extension_node.metadata,
-                )
+        base_ref = refs[0] if refs else None
+        extra_refs = refs[1:] if len(refs) > 1 else []
 
         return AllOfNode(
             base_ref=base_ref,
+            extra_refs=extra_refs,
             extension=extension,
             source_path=path,
             metadata=metadata,

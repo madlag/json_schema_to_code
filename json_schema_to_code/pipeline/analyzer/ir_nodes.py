@@ -115,10 +115,13 @@ class ClassDef:
     original_name: str = ""  # Original definition key
 
     # Inheritance
-    base_class: str | None = None  # Name of base class
+    base_class: str | None = None  # Name of primary base class
+    extra_base_classes: list[str] = field(default_factory=list)  # Additional base classes (multiple inheritance)
     subclasses: list[tuple[str, str]] = field(default_factory=list)  # [(name, discriminator), ...]
     # JSON property used for discriminator (e.g. "type", "action_type"). None => "type" in C# backend.
     discriminator_property: str | None = None
+    # C# using directives required by cross-schema known subtypes
+    subtype_usings: list[str] = field(default_factory=list)
 
     # Fields
     fields: list[FieldDef] = field(default_factory=list)

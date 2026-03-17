@@ -111,6 +111,8 @@ class CSharpAstBackend(AstBackend):
         # Subtype handling
         if class_def.subclasses:
             self.required_imports.add("JsonSubTypes")
+            for ns in class_def.subtype_usings:
+                self.required_imports.add(ns)
             disc_prop = class_def.discriminator_property or "type"
             cls.attributes.append(
                 CSharpAttribute(
@@ -140,7 +142,7 @@ class CSharpAstBackend(AstBackend):
             if field.is_const:
                 # Emit discriminator const as get-only property so JSON serialization includes it
                 if field.name == disc_prop_name:
-                    prop_node = self._generate_discriminator_property(field)
+                    prop_node = self._generate_discriminator_property(field, class_def.base_class is not None)
                     if prop_node:
                         cls.properties.append(prop_node)
                 else:
@@ -148,9 +150,15 @@ class CSharpAstBackend(AstBackend):
                     if field_node:
                         cls.fields.append(field_node)
             else:
-                prop_node = self._generate_property(field)
-                if prop_node:
-                    cls.properties.append(prop_node)
+                # Base with discriminator: emit virtual so subclasses (in other files) can override
+                if class_def.discriminator_property and field.name == disc_prop_name:
+                    prop_node = self._generate_discriminator_property(field, is_subclass=False)
+                    if prop_node:
+                        cls.properties.append(prop_node)
+                else:
+                    prop_node = self._generate_property(field)
+                    if prop_node:
+                        cls.properties.append(prop_node)
 
         # Constructor
         constructor = self._generate_constructor(class_def)
@@ -190,8 +198,13 @@ class CSharpAstBackend(AstBackend):
 
         return field_node
 
-    def _generate_discriminator_property(self, field: FieldDef) -> CSharpProperty | None:
-        """Generate a get-only property for discriminator (so it serializes to JSON)."""
+    def _generate_discriminator_property(self, field: FieldDef, is_subclass: bool = False) -> CSharpProperty | None:
+        """Generate a get-only property for discriminator (so it serializes to JSON).
+
+        When is_subclass is True, emits 'override' and expression-bodied getter so that
+        when the object is accessed via the base type, Type returns the constant (e.g. "image").
+        This fixes JsonSubtypes consuming the discriminator token without setting the base property.
+        """
         if not field.type_ref:
             return None
         type_str = self.translate_type(field.type_ref)
@@ -199,7 +212,9 @@ class CSharpAstBackend(AstBackend):
         prop = CSharpProperty(
             name=pascal_name,
             type_name=type_str,
-            has_setter=False,
+            has_setter=not is_subclass,
+            is_virtual=not is_subclass,
+            is_override=is_subclass,
         )
         prop.attributes.append(CSharpAttribute(name="JsonProperty", arguments=[f'"{field.name}"']))
         if field.has_default:

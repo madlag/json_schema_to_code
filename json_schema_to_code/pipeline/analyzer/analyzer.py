@@ -385,6 +385,13 @@ class SchemaAnalyzer:
                 if ext_def:
                     class_def.base_fields = self._analyze_external_base_properties(ext_def, allof.extension, class_name, resolved.external_path)
 
+        # Resolve extra base classes (for multiple inheritance in Python)
+        for extra_ref in allof.extra_refs:
+            extra_resolved = self.ref_resolver.resolve(extra_ref)
+            class_def.extra_base_classes.append(extra_resolved.target_name)
+            if extra_resolved.is_external and self.language == "python":
+                self._register_external_import(extra_resolved)
+
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
 
@@ -640,11 +647,30 @@ class SchemaAnalyzer:
         """Analyze an object type definition."""
         subclasses = self.subclasses.get(class_name, [])
         disc_prop = self.discriminator_property_by_base.get(class_name, "type") if subclasses else None
+        # If no subclasses in same schema, still respect discriminator on this definition (polymorphic base in another file)
+        if disc_prop is None and self.language == "cs":
+            defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
+            raw_def = defs.get(def_node.original_name, {})
+            if isinstance(raw_def, dict) and "discriminator" in raw_def:
+                disc_prop = raw_def.get("discriminator", {}).get("propertyName", "type")
+        # Cross-schema known subtypes declared via x-csharp-known-subtypes
+        external_subtypes = []
+        subtype_usings = []
+        if self.language == "cs":
+            defs = defs if "defs" in dir() else (self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {})
+            raw_def = defs.get(def_node.original_name, {}) if isinstance(defs, dict) else {}
+            known = raw_def.get("x-csharp-known-subtypes", []) if isinstance(raw_def, dict) else []
+            for entry in known:
+                external_subtypes.append((entry["class"], entry["value"]))
+                if "using" in entry:
+                    subtype_usings.append(entry["using"])
+
         class_def = ClassDef(
             name=class_name,
             original_name=def_node.original_name,
-            subclasses=subclasses,
+            subclasses=subclasses + external_subtypes,
             discriminator_property=disc_prop,
+            subtype_usings=subtype_usings,
         )
 
         # Check if this class is a subtype (from discriminated union or allOf)

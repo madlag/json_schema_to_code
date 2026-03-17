@@ -1,0 +1,106 @@
+[
+  {
+    "name": "allof_two_refs_multiple_inheritance",
+    "description": "allOf with two $refs produces multiple inheritance in Python",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$defs": {
+        "BaseA": {
+          "type": "object",
+          "properties": {
+            "field_a": { "type": "string" }
+          }
+        },
+        "BaseB": {
+          "type": "object",
+          "properties": {
+            "field_b": { "type": "integer" }
+          }
+        },
+        "Child": {
+          "allOf": [
+            { "$ref": "#/$defs/BaseA" },
+            { "$ref": "#/$defs/BaseB" }
+          ]
+        }
+      }
+    },
+    "expected_contains": [
+      "class Child(BaseA, BaseB):"
+    ],
+    "expected_not_contains": [
+      "class Child(BaseA):",
+      "class Child(BaseB):"
+    ]
+  },
+  {
+    "name": "allof_two_refs_with_extension",
+    "description": "allOf with two $refs plus an extension object",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$defs": {
+        "BaseA": {
+          "type": "object",
+          "properties": {
+            "field_a": { "type": "string" }
+          }
+        },
+        "BaseB": {
+          "type": "object",
+          "properties": {
+            "field_b": { "type": "integer" }
+          }
+        },
+        "Child": {
+          "allOf": [
+            { "$ref": "#/$defs/BaseA" },
+            { "$ref": "#/$defs/BaseB" },
+            {
+              "type": "object",
+              "properties": {
+                "field_c": { "type": "boolean" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expected_contains": [
+      "class Child(BaseA, BaseB):",
+      "field_c: bool"
+    ]
+  },
+  {
+    "name": "allof_single_ref_still_works",
+    "description": "Backward compatibility: allOf with one $ref + extension still produces single inheritance",
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$defs": {
+        "BaseA": {
+          "type": "object",
+          "properties": {
+            "field_a": { "type": "string" }
+          }
+        },
+        "Child": {
+          "allOf": [
+            { "$ref": "#/$defs/BaseA" },
+            {
+              "type": "object",
+              "properties": {
+                "field_c": { "type": "boolean" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expected_contains": [
+      "class Child(BaseA):",
+      "field_c: bool"
+    ],
+    "expected_not_contains": [
+      "class Child(BaseA, "
+    ]
+  }
+]

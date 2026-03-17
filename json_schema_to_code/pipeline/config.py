@@ -88,6 +88,12 @@ class CodeGeneratorConfig:
     # Exclude default values from JSON serialization
     exclude_default_value_from_json: bool = False
 
+    # When exclude_default_value_from_json is True, use a helper function instead of inline lambdas.
+    # None  → verbose inline form (current behaviour)
+    # ""    → emit the helper function definition inline in the generated file
+    # "a.b" → import the helper from that module: from a.b import optional_field_in_json
+    optional_field_helper_module: str | None = None
+
     # Add runtime validation code
     add_validation: bool = False
 
@@ -141,6 +147,7 @@ class CodeGeneratorConfig:
             "quoted_types_for_python": self.quoted_types_for_python,
             "use_future_annotations": self.use_future_annotations,
             "exclude_default_value_from_json": self.exclude_default_value_from_json,
+            "optional_field_helper_module": self.optional_field_helper_module,
             "add_validation": self.add_validation,
             "external_ref_base_module": self.external_ref_base_module,
             "external_ref_schema_to_module": self.external_ref_schema_to_module,

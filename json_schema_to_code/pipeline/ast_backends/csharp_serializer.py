@@ -182,8 +182,6 @@ class CSharpSerializer:
         lines.append(declaration)
         lines.append(f"{prefix}{{")
 
-        prefix + self.INDENT
-
         # Fields (const fields)
         for field in cls.fields:
             lines.extend(self._serialize_field(field, indent + 1))
@@ -248,17 +246,25 @@ class CSharpSerializer:
         for attr in prop.attributes:
             lines.append(f"{prefix}{attr.to_string()}")
 
-        # Property declaration
-        accessors = []
-        if prop.has_getter:
-            accessors.append("get")
-        if prop.has_setter:
-            accessors.append("set")
-        accessor_str = "; ".join(accessors)
+        mod_str = ""
+        if prop.is_virtual:
+            mod_str = "virtual "
+        elif prop.is_override:
+            mod_str = "override "
 
-        declaration = f"{prefix}{prop.access.value} {prop.type_name} {prop.name} {{ {accessor_str}; }}"
-        if prop.default_value is not None:
-            declaration += f" = {prop.default_value};"
+        # Override with default value: emit expression-bodied getter so base-typed reference returns the constant
+        if prop.is_override and prop.default_value is not None and not prop.has_setter:
+            declaration = f"{prefix}{prop.access.value} {mod_str}{prop.type_name} {prop.name} => {prop.default_value};"
+        else:
+            accessors = []
+            if prop.has_getter:
+                accessors.append("get")
+            if prop.has_setter:
+                accessors.append("set")
+            accessor_str = "; ".join(accessors)
+            declaration = f"{prefix}{prop.access.value} {mod_str}{prop.type_name} {prop.name} {{ {accessor_str}; }}"
+            if prop.default_value is not None:
+                declaration += f" = {prop.default_value};"
 
         if prop.comment:
             declaration += prop.comment

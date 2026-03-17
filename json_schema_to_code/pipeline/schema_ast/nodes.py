@@ -115,7 +115,8 @@ class UnionNode(SchemaNode):
 class AllOfNode(SchemaNode):
     """Represents inheritance via allOf."""
 
-    base_ref: RefNode | None = None  # The $ref part
+    base_ref: RefNode | None = None  # The primary $ref (first base class)
+    extra_refs: list[RefNode] = field(default_factory=list)  # Additional $ref base classes
     extension: ObjectNode | None = None  # The extension properties
 
 
