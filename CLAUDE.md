@@ -1,4 +1,4 @@
-# AGENTS.md -- json_schema_to_code context for AI agents
+# CLAUDE.md -- json_schema_to_code context for AI agents
 
 ## Project overview
 
@@ -231,8 +231,8 @@ Declares polymorphic subtypes that live in **other schema files**. The generator
     "WidgetData": {
         "discriminator": { "propertyName": "type" },
         "x-csharp-known-subtypes": [
-            { "class": "ImageWidgetData", "value": "image", "using": "EduObject.Widgets.Image" },
-            { "class": "TextWidgetData", "value": "text", "using": "EduObject.Widgets.Text" }
+            { "class": "ImageWidgetUIData", "value": "image", "using": "EduObject.Widgets.Image" },
+            { "class": "TextWidgetUIData", "value": "text", "using": "EduObject.Widgets.Text" }
         ]
     }
 }

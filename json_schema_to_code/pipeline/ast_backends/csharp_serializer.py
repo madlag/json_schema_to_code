@@ -38,6 +38,9 @@ class CSharpSerializer:
         if file.generation_comment:
             lines.append(file.generation_comment)
 
+        lines.append("#nullable enable")
+        lines.append("")
+
         # Using directives
         for using in file.using_directives:
             lines.append(self._serialize_using(using))
