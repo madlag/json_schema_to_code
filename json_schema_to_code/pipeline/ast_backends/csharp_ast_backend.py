@@ -277,11 +277,13 @@ class CSharpAstBackend(AstBackend):
         for field in class_def.base_fields:
             if field.is_const:
                 if field.is_overridden_const:
-                    # Pass literal value to base
+                    # This class turns a non-const parent field into a const.
+                    # The parent's constructor still takes it as a parameter,
+                    # so pass the new literal value to base().
                     base_call_args.append(f'"{field.default_value}"')
-                else:
-                    # Pass variable name to base
-                    base_call_args.append(field.name)
+                # else: the field was already const in the parent chain, so the
+                # parent's constructor excluded it from its parameters. Skip —
+                # passing it would reference an out-of-scope identifier.
             else:
                 # Regular property - add to params and base call
                 type_str = self.translate_type(field.type_ref) if field.type_ref else "object"
