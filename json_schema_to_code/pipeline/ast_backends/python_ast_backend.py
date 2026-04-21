@@ -230,12 +230,15 @@ def optional_field_in_json(*args, default=None, **kwargs):
                 )
             )
 
-        # Build bases
+        # Build bases. A concrete base wins over ABC: being marked abstract via
+        # ABC is orthogonal to actually inheriting a base's fields, and a class
+        # can be both a polymorphic base (has subclasses) and a child of another
+        # base (e.g. a middle class in an allOf chain).
         bases = []
-        if class_def.subclasses:
-            bases.append(ast.Name(id="ABC", ctx=ast.Load()))
-        elif class_def.base_class:
+        if class_def.base_class:
             bases.append(ast.Name(id=class_def.base_class, ctx=ast.Load()))
+        elif class_def.subclasses:
+            bases.append(ast.Name(id="ABC", ctx=ast.Load()))
         for extra_base in class_def.extra_base_classes:
             bases.append(ast.Name(id=extra_base, ctx=ast.Load()))
 

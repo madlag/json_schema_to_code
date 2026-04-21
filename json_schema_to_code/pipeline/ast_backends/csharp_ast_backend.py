@@ -138,11 +138,20 @@ class CSharpAstBackend(AstBackend):
 
         # Fields and properties
         disc_prop_name = class_def.discriminator_property or "type"
+        # Only emit 'override' on the subclass's discriminator const when the
+        # base class actually declares a virtual discriminator to override.
+        # Having any base_class isn't enough: if the base's own schema doesn't
+        # include the discriminator as a (non-const) property, it never emits
+        # 'virtual Type' and the subclass 'override' would fail to compile.
+        # The base is virtual either when we carry it here as non-const, or
+        # when we override it to a const (is_overridden_const=True, which
+        # means it was non-const at the base).
+        base_has_virtual_discriminator = any(bf.name == disc_prop_name and (not bf.is_const or bf.is_overridden_const) for bf in class_def.base_fields)
         for field in class_def.fields:
             if field.is_const:
                 # Emit discriminator const as get-only property so JSON serialization includes it
                 if field.name == disc_prop_name:
-                    prop_node = self._generate_discriminator_property(field, class_def.base_class is not None)
+                    prop_node = self._generate_discriminator_property(field, base_has_virtual_discriminator)
                     if prop_node:
                         cls.properties.append(prop_node)
                 else:
