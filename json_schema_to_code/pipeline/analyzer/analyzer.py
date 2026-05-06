@@ -492,6 +492,18 @@ class SchemaAnalyzer:
         Recursively collects properties from the allOf chain:
         the extension ObjectNode's properties plus any ancestor properties
         reached via the allOf's own base_ref.
+
+        When the immediate parent constifies a field that already exists in the
+        ancestor chain (typical discriminator pattern: ``WidgetImage.type`` →
+        ``ImageByURL.type = const "ImageByURL"`` → ``ImageBySearch.type = const
+        "ImageBySearch"``), the parent's own constructor handles the const
+        internally and does not expose it as a parameter. From a grandchild's
+        perspective the field must therefore be skipped in its ``base(...)``
+        call. We model this by replacing the ancestor's view of the field with
+        the parent's view and flagging ``is_skipped_in_base_call=True`` so the
+        constructor generator skips it; ``is_overridden_const`` is preserved
+        so the override-getter detection and emission paths still see that
+        the grandchild is overriding a const discriminator.
         """
         base_fields: list[FieldDef] = []
 
@@ -503,7 +515,20 @@ class SchemaAnalyzer:
                 base_fields.extend(self._analyze_allof_base_properties(ancestor_def.body, extension, class_name))
 
         if allof_node.extension:
-            base_fields.extend(self._analyze_base_properties(allof_node.extension, extension, class_name))
+            ancestor_names = {f.name for f in base_fields}
+            parent_fields = self._analyze_base_properties(allof_node.extension, extension, class_name)
+            for pf in parent_fields:
+                if pf.name in ancestor_names:
+                    # Drop the ancestor's view; the parent's view supersedes it.
+                    base_fields = [f for f in base_fields if f.name != pf.name]
+                    if pf.is_const:
+                        # Parent constified at its level → grandchild's base()
+                        # call must skip it (the parent's constructor doesn't
+                        # take it as a parameter). Keep is_overridden_const so
+                        # the override-getter emission still detects the
+                        # virtual discriminator on the base.
+                        pf.is_skipped_in_base_call = True
+                base_fields.append(pf)
 
         return base_fields
 

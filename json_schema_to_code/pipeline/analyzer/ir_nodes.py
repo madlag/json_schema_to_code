@@ -77,6 +77,15 @@ class FieldDef:
     # or inherited (use variable name)
     is_overridden_const: bool = False
 
+    # Set on a base_field when the immediate parent class already constified
+    # the field at its own level (typical multi-level allOf chain). The
+    # parent's constructor absorbs the const internally and does NOT take it
+    # as a parameter, so a derived class's ``base(...)`` call must skip this
+    # field — even if the derived class re-overrides the const value (which
+    # is then expressed via the C# ``override`` getter on the derived class
+    # itself, not via the constructor).
+    is_skipped_in_base_call: bool = False
+
     # For C# interface implementation
     is_interface_property: bool = False
     interface_property_name: str | None = None

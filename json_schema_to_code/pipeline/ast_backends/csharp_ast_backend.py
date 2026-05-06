@@ -284,6 +284,12 @@ class CSharpAstBackend(AstBackend):
 
         # Base class fields first
         for field in class_def.base_fields:
+            if field.is_skipped_in_base_call:
+                # The immediate parent constified this field at its own level;
+                # the parent's constructor doesn't take it as a parameter.
+                # The override-getter on this class (if any) handles the new
+                # const value at runtime; nothing to do here.
+                continue
             if field.is_const:
                 if field.is_overridden_const:
                     # This class turns a non-const parent field into a const.
