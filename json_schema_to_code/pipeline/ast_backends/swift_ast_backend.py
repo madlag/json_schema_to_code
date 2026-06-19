@@ -98,12 +98,21 @@ class SwiftAstBackend(AstBackend):
     FILE_EXTENSION = "swift"
 
     TYPE_MAP = {
+        # JSON Schema primitive names
         "integer": "Int",
         "string": "String",
         "boolean": "Bool",
         "number": "Double",
         "null": "Void",
         "object": "AnyCodable",
+        # Normalized/native spellings (base-class fields surface these, e.g. "int"/"bool")
+        "int": "Int",
+        "str": "String",
+        "bool": "Bool",
+        "float": "Double",
+        "double": "Double",
+        "any": "AnyCodable",
+        "Any": "AnyCodable",
     }
 
     def __init__(self, config: CodeGeneratorConfig):
@@ -205,14 +214,25 @@ class SwiftAstBackend(AstBackend):
         if not field.type_ref:
             return None
         swift_type = self.translate_type(field.type_ref)
+        is_optional = field.type_ref.is_nullable
         default = None
         if field.has_default:
             default = self.format_default_value(field.default_value, field.type_ref)
+
+        # Bare `AnyCodable` (schema object/Any) has no compile-time literal default. Drop the
+        # default and make the property optional so a missing key decodes to nil (tolerant).
+        base_type = swift_type[:-1] if swift_type.endswith("?") else swift_type
+        if base_type == "AnyCodable" and default is not None:
+            default = None
+            is_optional = True
+            if not swift_type.endswith("?"):
+                swift_type += "?"
+
         return SwiftProperty(
             name=self._swift_ident(self._lower_camel(field.name)),
             type_name=swift_type,
             json_key=field.original_name or field.name,
-            is_optional=field.type_ref.is_nullable,
+            is_optional=is_optional,
             default_value=default,
             comment=field.comment,
         )

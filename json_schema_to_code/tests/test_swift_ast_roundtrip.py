@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
+from json_schema_to_code.pipeline.analyzer.ir_nodes import TypeKind, TypeRef
+from json_schema_to_code.pipeline.ast_backends.swift_ast_backend import SwiftAstBackend
 from json_schema_to_code.pipeline.config import MergeStrategy
 from json_schema_to_code.pipeline.merger import SwiftAstMerger
 
@@ -159,3 +161,34 @@ def test_merge_preserves_custom_code():
     # The generator-owned init(from:) extension must not be duplicated.
     assert merged.count("init(from decoder: Decoder)") == 1
     _swiftc_typecheck(merged)
+
+
+def test_native_primitive_spellings_map_to_swift():
+    """Base-class fields surface native spellings (int/bool/float/str), not JSON Schema names."""
+    backend = SwiftAstBackend(CodeGeneratorConfig())
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="int")) == "Int"
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="bool")) == "Bool"
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="float")) == "Double"
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="str")) == "String"
+    # JSON Schema spellings still work too.
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="integer")) == "Int"
+    assert backend.translate_type(TypeRef(kind=TypeKind.PRIMITIVE, name="boolean")) == "Bool"
+
+
+def test_anycodable_field_with_default_is_optional_without_literal():
+    """A bare object/Any field with a default has no Swift literal: make it optional, drop default."""
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+            "TestClass": {
+                "type": "object",
+                "properties": {
+                    "extra": {"type": "object", "default": {}},
+                },
+            }
+        },
+    }
+    code = _gen(schema, "TestClass")
+    assert "var extra: AnyCodable = [:]" not in code  # would not compile
+    assert "extra: AnyCodable?" in code
+    _swiftc_typecheck(code)
