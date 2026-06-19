@@ -1,0 +1,107 @@
+[
+  {
+    "name": "swift_basic_struct",
+    "description": "Swift struct: primitives, optional, defaults, array, dict, enum field, reserved keyword",
+    "config": {"use_inline_unions": true},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Color": {"type": "string", "enum": ["red", "green", "blue_ish"]},
+        "TestClass": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "integer"},
+            "ratio": {"type": "number"},
+            "is_active": {"type": "boolean", "default": true},
+            "nickname": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+            "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+            "links": {"type": "object", "additionalProperties": {"type": "integer"}},
+            "color": {"$ref": "#/definitions/Color", "default": "red"},
+            "class": {"type": "string", "default": "x"}
+          },
+          "required": ["id", "ratio", "links"]
+        }
+      }
+    },
+    "expected_swift": [
+      "import Foundation",
+      "enum Color: String, Codable {",
+      "case blueIsh = \"blue_ish\"",
+      "struct TestClass: Codable {",
+      "let id: Int",
+      "let ratio: Double",
+      "var isActive: Bool = true",
+      "let nickname: String?",
+      "var tags: [String] = []",
+      "let links: [String: Int]",
+      "var color: Color = .red",
+      "var `class`: String = \"x\"",
+      "case isActive = \"is_active\"",
+      "extension TestClass {",
+      "self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true",
+      "self.id = try container.decode(Int.self, forKey: .id)"
+    ]
+  },
+  {
+    "name": "swift_allof_flatten",
+    "description": "Swift: plain allOf inheritance flattens base fields into the child struct (no enum)",
+    "config": {"use_inline_unions": true},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Base": {
+          "type": "object",
+          "properties": {"kind": {"type": "string"}, "shared": {"type": "integer"}},
+          "required": ["kind"]
+        },
+        "Child": {
+          "allOf": [
+            {"$ref": "#/definitions/Base"},
+            {"type": "object", "properties": {"extra": {"type": "string"}}, "required": ["extra"]}
+          ]
+        }
+      }
+    },
+    "expected_swift": [
+      "struct Base: Codable {",
+      "struct Child: Codable {",
+      "let kind: String",
+      "let extra: String"
+    ]
+  },
+  {
+    "name": "swift_discriminated_union",
+    "description": "Swift: oneOf with discriminator becomes a discriminated enum dispatching on the key",
+    "config": {"use_inline_unions": true},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "ImageWidget": {
+          "type": "object",
+          "properties": {"type": {"const": "image"}, "url": {"type": "string"}},
+          "required": ["type", "url"]
+        },
+        "TextWidget": {
+          "type": "object",
+          "properties": {"type": {"const": "text"}, "text": {"type": "string"}},
+          "required": ["type", "text"]
+        },
+        "Widget": {
+          "oneOf": [{"$ref": "#/definitions/ImageWidget"}, {"$ref": "#/definitions/TextWidget"}],
+          "discriminator": {"propertyName": "type"}
+        }
+      }
+    },
+    "expected_swift": [
+      "enum Widget: Codable {",
+      "case imageWidget(ImageWidget)",
+      "case textWidget(TextWidget)",
+      "case discriminator = \"type\"",
+      "case \"image\": self = .imageWidget(try ImageWidget(from: decoder))",
+      "func encode(to encoder: Encoder) throws",
+      "case .imageWidget(let value): try value.encode(to: encoder)",
+      "struct ImageWidget: Codable {",
+      "var type: String = \"image\""
+    ]
+  }
+]

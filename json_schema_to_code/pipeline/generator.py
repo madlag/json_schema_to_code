@@ -12,7 +12,7 @@ from typing import Any
 from .. import __version__
 from ..cli_utils import reconstruct_command_line
 from .analyzer import SchemaAnalyzer
-from .ast_backends import AstBackend, CSharpAstBackend, PythonAstBackend
+from .ast_backends import AstBackend, CSharpAstBackend, PythonAstBackend, SwiftAstBackend
 from .config import CodeGeneratorConfig, OutputMode
 from .formatters import RuffFormatter
 from .merger import AtomicWriter, CodeMergeError, PythonAstMerger
@@ -64,6 +64,8 @@ class PipelineGenerator:
             return PythonAstBackend(self.config)
         elif self.language == "cs":
             return CSharpAstBackend(self.config)
+        elif self.language == "swift":
+            return SwiftAstBackend(self.config)
         else:
             raise ValueError(f"Unsupported language: {self.language}")
 
@@ -176,7 +178,11 @@ class PipelineGenerator:
 
     def _get_language_for_writer(self) -> str:
         """Get the language string for the atomic writer."""
-        return "python" if self.language == "python" else "cs"
+        if self.language == "python":
+            return "python"
+        if self.language == "swift":
+            return "swift"
+        return "cs"
 
     def _create_merger(self):
         """Create the appropriate merger for the language."""
@@ -187,5 +193,10 @@ class PipelineGenerator:
             from .merger import CSharpAstMerger
 
             return CSharpAstMerger()
+        elif self.language == "swift":
+            # Import here to avoid dependency issues if tree-sitter not installed
+            from .merger import SwiftAstMerger
+
+            return SwiftAstMerger()
         else:
             raise ValueError(f"No merger available for language: {self.language}")

@@ -1,0 +1,161 @@
+"""
+Swift backend tests: generation, tree-sitter merge roundtrip, and (when a Swift
+toolchain is present) a real ``swiftc -typecheck`` of the generated output.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+import pytest
+
+from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
+from json_schema_to_code.pipeline.config import MergeStrategy
+from json_schema_to_code.pipeline.merger import SwiftAstMerger
+
+# Minimal AnyCodable shim so generated code referencing it can be type-checked.
+ANY_CODABLE = """
+import Foundation
+
+struct AnyCodable: Codable {
+    let value: Any
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let v = try? c.decode(Bool.self) { value = v }
+        else if let v = try? c.decode(Int.self) { value = v }
+        else if let v = try? c.decode(Double.self) { value = v }
+        else if let v = try? c.decode(String.self) { value = v }
+        else if let v = try? c.decode([AnyCodable].self) { value = v }
+        else if let v = try? c.decode([String: AnyCodable].self) { value = v }
+        else { value = () }
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch value {
+        case let v as Bool: try c.encode(v)
+        case let v as Int: try c.encode(v)
+        case let v as Double: try c.encode(v)
+        case let v as String: try c.encode(v)
+        case let v as [AnyCodable]: try c.encode(v)
+        case let v as [String: AnyCodable]: try c.encode(v)
+        default: try c.encodeNil()
+        }
+    }
+}
+"""
+
+BASIC_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "Color": {"type": "string", "enum": ["red", "green", "blue_ish"]},
+        "TestClass": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "is_active": {"type": "boolean", "default": True},
+                "nickname": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+                "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+                "links": {"type": "object", "additionalProperties": {"type": "integer"}},
+                "color": {"$ref": "#/definitions/Color", "default": "red"},
+            },
+            "required": ["id", "links"],
+        },
+    },
+}
+
+POLY_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "ImageWidget": {
+            "type": "object",
+            "properties": {"type": {"const": "image"}, "url": {"type": "string"}},
+            "required": ["type", "url"],
+        },
+        "TextWidget": {
+            "type": "object",
+            "properties": {"type": {"const": "text"}, "text": {"type": "string"}},
+            "required": ["type", "text"],
+        },
+        "Widget": {
+            "oneOf": [{"$ref": "#/definitions/ImageWidget"}, {"$ref": "#/definitions/TextWidget"}],
+            "discriminator": {"propertyName": "type"},
+        },
+    },
+}
+
+
+def _gen(schema, name, comment=False):
+    cfg = CodeGeneratorConfig()
+    cfg.use_inline_unions = True
+    cfg.add_generation_comment = comment
+    return PipelineGenerator(name, schema, cfg, "swift").generate()
+
+
+def _swiftc_typecheck(*sources: str) -> None:
+    """Type-check Swift sources; skip if no swiftc toolchain is available."""
+    if shutil.which("swiftc") is None:
+        pytest.skip("swiftc not available")
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "AnyCodable.swift").write_text(ANY_CODABLE)
+        for i, src in enumerate(sources):
+            (d / f"Source{i}.swift").write_text(src)
+        files = [str(p) for p in d.glob("*.swift")]
+        result = subprocess.run(
+            ["swiftc", "-typecheck", "-swift-version", "6", *files],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"swiftc failed:\n{result.stderr}"
+
+
+def test_basic_struct_generates_expected_swift():
+    code = _gen(BASIC_SCHEMA, "TestClass")
+    assert "struct TestClass: Codable {" in code
+    assert "var isActive: Bool = true" in code
+    assert "let nickname: String?" in code
+    assert 'case isActive = "is_active"' in code
+    assert "decodeIfPresent(Bool.self, forKey: .isActive) ?? true" in code
+    assert "enum Color: String, Codable {" in code
+
+
+def test_discriminated_union_generates_enum():
+    code = _gen(POLY_SCHEMA, "Widget")
+    assert "enum Widget: Codable {" in code
+    assert "case imageWidget(ImageWidget)" in code
+    assert 'case "image": self = .imageWidget(try ImageWidget(from: decoder))' in code
+    assert code.count("init(from decoder: Decoder)") >= 1
+
+
+def test_generated_swift_typechecks():
+    _swiftc_typecheck(_gen(BASIC_SCHEMA, "TestClass"), _gen(POLY_SCHEMA, "Widget"))
+
+
+def test_merge_preserves_custom_code():
+    generated = _gen(BASIC_SCHEMA, "TestClass")
+
+    # Simulate user edits: custom import, custom member, custom extension, helper, marked section.
+    insert_member = '\n    func describe() -> String { return "id=\\(id)" }\n'
+    existing = generated.replace("import Foundation", "import Foundation\nimport Combine", 1)
+    existing = existing.replace(
+        "    enum CodingKeys: String, CodingKey {",
+        insert_member + "    enum CodingKeys: String, CodingKey {",
+        1,
+    )
+    existing += (
+        "\nextension TestClass: Identifiable {\n    var customId: Int { id }\n}\n" "\nstruct Helper {\n    let x: Int\n}\n" "\n// CUSTOM CODE START\nlet globalConstant = 42\n// CUSTOM CODE END\n"
+    )
+
+    merged = SwiftAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
+
+    assert "func describe()" in merged
+    assert "extension TestClass: Identifiable {" in merged
+    assert "struct Helper {" in merged
+    assert "import Combine" in merged
+    assert "globalConstant = 42" in merged
+    # The generator-owned init(from:) extension must not be duplicated.
+    assert merged.count("init(from decoder: Decoder)") == 1
+    _swiftc_typecheck(merged)

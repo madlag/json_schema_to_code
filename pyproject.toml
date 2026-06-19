@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "json_schema_to_code"
 version = "1.0.1"
-description = "Generate strongly-typed classes from JSON Schema definitions for Python and C#"
+description = "Generate strongly-typed classes from JSON Schema definitions for Python, C# and Swift"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "François Lagunas", email = "francois.lagunas@gmail.com"}
 ]
-keywords = ["json", "schema", "code", "generation", "python", "csharp", "dataclass", "template"]
+keywords = ["json", "schema", "code", "generation", "python", "csharp", "swift", "dataclass", "template"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
@@ -33,6 +33,7 @@ dev = [
     "ruff>=0.1.0",
     "tree-sitter>=0.21.0",
     "tree-sitter-c-sharp>=0.21.0",
+    "tree-sitter-swift>=0.7.0",
 ]
 
 [project.scripts]
