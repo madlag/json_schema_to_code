@@ -70,6 +70,10 @@ class SchemaAnalyzer:
         self.name_mapping: NameMapping | None = None
         self.ref_resolver: ReferenceResolver | None = None
 
+        # Bases that are genuine discriminated unions / known-subtypes bases (not plain allOf
+        # inheritance). Used by the Swift backend to choose a discriminated enum over a struct.
+        self.polymorphic_bases: set[str] = set()
+
         # Track subclass relationships
         # base -> [(name, discriminator), ...]
         self.subclasses: dict[str, list[tuple[str, str]]] = {}
@@ -109,17 +113,20 @@ class SchemaAnalyzer:
         for def_node in classes_to_generate:
             class_def = self._analyze_definition(def_node)
             if class_def:
+                self._mark_polymorphic_base(class_def)
                 ir.classes.append(class_def)
 
         # Add inline classes
         inline_classes = self._collect_inline_classes()
         for class_def in inline_classes:
+            self._mark_polymorphic_base(class_def)
             ir.classes.append(class_def)
 
         # Add root class if needed
         if ast.root_node:
             root_class = self._analyze_root_node()
             if root_class:
+                self._mark_polymorphic_base(root_class)
                 ir.classes.insert(0, root_class)
 
         # Add type aliases
@@ -139,6 +146,11 @@ class SchemaAnalyzer:
 
         return ir
 
+    def _mark_polymorphic_base(self, class_def: ClassDef) -> None:
+        """Flag genuine discriminated-union / known-subtypes bases (Swift emits an enum for these)."""
+        if class_def.name in self.polymorphic_bases:
+            class_def.is_polymorphic_base = True
+
     def _build_inheritance_graph(self) -> None:
         """Build the inheritance graph from allOf and anyOf/oneOf relationships."""
         for def_node in self.ast.definitions:
@@ -146,9 +158,10 @@ class SchemaAnalyzer:
             if isinstance(def_node.body, AllOfNode):
                 self._process_allof_inheritance(def_node)
 
-            # Handle anyOf/oneOf discriminated unions (C# only)
-            # For anyOf/oneOf with all $refs, the union type becomes a base class
-            if self.language == "cs" and isinstance(def_node.body, UnionNode):
+            # Handle anyOf/oneOf discriminated unions (C# and Swift)
+            # For anyOf/oneOf with all $refs, the union type becomes a polymorphic base
+            # (a base class in C#, a discriminated enum in Swift).
+            if self.language in ("cs", "swift") and isinstance(def_node.body, UnionNode):
                 self._process_union_discriminated_type(def_node)
 
     def _process_allof_inheritance(self, def_node: DefinitionNode) -> None:
@@ -167,8 +180,13 @@ class SchemaAnalyzer:
         # Store discriminator property name for the base (from base definition's raw schema)
         defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
         base_original_name = allof.base_ref.ref_path.split("/")[-1]
-        disc_prop = defs.get(base_original_name, {}).get("discriminator", {}).get("propertyName", "type")
+        base_raw_def = defs.get(base_original_name, {})
+        disc_prop = base_raw_def.get("discriminator", {}).get("propertyName", "type")
         self.discriminator_property_by_base[base_class_name] = disc_prop
+        # Only an explicit "discriminator" on the base makes this a polymorphic union;
+        # plain allOf inheritance (no discriminator) keeps the base as a normal struct in Swift.
+        if isinstance(base_raw_def, dict) and "discriminator" in base_raw_def:
+            self.polymorphic_bases.add(base_class_name)
 
         # Find discriminator value from const in extension (property name may be "type" or e.g. "action_type")
         discriminator = class_name
@@ -219,6 +237,8 @@ class SchemaAnalyzer:
         defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
         disc_prop = defs.get(def_node.original_name, {}).get("discriminator", {}).get("propertyName", "type")
         self.discriminator_property_by_base[base_class_name] = disc_prop
+        # A oneOf/anyOf of $refs is always a genuine discriminated union.
+        self.polymorphic_bases.add(base_class_name)
 
         if base_class_name not in self.subclasses:
             self.subclasses[base_class_name] = []
@@ -343,14 +363,15 @@ class SchemaAnalyzer:
             )
             self.type_aliases[class_name] = alias
 
-            # For C#, we still generate a base class if discriminated
-            if self.language == "cs" and class_name in self.subclasses:
+            # For C#/Swift, we still generate a polymorphic base if discriminated
+            if self.language in ("cs", "swift") and class_name in self.subclasses:
                 disc_prop = self.discriminator_property_by_base.get(class_name, "type")
                 return ClassDef(
                     name=class_name,
                     original_name=def_node.original_name,
                     subclasses=self.subclasses.get(class_name, []),
                     discriminator_property=disc_prop,
+                    is_polymorphic_base=True,
                 )
 
             return None
@@ -673,22 +694,33 @@ class SchemaAnalyzer:
         subclasses = self.subclasses.get(class_name, [])
         disc_prop = self.discriminator_property_by_base.get(class_name, "type") if subclasses else None
         # If no subclasses in same schema, still respect discriminator on this definition (polymorphic base in another file)
-        if disc_prop is None and self.language == "cs":
+        if disc_prop is None and self.language in ("cs", "swift"):
             defs = self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {}
             raw_def = defs.get(def_node.original_name, {})
             if isinstance(raw_def, dict) and "discriminator" in raw_def:
                 disc_prop = raw_def.get("discriminator", {}).get("propertyName", "type")
         # Cross-schema known subtypes declared via x-csharp-known-subtypes
+        # (Swift reads x-swift-known-subtypes first, falling back to the C# key).
         external_subtypes = []
         subtype_usings = []
-        if self.language == "cs":
+        if self.language in ("cs", "swift"):
             defs = defs if "defs" in dir() else (self.ast.raw_schema.get("$defs") or self.ast.raw_schema.get("definitions") or {})
             raw_def = defs.get(def_node.original_name, {}) if isinstance(defs, dict) else {}
-            known = raw_def.get("x-csharp-known-subtypes", []) if isinstance(raw_def, dict) else []
-            for entry in known:
+            known = None
+            if isinstance(raw_def, dict):
+                if self.language == "swift":
+                    known = raw_def.get("x-swift-known-subtypes")
+                if not known:
+                    known = raw_def.get("x-csharp-known-subtypes", [])
+            for entry in known or []:
                 external_subtypes.append((entry["class"], entry["value"]))
-                if "using" in entry:
+                # C# needs per-type 'using' namespaces; Swift has a single module, so ignore.
+                if self.language == "cs" and "using" in entry:
                     subtype_usings.append(entry["using"])
+            # Known-subtypes or an explicit discriminator make this object a polymorphic base.
+            raw_def_for_poly = defs.get(def_node.original_name, {}) if isinstance(defs, dict) else {}
+            if external_subtypes or (isinstance(raw_def_for_poly, dict) and "discriminator" in raw_def_for_poly):
+                self.polymorphic_bases.add(class_name)
 
         class_def = ClassDef(
             name=class_name,

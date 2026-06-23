@@ -83,6 +83,12 @@ def test_functional_generation(test_case):
         for expected in test_case["expected_cs"]:
             assert expected in generated_code, f"Expected pattern '{expected}' not found in C# output"
 
+    # Test Swift generation if specified
+    if "expected_swift" in test_case:
+        generated_code = _generate_code(schema, config, "swift")
+        for expected in test_case["expected_swift"]:
+            assert expected in generated_code, f"Expected pattern '{expected}' not found in Swift output"
+
     # Test contains patterns if specified
     if "expected_contains" in test_case:
         language = test_case.get("test_language", "python")

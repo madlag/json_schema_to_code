@@ -11,11 +11,13 @@ from .atomic_writer import AtomicWriter
 from .base import AstMerger, CodeMergeError
 from .csharp_merger import CSharpAstMerger
 from .python_merger import PythonAstMerger
+from .swift_merger import SwiftAstMerger
 
 __all__ = [
     "AstMerger",
     "CodeMergeError",
     "PythonAstMerger",
     "CSharpAstMerger",
+    "SwiftAstMerger",
     "AtomicWriter",
 ]

@@ -129,6 +129,10 @@ class ClassDef:
     subclasses: list[tuple[str, str]] = field(default_factory=list)  # [(name, discriminator), ...]
     # JSON property used for discriminator (e.g. "type", "action_type"). None => "type" in C# backend.
     discriminator_property: str | None = None
+    # True when this is a genuine discriminated-union / known-subtypes base (oneOf/anyOf or an
+    # explicit "discriminator" / x-*-known-subtypes), as opposed to a plain allOf inheritance base.
+    # The Swift backend emits a discriminated enum only for these; plain inheritance bases stay structs.
+    is_polymorphic_base: bool = False
     # C# using directives required by cross-schema known subtypes
     subtype_usings: list[str] = field(default_factory=list)
 
