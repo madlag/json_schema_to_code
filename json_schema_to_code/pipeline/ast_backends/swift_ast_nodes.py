@@ -56,6 +56,8 @@ class SwiftEnum(SwiftNode):
     raw_type: str = "String"
     cases: list[SwiftEnumCase] = field(default_factory=list)
     comment: str | None = None
+    conformances: list[str] = field(default_factory=lambda: ["Codable"])
+    nonisolated: bool = False
 
 
 @dataclass
@@ -64,6 +66,7 @@ class SwiftStruct(SwiftNode):
 
     name: str = ""
     conformances: list[str] = field(default_factory=lambda: ["Codable"])
+    nonisolated: bool = False
     properties: list[SwiftProperty] = field(default_factory=list)
     # Emit a custom init(from:) (in an extension) so property defaults are applied
     # for missing keys -- Swift's synthesized Codable ignores property defaults.
@@ -93,6 +96,8 @@ class SwiftPolyEnum(SwiftNode):
     discriminator_key: str = "type"
     cases: list[SwiftPolyEnumCase] = field(default_factory=list)
     comment: str | None = None
+    conformances: list[str] = field(default_factory=lambda: ["Codable"])
+    nonisolated: bool = False
 
 
 @dataclass

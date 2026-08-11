@@ -133,7 +133,7 @@ class SwiftAstBackend(AstBackend):
         self.class_field_map = {}
         for class_def in ir.classes:
             if class_def.is_enum and class_def.enum_def:
-                self.enum_value_to_member[class_def.name] = {json_value: self._swift_ident(self._lower_camel(member)) for member, json_value in class_def.enum_def.members.items()}
+                self.enum_value_to_member[class_def.name] = {json_value: self._enum_case_name(member) for member, json_value in class_def.enum_def.members.items()}
             elif not (class_def.is_polymorphic_base and class_def.subclasses):
                 self.class_field_map[class_def.name] = {f.original_name or f.name: f for f in (class_def.base_fields + class_def.fields)}
 
@@ -159,11 +159,16 @@ class SwiftAstBackend(AstBackend):
         if not enum_def:
             return None
         raw_type = "Int" if enum_def.value_type == "integer" else "String"
-        node = SwiftEnum(name=class_def.name, raw_type=raw_type)
+        node = SwiftEnum(
+            name=class_def.name,
+            raw_type=raw_type,
+            conformances=list(self.config.swift_conformances),
+            nonisolated=self.config.swift_nonisolated,
+        )
         for member, json_value in enum_def.members.items():
             node.cases.append(
                 SwiftEnumCase(
-                    name=self._swift_ident(self._lower_camel(member)),
+                    name=self._enum_case_name(member),
                     raw_value=str(json_value),
                 )
             )
@@ -171,7 +176,12 @@ class SwiftAstBackend(AstBackend):
 
     def _generate_poly_enum(self, class_def: ClassDef) -> SwiftPolyEnum:
         disc_key = class_def.discriminator_property or "type"
-        node = SwiftPolyEnum(name=class_def.name, discriminator_key=disc_key)
+        node = SwiftPolyEnum(
+            name=class_def.name,
+            discriminator_key=disc_key,
+            conformances=list(self.config.swift_conformances),
+            nonisolated=self.config.swift_nonisolated,
+        )
         for subtype_name, disc_value in class_def.subclasses:
             node.cases.append(
                 SwiftPolyEnumCase(
@@ -183,7 +193,11 @@ class SwiftAstBackend(AstBackend):
         return node
 
     def _generate_struct(self, class_def: ClassDef) -> SwiftStruct:
-        node = SwiftStruct(name=class_def.name)
+        node = SwiftStruct(
+            name=class_def.name,
+            conformances=list(self.config.swift_conformances),
+            nonisolated=self.config.swift_nonisolated,
+        )
 
         # Flatten base fields + own fields; own fields override base fields by JSON key.
         ordered: list[FieldDef] = []
@@ -219,6 +233,17 @@ class SwiftAstBackend(AstBackend):
         if field.has_default:
             default = self.format_default_value(field.default_value, field.type_ref)
 
+        # x-swift-type: emit the client-provided type verbatim. A trailing "?" makes it
+        # optional (decoded via decodeIfPresent); defaults are kept only for empty
+        # container literals, which format the same for any element type.
+        if field.swift_type_override:
+            swift_type = field.swift_type_override
+            is_optional = swift_type.endswith("?")
+            if is_optional:
+                default = None
+            elif default is not None and default not in ("[]", "[:]"):
+                default = None
+
         # Bare `AnyCodable` (schema object/Any) has no compile-time literal default. Drop the
         # default and make the property optional so a missing key decodes to nil (tolerant).
         base_type = swift_type[:-1] if swift_type.endswith("?") else swift_type
@@ -227,6 +252,13 @@ class SwiftAstBackend(AstBackend):
             is_optional = True
             if not swift_type.endswith("?"):
                 swift_type += "?"
+
+        # Tolerant decoding: a non-required field with neither a default nor
+        # nullability must not hard-fail the whole payload when absent — decode
+        # it as optional instead of `try container.decode`.
+        if default is None and not is_optional and not field.is_required and not field.is_const:
+            is_optional = True
+            swift_type += "?"
 
         return SwiftProperty(
             name=self._swift_ident(self._lower_camel(field.name)),
@@ -337,6 +369,15 @@ class SwiftAstBackend(AstBackend):
         return f"{base_name}(" + ", ".join(items) + ")"
 
     # -------------------------------------------------------------------- helpers
+
+    def _enum_case_name(self, member: str) -> str:
+        # SCREAMING_SNAKE members (x-enum-members style, e.g. TYPE_CHANGE) lower-camel
+        # per letter otherwise ("aDD"); normalize them to snake first -> typeChange.
+        import re
+
+        if re.fullmatch(r"[A-Z0-9_]+", member):
+            member = member.lower()
+        return self._swift_ident(self._lower_camel(member))
 
     def _lower_camel(self, text: str) -> str:
         pascal = self._snake_to_pascal(text)

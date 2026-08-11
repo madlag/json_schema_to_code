@@ -73,6 +73,9 @@ class FieldDef:
     default_value: Any = None
     has_default: bool = False
 
+    # Verbatim Swift type from x-swift-type (e.g. "[NamedWidget]", "JSONValue?")
+    swift_type_override: str | None = None
+
     # For C# keyword escaping
     escaped_name: str | None = None
 

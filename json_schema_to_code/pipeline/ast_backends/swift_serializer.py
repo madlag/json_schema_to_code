@@ -59,7 +59,9 @@ class SwiftSerializer:
         lines: list[str] = []
         if enum.comment:
             lines.append(f"// {enum.comment}")
-        lines.append(f"enum {enum.name}: {enum.raw_type}, Codable {{")
+        prefix = "nonisolated " if enum.nonisolated else ""
+        conformances = ", ".join(enum.conformances)
+        lines.append(f"{prefix}enum {enum.name}: {enum.raw_type}, {conformances} {{")
         for case in enum.cases:
             raw = f'"{case.raw_value}"' if enum.raw_type == "String" else case.raw_value
             lines.append(f"{self.INDENT}case {case.name} = {raw}")
@@ -70,7 +72,9 @@ class SwiftSerializer:
         lines: list[str] = []
         if poly.comment:
             lines.append(f"// {poly.comment}")
-        lines.append(f"enum {poly.name}: Codable {{")
+        prefix = "nonisolated " if poly.nonisolated else ""
+        conformances = ", ".join(poly.conformances)
+        lines.append(f"{prefix}enum {poly.name}: {conformances} {{")
         for case in poly.cases:
             lines.append(f"{self.INDENT}case {case.name}({case.concrete_type})")
         lines.append("")
@@ -98,7 +102,10 @@ class SwiftSerializer:
         lines.append(f"{self.INDENT}}}")
         lines.append("")
 
-        # encode(to:)
+        # encode(to:) — only when the type actually encodes
+        if not any(c in ("Codable", "Encodable") for c in poly.conformances):
+            lines.append("}")
+            return lines
         lines.append(f"{self.INDENT}func encode(to encoder: Encoder) throws {{")
         lines.append(f"{self.INDENT}{self.INDENT}switch self {{")
         for case in poly.cases:
@@ -114,8 +121,9 @@ class SwiftSerializer:
         lines: list[str] = []
         if struct.comment:
             lines.append(f"// {struct.comment}")
+        prefix = "nonisolated " if struct.nonisolated else ""
         conformances = ", ".join(struct.conformances)
-        lines.append(f"struct {struct.name}: {conformances} {{")
+        lines.append(f"{prefix}struct {struct.name}: {conformances} {{")
 
         for prop in struct.properties:
             keyword = "var" if prop.default_value is not None else "let"
@@ -139,7 +147,10 @@ class SwiftSerializer:
         # Custom decoder in an extension (keeps the synthesized memberwise init available).
         if struct.needs_custom_decoder:
             lines.append("")
-            lines.append(f"extension {struct.name} {{")
+            # nonisolated must be restated: an extension is its own isolation scope,
+            # so under default-MainActor projects the decoder witness would otherwise
+            # be @MainActor while the conformance is nonisolated.
+            lines.append(f"{prefix}extension {struct.name} {{")
             lines.append(f"{self.INDENT}init(from decoder: Decoder) throws {{")
             lines.append(f"{self.INDENT}{self.INDENT}let container = try decoder.container(keyedBy: CodingKeys.self)")
             for prop in struct.properties:

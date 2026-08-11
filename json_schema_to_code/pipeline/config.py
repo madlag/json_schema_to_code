@@ -79,6 +79,12 @@ class CodeGeneratorConfig:
     # Add generation comment at top of file
     add_generation_comment: bool = True
 
+    # Protocol conformances for generated Swift types (structs and enums)
+    swift_conformances: list[str] = field(default_factory=lambda: ["Codable"])
+
+    # Prefix generated Swift types with `nonisolated` (strict-concurrency projects)
+    swift_nonisolated: bool = False
+
     # Types to quote for Python (forward references)
     quoted_types_for_python: list[str] = field(default_factory=list)
 

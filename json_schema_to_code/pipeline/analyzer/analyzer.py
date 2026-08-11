@@ -412,6 +412,21 @@ class SchemaAnalyzer:
             class_def.extra_base_classes.append(extra_resolved.target_name)
             if extra_resolved.is_external and self.language == "python":
                 self._register_external_import(extra_resolved)
+            # Swift has no multiple inheritance: mixin ($ref beyond the first) properties
+            # are flattened into the struct. _analyze_properties (not the base-properties
+            # path) so schema defaults survive into the generated decode.
+            if self.language == "swift":
+                extra_def = self.ref_resolver.get_definition(extra_ref.ref_path.split("/")[-1])
+                if extra_def and isinstance(extra_def.body, ObjectNode):
+                    class_def.base_fields += self._analyze_properties(extra_def.body, class_name)
+                elif extra_resolved.is_external:
+                    ext_def = self.ref_resolver.load_external_definition(
+                        extra_resolved.external_path, extra_resolved.class_name_in_external
+                    )
+                    if ext_def:
+                        class_def.base_fields += self._analyze_external_base_properties(
+                            ext_def, allof.extension, class_name, extra_resolved.external_path
+                        )
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
@@ -478,6 +493,15 @@ class SchemaAnalyzer:
                 original_name=base_prop.name,
                 is_required=base_prop.is_required,
             )
+            # Swift flattens base fields into the struct, so schema defaults must
+            # survive for the decode to stay lenient (decodeIfPresent ?? default).
+            # C#/Python keep base fields as constructor params, where a default
+            # would change signatures — leave them untouched.
+            if self.language == "swift" and base_prop.has_default and base_prop.default_value is not None:
+                field_def.has_default = True
+                field_def.default_value = base_prop.default_value
+            if base_prop.type_node:
+                field_def.swift_type_override = base_prop.type_node.metadata.get("x-swift-type")
 
             # Set type_ref for C# constructor parameter types
             if base_prop.type_node:
@@ -622,6 +646,13 @@ class SchemaAnalyzer:
                 original_name=prop_name,
                 is_required=prop_name in required,
             )
+            # Same as _analyze_base_properties: Swift needs the schema default so
+            # the flattened field decodes leniently. `default: null` is treated as
+            # no-default — the field then falls back to optional decoding.
+            if self.language == "swift" and prop_schema.get("default") is not None:
+                field_def.has_default = True
+                field_def.default_value = prop_schema["default"]
+            field_def.swift_type_override = prop_schema.get("x-swift-type")
 
             # Set type_ref based on JSON schema type
             field_def.type_ref = self._type_ref_from_json_schema(prop_schema, prop_name in required)
@@ -802,6 +833,8 @@ class SchemaAnalyzer:
             has_default=prop.has_default,
             default_value=prop.default_value,
         )
+        if prop.type_node:
+            field_def.swift_type_override = prop.type_node.metadata.get("x-swift-type")
 
         # Escape C# keywords
         if self.language == "cs":
