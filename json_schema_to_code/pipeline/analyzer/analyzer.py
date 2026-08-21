@@ -937,6 +937,8 @@ class SchemaAnalyzer:
         if resolved.is_external and self.language == "python":
             self._register_external_import(resolved)
 
+        self._apply_type_overrides(type_ref, node.metadata)
+
         return type_ref
 
     def _analyze_primitive_type(self, node: PrimitiveNode, is_required: bool) -> TypeRef:
@@ -1220,6 +1222,8 @@ class SchemaAnalyzer:
             type_ref.default_value = node.metadata["default"]
         elif not is_required and not is_nullable:
             type_ref.is_nullable = True
+
+        self._apply_type_overrides(type_ref, node.metadata)
 
         return type_ref
 

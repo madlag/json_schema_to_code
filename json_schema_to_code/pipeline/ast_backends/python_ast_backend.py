@@ -218,17 +218,19 @@ def optional_field_in_json(*args, default=None, **kwargs):
         if class_def.is_enum:
             return self._generate_enum_class(class_def)
 
-        # Build decorator list
-        decorators = []
-        if not class_def.subclasses:  # Abstract classes don't get decorators
-            decorators.append(ast.Name(id="dataclass_json", ctx=ast.Load()))
-            decorators.append(
-                ast.Call(
-                    func=ast.Name(id="dataclass", ctx=ast.Load()),
-                    args=[],
-                    keywords=[ast.keyword(arg="kw_only", value=ast.Constant(value=True))],
-                )
-            )
+        # Build decorator list.
+        # Polymorphic bases are decorated too: a subclass's @dataclass only picks
+        # up inherited fields when the base is itself a dataclass, so an
+        # undecorated ABC base silently drops every shared field from the
+        # children's __init__/to_dict.
+        decorators = [
+            ast.Name(id="dataclass_json", ctx=ast.Load()),
+            ast.Call(
+                func=ast.Name(id="dataclass", ctx=ast.Load()),
+                args=[],
+                keywords=[ast.keyword(arg="kw_only", value=ast.Constant(value=True))],
+            ),
+        ]
 
         # Build bases. A concrete base wins over ABC: being marked abstract via
         # ABC is orthogonal to actually inheriting a base's fields, and a class
@@ -511,6 +513,15 @@ def optional_field_in_json(*args, default=None, **kwargs):
 
     def _translate_type_inner(self, type_ref: TypeRef) -> str:
         """Inner type translation without nullable handling."""
+        # An explicit x-python-type wins over anything inferred from the schema:
+        # it is how a schema maps a shape onto a type the generator must not
+        # own (a hand-written class, a plain dict for a foreign wire payload...).
+        if type_ref.override_type_python:
+            for module, name in (("typing", "Any"), ("typing", "Literal")):
+                if name in type_ref.override_type_python:
+                    self.python_imports.add((module, name))
+            return type_ref.override_type_python
+
         if type_ref.kind == TypeKind.PRIMITIVE:
             type_name = self.TYPE_MAP.get(type_ref.name, type_ref.name)
             if type_name == "Any":

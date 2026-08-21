@@ -55,6 +55,12 @@ class TypeRef:
     # Whether this is a nullable type
     is_nullable: bool = False
 
+    # Explicit per-language type overrides (x-python-type / x-csharp-type):
+    # the schema names the type to emit instead of the inferred one, for shapes
+    # the generator must not own (foreign payloads, hand-written classes).
+    override_type_python: str = ""
+    override_type_csharp: str = ""
+
 
 @dataclass
 class FieldDef:
