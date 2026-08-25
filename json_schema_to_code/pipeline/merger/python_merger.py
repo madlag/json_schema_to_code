@@ -147,8 +147,31 @@ class PythonAstMerger(AstMerger):
                     insert_idx += 1
 
         # Add new classes from generated at end
-        for cls in gen_classes.values():
-            new_body.append(cls)
+        new_class_names = set(gen_classes)
+        for node in generated_tree.body:
+            if isinstance(node, ast.ClassDef) and node.name in new_class_names:
+                new_body.append(node)
+
+        # Then new module-level assignments (chiefly union type aliases). The
+        # generator emits every alias in a trailing block, which would leave a new
+        # alias below the classes that annotate with it (F821) and below the classes
+        # it unions (a real NameError, since `A | B` evaluates eagerly). Place each
+        # one just after the last definition it depends on instead.
+        existing_assign_names = self._module_assign_names(existing_tree)
+        for node in generated_tree.body:
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            names = self._assign_target_names(node)
+            if not names or names & existing_assign_names:
+                continue
+            referenced = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)} - names
+            insert_at = len(new_body)
+            for index, placed in enumerate(new_body):
+                defines = {placed.name} if isinstance(placed, ast.ClassDef) else self._assign_target_names(placed)
+                if defines & referenced:
+                    insert_at = index + 1
+            new_body.insert(insert_at, node)
+            existing_assign_names |= names
 
         existing_tree.body = new_body
         ast.fix_missing_locations(existing_tree)
@@ -183,6 +206,22 @@ class PythonAstMerger(AstMerger):
                     "Use --merge-strategy merge to keep it, or --merge-strategy delete to remove it. "
                     f"Location: class '{class_name}', member '{member_name}' at line {line}, column {col}."
                 )
+
+    @staticmethod
+    def _assign_target_names(node: ast.AST) -> set[str]:
+        """Top-level names bound by an assignment (module-level type aliases, constants)."""
+        if isinstance(node, ast.AnnAssign):
+            return {node.target.id} if isinstance(node.target, ast.Name) else set()
+        if isinstance(node, ast.Assign):
+            return {t.id for t in node.targets if isinstance(t, ast.Name)}
+        return set()
+
+    def _module_assign_names(self, tree: ast.Module) -> set[str]:
+        """Every name bound by a module-level assignment in *tree*."""
+        names: set[str] = set()
+        for node in tree.body:
+            names |= self._assign_target_names(node)
+        return names
 
     def _get_class_value_members(self, class_node: ast.ClassDef) -> dict[str, ast.AST]:
         """Return class value members (fields/constants), excluding functions."""

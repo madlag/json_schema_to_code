@@ -1181,3 +1181,67 @@ class TestPythonNoMergeMarkerPersistence:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+def test_merge_adds_new_union_alias_after_its_dependencies():
+    """A new oneOf gains a type alias, placed where it actually resolves.
+
+    The generator emits every alias in one trailing block. Appending that block
+    verbatim would put a new alias below the classes it unions -- a NameError,
+    since ``A | B`` evaluates eagerly -- and below the class annotating with it.
+    """
+    generated = textwrap.dedent(
+        """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        @dataclass
+        class Owner:
+            pet: Pet
+
+        Pet = Cat | Dog
+        """
+    ).strip()
+
+    # The existing file predates Dog/Owner/Pet: only Cat had been generated.
+    existing = textwrap.dedent(
+        """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+            def speak(self) -> str:
+                return "meow"
+        """
+    ).strip()
+
+    merged = PythonAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
+
+    # Hand-written behaviour survives.
+    assert "def speak" in merged
+
+    lines = merged.splitlines()
+
+    def index_of(fragment: str) -> int:
+        return next(i for i, line in enumerate(lines) if fragment in line)
+
+    alias = index_of("Pet = ")
+    assert alias > index_of("class Cat")
+    assert alias > index_of("class Dog")
+    assert alias < index_of("class Owner")
+
+    # And the merged module is importable: eager `A | B` would raise otherwise.
+    namespace: dict = {}
+    exec(compile(merged, "<merged>", "exec"), namespace)
+    assert namespace["Pet"] is not None
