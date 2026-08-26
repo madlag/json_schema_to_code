@@ -186,7 +186,7 @@ class ElementState(str, Enum):
     CORRECT_ANSWER = "C"
 ```
 
-**Note**: `x-enum-members` maps enum values (the keys) to member names (the values). Python and C# both honour it — C# additionally emits a `JsonConverter` mapping the members back to their string values. Swift honours it too, but its lowerCamel conversion mangles all-caps names (`NORMAL` becomes `case nORMAL`), so prefer schema-side names that read well in camelCase when targeting Swift.
+**Note**: `x-enum-members` maps enum values (the keys) to member names (the values). All three languages honour it: C# additionally emits a `JsonConverter` mapping the members back to their string values, and Swift lower-camels the member names (`CORRECT_ANSWER` becomes `case correctAnswer`).
 
 ## Output Examples
 
