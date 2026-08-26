@@ -128,4 +128,4 @@ class CodeGeneratorConfig:
 
 This release represents a major enhancement to the json_schema_to_code package, introducing robust union type support, generation tracking, and comprehensive test coverage. The version 1.0.0 reflects the maturity and stability of these core features.
 
-[1.0.0]: https://github.com/yourusername/json_schema_to_code/releases/tag/v1.0.0
+[1.0.0]: https://github.com/randomwalkteam/json_schema_to_code/releases/tag/v1.0.0

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -40,9 +40,9 @@ dev = [
 json_schema_to_code = "json_schema_to_code.json_schema_to_code:json_schema_to_code"
 
 [project.urls]
-Homepage = "https://github.com/flagunas/json_schema_to_code"
-Repository = "https://github.com/flagunas/json_schema_to_code.git"
-Issues = "https://github.com/flagunas/json_schema_to_code/issues"
+Homepage = "https://github.com/randomwalkteam/json_schema_to_code"
+Repository = "https://github.com/randomwalkteam/json_schema_to_code.git"
+Issues = "https://github.com/randomwalkteam/json_schema_to_code/issues"
 
 [tool.setuptools.packages.find]
 include = ["json_schema_to_code*"]
