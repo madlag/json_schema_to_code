@@ -320,7 +320,19 @@ class SwiftAstMerger(AstMerger):
         return None
 
     def _import_module(self, import_text: str) -> str | None:
+        """The module an import names, ignoring any leading attributes.
+
+        An import may be attributed -- ``@testable import Foo`` in a test target,
+        ``@_exported import Foo`` in an umbrella. Matching only a bare ``import``
+        prefix returned None for those, so the custom-import collector skipped
+        them and the merge dropped them.
+        """
         text = import_text.strip()
+        while text.startswith("@"):
+            head, _, rest = text.partition(" ")
+            if not rest:
+                return None
+            text = rest.strip()
         if text.startswith("import "):
             return text[len("import ") :].strip()
         return None

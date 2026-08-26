@@ -192,3 +192,18 @@ def test_anycodable_field_with_default_is_optional_without_literal():
     assert "var extra: AnyCodable = [:]" not in code  # would not compile
     assert "extra: AnyCodable?" in code
     _swiftc_typecheck(code)
+
+
+def test_merge_preserves_attributed_imports():
+    """An attributed import survives regeneration.
+
+    A generated file that lands in a TEST target has to reach the app module's
+    internal types, which needs `@testable import`. Matching only a bare
+    `import ` prefix dropped it on every merge, so the file stopped compiling.
+    """
+    generated = _gen(BASIC_SCHEMA, "TestClass")
+
+    for attributed in ("@testable import HostApp", "@_exported import Shared"):
+        existing = generated.replace("import Foundation", f"import Foundation\n{attributed}", 1)
+        merged = SwiftAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
+        assert attributed in merged, f"{attributed} was dropped by the merge"
