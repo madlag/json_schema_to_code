@@ -117,6 +117,11 @@ Unknown keys are ignored, so a config file can carry options for several project
 - **`csharp_namespace`**: Namespace to wrap the generated types in
 - **`csharp_additional_usings`**: Extra `using` directives
 
+**Swift specifics**
+
+- **`swift_conformances`** (default `["Codable"]`): Protocols the generated structs and enums conform to, e.g. `["Decodable", "Hashable", "Sendable"]` for a decode-only, strict-concurrency project
+- **`swift_nonisolated`** (default `false`): Prefix generated types with `nonisolated`, and restate it on the `init(from:)` extension — needed under default-MainActor isolation
+
 **External references**
 
 - **`schema_base_path`**: Base directory for resolving external `$ref` paths from disk
@@ -149,7 +154,8 @@ Unknown keys are ignored, so a config file can carry options for several project
 - **Union types**: Multiple type options (`oneOf`)
 - **Const values**: Fixed literal values
 - **Optional properties**: Nullable type generation
-- **Custom enum member names**: Use `x-enum-members` to specify custom Python enum member names
+- **Custom enum member names**: Use `x-enum-members` to specify custom enum member names
+- **Verbatim Swift types**: Use `x-swift-type` on a property to emit a client-provided Swift type as-is (e.g. `"[NamedWidget]"`, `"JSONValue?"`)
 
 ### Custom Enum Member Names
 
@@ -342,10 +348,11 @@ with open('output.py', 'w') as f:
 - Supports nullable reference types
 
 ### Swift Output
-- Generates `struct`s conforming to `Codable`, with an explicit `CodingKeys` enum
+- Generates `struct`s with an explicit `CodingKeys` enum, conforming to whatever `swift_conformances` lists (`Codable` by default)
 - String enums become raw-value `Codable` enums
-- Const-valued fields get a defaulted `init(from:)` in an extension, so they survive a missing key
 - Schema `object` / untyped values map to an `AnyCodable` helper the project must supply
+- **Decoding is deliberately lenient**: a field with a schema default emits as `var x = default` plus `decodeIfPresent ?? default`, and a non-required field with neither default nor nullability becomes optional. One absent or unexpected field cannot throw away an entire payload — which matters when the server is free to add fields ahead of the client.
+- Defaults declared on a base class survive `allOf` flattening, including across external `$ref`s (Swift only; C#/Python constructor signatures are untouched)
 
 ## Architecture
 
