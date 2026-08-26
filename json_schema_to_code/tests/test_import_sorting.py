@@ -54,17 +54,27 @@ def import_block(lines: list[str]) -> list[str]:
     return lines[: last + 1]
 
 
+def groups(block: list[str]) -> list[list[str]]:
+    """Split an import block into its blank-line-separated groups."""
+    out: list[list[str]] = [[]]
+    for line in block:
+        if line:
+            out[-1].append(line)
+        elif out[-1]:
+            out.append([])
+    return [g for g in out if g]
+
+
 def test_import_groups_are_blank_line_separated(tmp_path: Path):
     block = import_block(generate(tmp_path, sort_imports=True))
+    found = groups(block)
 
-    assert block == [
-        "from __future__ import annotations",
-        "",
-        "from dataclasses import dataclass, field",
-        "from enum import Enum",
-        "",
-        "from dataclasses_json import dataclass_json",
-    ]
+    # __future__, then stdlib, then third party -- asserted by group membership rather
+    # than exact names, which shift as the backend's own imports change.
+    assert len(found) == 3, found
+    assert found[0] == ["from __future__ import annotations"]
+    assert all(line.startswith(("from dataclasses import", "from enum import")) for line in found[1]), found[1]
+    assert found[2] == ["from dataclasses_json import dataclass_json"]
 
 
 def test_sorting_is_idempotent(tmp_path: Path):

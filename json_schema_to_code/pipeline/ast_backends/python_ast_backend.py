@@ -49,6 +49,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
         self.needs_re_import = False
         self.type_aliases: set[str] = set()
         self.needs_optional_field_helper = False
+        self.enum_class_names: set[str] = set()
 
     def generate(self, ir: IR) -> str:
         """Generate Python code from IR using AST."""
@@ -57,6 +58,9 @@ def optional_field_in_json(*args, default=None, **kwargs):
         self.needs_re_import = False
         self.type_aliases = set()
         self.needs_optional_field_helper = False
+        # A $ref to an enum and a $ref to an object are both TypeKind.CLASS; only the IR
+        # says which is which, and they need opposite defaults (see _get_field_default).
+        self.enum_class_names = {c.name for c in ir.classes if c.enum_def}
 
         # Build the module body
         body: list[ast.stmt] = []
@@ -339,8 +343,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
             default_val = field.default_value if field.has_default else field.type_ref.default_value
 
             if default_val is None and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-                if is_nullable:
-                    return self._format_default_expr(None, field.type_ref)
+                if is_nullable or self._is_enum_ref(field.type_ref):
+                    return self._null_default(field)
                 else:
                     clean_type = field.type_ref.name.strip('"')
                     self.python_imports.add(("dataclasses", "field"))
@@ -350,8 +354,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
 
         elif not field.is_required and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
             # Optional CLASS types without explicit default
-            if is_nullable:
-                return self._format_default_expr(None, field.type_ref)
+            if is_nullable or self._is_enum_ref(field.type_ref):
+                return self._null_default(field)
             else:
                 clean_type = field.type_ref.name.strip('"')
                 self.python_imports.add(("dataclasses", "field"))
@@ -361,6 +365,21 @@ def optional_field_in_json(*args, default=None, **kwargs):
             return self._format_default_expr(None, field.type_ref)
 
         return None
+
+    def _is_enum_ref(self, type_ref) -> bool:
+        """Whether this CLASS reference points at a generated Enum.
+
+        An object gets an empty instance as its default; an enum cannot -- ``E()`` raises
+        ``TypeError: missing 1 required positional argument: 'value'``, so the dataclass
+        could be neither constructed nor deserialized. Absent means None for enums.
+        """
+        return type_ref.name.strip('"') in self.enum_class_names
+
+    def _null_default(self, field: FieldDef) -> ast.expr | None:
+        """Default a field to None, widening its annotation to match."""
+        # translate_type() runs after this and reads is_nullable, so the annotation follows.
+        field.type_ref.is_nullable = True
+        return self._format_default_expr(None, field.type_ref)
 
     def _use_optional_field_helper(self) -> bool:
         """Return True when the compact helper syntax should be used."""

@@ -429,6 +429,14 @@ class PythonAstMerger(AstMerger):
         """Normalize a code line for matching between original and unparsed code."""
         return " ".join(line.split())
 
+    @staticmethod
+    def _same_annotation(generated: ast.AnnAssign, existing: ast.AnnAssign) -> bool:
+        """Whether two field declarations carry the same type annotation."""
+        try:
+            return ast.unparse(generated.annotation) == ast.unparse(existing.annotation)
+        except (AttributeError, ValueError):
+            return False
+
     def _has_field_metadata(self, node: ast.AnnAssign) -> bool:
         """Check if a field uses field() with a metadata= keyword argument."""
         if node.value is None or not isinstance(node.value, ast.Call):
@@ -471,7 +479,13 @@ class PythonAstMerger(AstMerger):
                         new_body.append(item)
                     else:
                         gen_field = gen_fields[field_name]
-                        if gen_field.value is None and item.value is not None:
+                        if gen_field.value is None and item.value is not None and self._same_annotation(gen_field, item):
+                            # Carry a hand-set default over -- but only while the field's
+                            # type is unchanged. A differing annotation means the schema
+                            # changed the field's shape, and the old default was usually a
+                            # consequence of the old shape: keeping it splices `X = None`
+                            # out of `X | None = None` + `X`, a declaration that appears in
+                            # neither input and type-checks as a lie.
                             gen_field.value = item.value
                         new_body.append(gen_field)
                 elif merge_strategy != MergeStrategy.DELETE:
