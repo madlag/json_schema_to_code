@@ -163,7 +163,7 @@ class PipelineGenerator:
         # Format the final code (Python only)
         if self.formatter and self.config.formatter.enabled:
             if self.formatter.is_available():
-                final_code = self.formatter.format(final_code, self.config.formatter)
+                final_code = self.formatter.format(final_code, self.config.formatter, str(output_path))
 
         # Write to file
         writer = AtomicWriter(

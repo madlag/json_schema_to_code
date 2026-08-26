@@ -1,0 +1,88 @@
+"""Formatter: isort grouping of the generated imports.
+
+The Python backend already emits imports sorted and grouped (`__future__`, then
+stdlib, then third party). What it cannot do is insert the blank lines isort puts
+*between* those groups, because the grouping depends on which modules are
+first-party to the project consuming the generated file -- knowledge that lives in
+that project's ruff config, not here.
+
+Without the isort pass, any project whose own lint sorts imports rewrites every
+generated file on the next commit, which reads as generator drift when it is not.
+"""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+import pytest
+
+from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
+
+pytestmark = pytest.mark.skipif(shutil.which("ruff") is None, reason="ruff not installed")
+
+SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$ref": "#/$defs/Root",
+    "$defs": {
+        "Root": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string"},
+                "items": {"type": "array", "items": {"type": "string"}},
+                "state": {"$ref": "#/$defs/State"},
+            },
+            "required": ["kind"],
+        },
+        "State": {"type": "string", "enum": ["A", "B"]},
+    },
+}
+
+
+def generate(tmp_path: Path, *, sort_imports: bool) -> list[str]:
+    config = CodeGeneratorConfig()
+    config.add_generation_comment = False
+    config.formatter.sort_imports = sort_imports
+    out = tmp_path / "generated.py"
+    PipelineGenerator("Root", SCHEMA, config, "python").generate_to_file(out)
+    return out.read_text(encoding="utf-8").splitlines()
+
+
+def import_block(lines: list[str]) -> list[str]:
+    """Lines up to (and including) the last import, blank lines preserved."""
+    last = max(i for i, line in enumerate(lines) if line.startswith(("import ", "from ")))
+    return lines[: last + 1]
+
+
+def test_import_groups_are_blank_line_separated(tmp_path: Path):
+    block = import_block(generate(tmp_path, sort_imports=True))
+
+    assert block == [
+        "from __future__ import annotations",
+        "",
+        "from dataclasses import dataclass, field",
+        "from enum import Enum",
+        "",
+        "from dataclasses_json import dataclass_json",
+    ]
+
+
+def test_sorting_is_idempotent(tmp_path: Path):
+    """A second generation must not churn the file -- the point of the option."""
+    first = generate(tmp_path, sort_imports=True)
+    second = generate(tmp_path, sort_imports=True)
+
+    assert first == second
+
+
+def test_opting_out_leaves_the_groups_unseparated(tmp_path: Path):
+    block = import_block(generate(tmp_path, sort_imports=False))
+
+    assert "" not in block
+    # still ordered by the backend, just without isort's separators
+    assert block[0] == "from __future__ import annotations"
+    assert block[-1] == "from dataclasses_json import dataclass_json"
+
+
+def test_sorting_is_on_by_default():
+    assert CodeGeneratorConfig().formatter.sort_imports is True

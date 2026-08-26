@@ -36,6 +36,11 @@ class FormatterConfig:
     target_version: str = ""  # Python target version (e.g., "py313")
     string_normalization: bool = True  # Normalize strings to double quotes
     magic_trailing_comma: bool = True  # Add trailing comma to multi-line structures
+    # Run ruff's isort rules over the output. The backend already sorts imports, but only
+    # ruff knows the *consuming* project's first-party modules, so only ruff can insert the
+    # group separators isort expects. Without this, a project whose own lint sorts imports
+    # rewrites every generated file on the next commit.
+    sort_imports: bool = True
 
 
 @dataclass

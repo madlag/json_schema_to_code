@@ -5,8 +5,6 @@ Ruff formatter for Python code.
 from __future__ import annotations
 
 import subprocess
-import tempfile
-from pathlib import Path
 
 from ..config import FormatterConfig
 from .base import Formatter
@@ -33,13 +31,16 @@ class RuffFormatter(Formatter):
                 self._available = False
         return self._available
 
-    def format(self, code: str, config: FormatterConfig) -> str:
+    def format(self, code: str, config: FormatterConfig, path: str | None = None) -> str:
         """
         Format Python code using ruff.
 
         Args:
             code: Python source code to format
             config: Formatter configuration
+            path: Destination path of the generated file, when known. Passed to ruff as
+                --stdin-filename so ruff resolves the *consuming* project's settings
+                (notably isort's known-first-party) instead of this package's.
 
         Returns:
             Formatted code
@@ -48,40 +49,45 @@ class RuffFormatter(Formatter):
             # Return unformatted code if ruff is not available
             return code
 
-        # Write code to a temporary file (ruff format works on files)
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
-            f.write(code)
-            temp_path = Path(f.name)
+        stdin_filename = path or "code.py"
 
+        if config.sort_imports:
+            code = self._sort_imports(code, config, stdin_filename)
+
+        cmd = ["ruff", "format", "--stdin-filename", stdin_filename]
+
+        if config.line_length:
+            cmd.extend(["--line-length", str(config.line_length)])
+
+        if config.target_version:
+            cmd.extend(["--target-version", config.target_version])
+
+        return self._run(cmd, code)
+
+    def _sort_imports(self, code: str, config: FormatterConfig, stdin_filename: str) -> str:
+        """Apply ruff's isort rules (I) only.
+
+        The backend already emits imports sorted and grouped, but it cannot know which
+        modules are first-party to the project consuming the generated file, so it cannot
+        place the blank lines isort puts between groups. ruff can, from that project's own
+        configuration -- which is why the destination path matters here.
+        """
+        cmd = ["ruff", "check", "--select", "I", "--fix-only", "--stdin-filename", stdin_filename, "-"]
+        if config.line_length:
+            cmd.extend(["--line-length", str(config.line_length)])
+        return self._run(cmd, code)
+
+    def _run(self, cmd: list[str], code: str) -> str:
+        """Run a ruff command over ``code`` via stdin, returning it unchanged on any failure."""
         try:
-            # Build ruff format command
-            cmd = ["ruff", "format", "--stdin-filename", "code.py"]
-
-            if config.line_length:
-                cmd.extend(["--line-length", str(config.line_length)])
-
-            if config.target_version:
-                cmd.extend(["--target-version", config.target_version])
-
-            # Run ruff format via stdin/stdout
-            result = subprocess.run(
-                cmd,
-                input=code,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-            if result.returncode == 0:
-                return result.stdout
-            else:
-                # If formatting fails, return original code
-                return code
+            result = subprocess.run(cmd, input=code, capture_output=True, text=True, timeout=30)
         except subprocess.SubprocessError:
             return code
-        finally:
-            # Clean up temp file
-            temp_path.unlink(missing_ok=True)
+        # ruff check --fix-only exits non-zero only on real errors; both commands print the
+        # resulting source on success. Anything else: keep the input rather than lose it.
+        if result.returncode != 0 or not result.stdout:
+            return code
+        return result.stdout
 
 
 def format_with_ruff(
