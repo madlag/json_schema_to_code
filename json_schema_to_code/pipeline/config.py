@@ -128,6 +128,13 @@ class CodeGeneratorConfig:
                     config.output.mode = OutputMode(v["mode"])
                 if "merge_strategy" in v:
                     config.output.merge_strategy = MergeStrategy(v["merge_strategy"])
+                for fk in ("output_path", "validate_before_write"):
+                    if fk in v:
+                        setattr(config.output, fk, v[fk])
+            elif k == "formatter" and isinstance(v, dict):
+                for fk, fv in v.items():
+                    if hasattr(config.formatter, fk):
+                        setattr(config.formatter, fk, fv)
             elif hasattr(config, k):
                 setattr(config, k, v)
         return config
