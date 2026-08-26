@@ -1,27 +1,38 @@
 # JSON Schema to Code Generator
 
-A Python package that generates strongly-typed classes from JSON Schema definitions. Supports code generation for **Python** and **C#** with full inheritance, polymorphism, and type safety.
+A Python package that generates strongly-typed classes from JSON Schema definitions. Supports code generation for **Python**, **C#** and **Swift** with full inheritance, polymorphism, and type safety.
 
 ## Features
 
-- **Multi-language support**: Generate Python dataclasses and C# classes
+- **Multi-language support**: Python dataclasses, C# classes, and Swift `Codable` structs
 - **Full JSON Schema compliance**: Supports definitions, references, inheritance (`allOf`), enums, and complex types
 - **Type safety**: Generates strongly-typed code with proper nullable handling
 - **Inheritance and polymorphism**: Handles base classes and subclass discrimination
-- **Template-based**: Uses Jinja2 templates for customizable code generation
+- **AST-based pipeline**: Schemas are compiled to a language-native AST, not rendered from text templates
+- **Merge-aware output**: Regenerating a file preserves hand-written methods, imports and constants
+- **Runtime validation**: Optionally emits constraint checks from the schema
 - **Configuration support**: Flexible configuration options for customizing output
 - **Command-line interface**: Easy-to-use CLI tool
 
 ## Installation
 
+The package is not published on PyPI — install it from the repository:
+
 ```bash
-pip install json_schema_to_code
+pip install git+https://github.com/randomwalkteam/json_schema_to_code.git@main
 ```
 
 ### Dependencies
 
 - Python 3.12+
 - Click (CLI interface)
+
+Two capabilities are optional and degrade gracefully when absent:
+
+- **Merging C# / Swift** needs `tree-sitter`, `tree-sitter-c-sharp` and `tree-sitter-swift`. Python merging uses the standard library `ast` and always works.
+- **Formatting Python output** shells out to `ruff` if it is on `PATH`; without it the generated code is emitted unformatted.
+
+Both are included in the `dev` extra (`pip install -e ".[dev]"`).
 
 ## Quick Start
 
@@ -34,6 +45,9 @@ json_schema_to_code schema.json output.cs
 # Generate Python dataclasses
 json_schema_to_code schema.json output.py --language python
 
+# Generate Swift Codable structs
+json_schema_to_code schema.json output.swift --language swift
+
 # Use a configuration file
 json_schema_to_code schema.json output.cs --config config.json
 
@@ -45,10 +59,11 @@ json_schema_to_code schema.json output.cs --name MyRootClass
 
 - `path`: Input JSON Schema file (required)
 - `output`: Output file path (required)
-- `--language, -l`: Target language (`cs` or `python`, default: `cs`)
+- `--language, -l`: Target language (`cs`, `python` or `swift`, default: `cs`)
 - `--config, -c`: Configuration file path (optional)
 - `--name, -n`: Root class name (optional, defaults to schema filename)
-- `--add-validation`: Add runtime validation code (optional)
+- `--add-validation`: Add runtime validation in `__post_init__` (Python) or the constructor (C#)
+- `--merge-strategy`: How to treat existing members absent from the generated code — `error` (default), `merge` (keep them), `delete` (remove them)
 
 ## Configuration
 
@@ -59,24 +74,65 @@ Create a JSON configuration file to customize code generation:
   "ignore_classes": ["TempClass", "DebugInfo"],
   "global_ignore_fields": ["_internal", "__debug"],
   "order_classes": ["BaseMessage", "ErrorMessage"],
-  "ignoreSubClassOverrides": false,
-  "drop_min_max_items": false,
-  "use_array_of_super_type_for_variable_length_tuple": true,
-  "use_tuples": true,
-  "quoted_types_for_python": ["Node", "Tree"]
+  "quoted_types_for_python": ["Node", "Tree"],
+  "output": {
+    "mode": "merge",
+    "merge_strategy": "error"
+  },
+  "formatter": {
+    "line_length": 120
+  }
 }
 ```
 
 ### Configuration Options
 
+Unknown keys are ignored, so a config file can carry options for several projects.
+
+**Selecting what is generated**
+
 - **`ignore_classes`**: List of class names to skip during generation
 - **`global_ignore_fields`**: Field names to exclude from all classes
-- **`order_classes`**: Specify the order of class generation
-- **`ignoreSubClassOverrides`**: Skip property overrides in subclasses
-- **`drop_min_max_items`**: Ignore array length constraints
-- **`use_array_of_super_type_for_variable_length_tuple`**: Use arrays for variable-length tuples
-- **`use_tuples`**: Generate tuple types for fixed-length arrays
-- **`quoted_types_for_python`**: List of type names to quote in Python type references (e.g., `List["MyType"]` instead of `List[MyType]`) to handle circular type definitions
+- **`order_classes`**: Order in which classes are emitted (empty = definition order)
+- **`ignoreSubClassOverrides`** (default `false`): Skip property overrides in subclasses
+
+**Type mapping**
+
+- **`use_tuples`** (default `true`): Generate tuple types for fixed-length arrays
+- **`use_array_of_super_type_for_variable_length_tuple`** (default `true`): Use arrays for variable-length tuples
+- **`drop_min_max_items`** (default `false`): Ignore `minItems`/`maxItems` array length constraints
+- **`use_inline_unions`** (default `false`): Emit inline union syntax instead of named type aliases
+- **`add_validation`** (default `false`): Emit runtime constraint checks
+
+**Python specifics**
+
+- **`quoted_types_for_python`**: Type names to quote in type references (e.g. `list["MyType"]`) to handle circular definitions
+- **`use_future_annotations`** (default `true`): Emit `from __future__ import annotations`
+- **`exclude_default_value_from_json`** (default `false`): Omit fields still at their default from JSON output
+- **`optional_field_helper_module`**: With the option above — `null` for inline lambdas, `""` to inline the helper function, or a module path to import it from
+- **`add_generation_comment`** (default `true`): Add the "Generated by" header
+
+**C# specifics**
+
+- **`csharp_namespace`**: Namespace to wrap the generated types in
+- **`csharp_additional_usings`**: Extra `using` directives
+
+**External references**
+
+- **`schema_base_path`**: Base directory for resolving external `$ref` paths from disk
+- **`external_ref_base_module`**: Base module for imports generated from external `$ref`s
+- **`external_ref_schema_to_module`**: Explicit schema-name → module-path overrides
+
+**`output` block**
+
+- **`mode`**: `merge` (default), `overwrite`, or `error_if_exists`
+- **`merge_strategy`**: `error` (default), `merge`, or `delete` — what to do with existing members absent from the generated code
+- **`output_path`**: Default output path
+- **`validate_before_write`** (default `true`): Parse the result before replacing the file
+
+**`formatter` block** (Python only)
+
+- **`enabled`** (default `true`), **`line_length`** (default `100`), **`target_version`**, **`string_normalization`** (default `true`), **`magic_trailing_comma`** (default `true`)
 
 ## Supported JSON Schema Features
 
@@ -115,7 +171,7 @@ By default, when generating Python enum classes, the generator uses the enum val
 }
 ```
 
-When preprocessing the schema (before passing it to `CodeGenerator`), transform the enum array into a dict mapping member names to values. The generator will then use this dict to create enum classes with custom member names:
+The generator picks this up directly from the schema — no preprocessing step is needed:
 
 ```python
 class ElementState(str, Enum):
@@ -124,7 +180,7 @@ class ElementState(str, Enum):
     CORRECT_ANSWER = "C"
 ```
 
-**Note**: The `x-enum-members` extension maps enum values (the keys) to Python enum member names (the values). This requires preprocessing the schema to transform `enum` arrays into dicts before code generation. This feature is currently only supported for Python code generation.
+**Note**: `x-enum-members` maps enum values (the keys) to member names (the values). Python and C# both honour it — C# additionally emits a `JsonConverter` mapping the members back to their string values. Swift honours it too, but its lowerCamel conversion mangles all-caps names (`NORMAL` becomes `case nORMAL`), so prefer schema-side names that read well in camelCase when targeting Swift.
 
 ## Output Examples
 
@@ -158,51 +214,94 @@ class ElementState(str, Enum):
 
 ### Generated C# Code
 ```csharp
-using System;
-using System.Collections.Generic;
+#nullable enable
+
 using JsonSubTypes;
 using Newtonsoft.Json;
+using System;
 
 [Serializable]
 [JsonConverter(typeof(JsonSubtypes), "type")]
 [JsonSubtypes.KnownSubType(typeof(Circle), "circle")]
 public class Shape
 {
-    public string type;
+    [JsonProperty("type")]
+    public virtual string Type { get; set; }
     public Shape(string type)
     {
-        this.type = type;
+        this.Type = type;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public Shape() { }
+
 }
 
 [Serializable]
 public class Circle : Shape
 {
-    public float radius;
+    [JsonProperty("type")]
+    public override string Type => "circle";
+    [JsonProperty("radius")]
+    public float Radius { get; set; }
     public Circle(float radius): base("circle")
     {
-        this.radius = radius;
+        this.Radius = radius;
     }
+    // Parameterless constructor for Unity editor and serialization
+    public Circle() { }
+
 }
 ```
 
 ### Generated Python Code
 ```python
+from __future__ import annotations
+from abc import ABC
 from dataclasses import dataclass
 from typing import Literal
 from dataclasses_json import dataclass_json
-from abc import ABC
 
 @dataclass_json
 @dataclass(kw_only=True)
 class Shape(ABC):
-    pass
+    type: str
 
 @dataclass_json
 @dataclass(kw_only=True)
 class Circle(Shape):
-    type: Literal["circle"] = "circle"
     radius: float
+    type: Literal['circle'] = 'circle'
+```
+
+### Generated Swift Code
+```swift
+import Foundation
+
+struct Shape: Codable {
+    let type: String
+
+    enum CodingKeys: String, CodingKey {
+        case type = "type"
+    }
+}
+
+struct Circle: Codable {
+    var type: String = "circle"
+    let radius: Double
+
+    enum CodingKeys: String, CodingKey {
+        case type = "type"
+        case radius = "radius"
+    }
+}
+
+extension Circle {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try container.decodeIfPresent(String.self, forKey: .type) ?? "circle"
+        self.radius = try container.decode(Double.self, forKey: .radius)
+    }
+}
 ```
 
 ## Python API Usage
@@ -239,8 +338,14 @@ with open('output.py', 'w') as f:
 ### C# Output
 - Includes `[Serializable]` attributes
 - Uses `JsonSubTypes` for polymorphic serialization
-- Generates proper constructors with base class calls
+- Generates proper constructors with base class calls, plus a parameterless one for Unity
 - Supports nullable reference types
+
+### Swift Output
+- Generates `struct`s conforming to `Codable`, with an explicit `CodingKeys` enum
+- String enums become raw-value `Codable` enums
+- Const-valued fields get a defaulted `init(from:)` in an extension, so they survive a missing key
+- Schema `object` / untyped values map to an `AnyCodable` helper the project must supply
 
 ## Architecture
 
@@ -258,8 +363,8 @@ The generator uses an AST-based pipeline for code generation:
 ### Running Tests
 
 ```bash
-# Install development dependencies
-pip install -e .
+# Install with development dependencies (pytest, ruff, tree-sitter grammars)
+pip install -e ".[dev]"
 
 # Run tests
 python -m pytest json_schema_to_code/tests/
@@ -270,17 +375,28 @@ python -m pytest json_schema_to_code/tests/
 ```
 json_schema_to_code/
 ├── json_schema_to_code/
-│   ├── __init__.py
-│   ├── json_schema_to_code.py  # CLI entry point
-│   ├── codegen.py              # Core generator logic
-│   └── templates/              # Jinja2 templates
-│       ├── python/
-│       └── cs/
-├── tests/
-│   ├── schemas/                # Test schemas
-│   └── test_base.py           # Test suite
-└── setup.py
+│   ├── json_schema_to_code.py      # CLI entry point
+│   ├── validation_rules.py         # Schema constraint -> validation code
+│   ├── validator.py
+│   ├── pipeline/
+│   │   ├── config.py               # CodeGeneratorConfig / Output / Formatter
+│   │   ├── generator.py            # PipelineGenerator - drives the phases
+│   │   ├── schema_ast/             # Phase 1: JSON Schema -> Schema AST
+│   │   ├── analyzer/               # Phase 2: $ref resolution, naming, IR
+│   │   ├── ast_backends/           # Phases 3-4: language AST + serializers
+│   │   │   ├── python_ast_backend.py
+│   │   │   ├── csharp_ast_backend.py / csharp_serializer.py
+│   │   │   └── swift_ast_backend.py / swift_serializer.py
+│   │   ├── formatters/             # Phase 5: ruff
+│   │   └── merger/                 # Phase 6: per-language AST merge + atomic write
+│   └── tests/
+│       ├── test_data/              # Reference cases and functional test JSON
+│       └── v3/                     # Pipeline test suites
+├── CHANGELOG.md
+└── pyproject.toml
 ```
+
+Packaging metadata lives entirely in `pyproject.toml`; there is no `setup.py`.
 
 ## License
 
@@ -292,9 +408,4 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 ## Changelog
 
-### v0.1
-- Initial release
-- Support for Python and C# code generation
-- Basic JSON Schema features
-- Command-line interface
-- Configuration system
+See [CHANGELOG.md](CHANGELOG.md).

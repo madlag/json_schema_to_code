@@ -1,7 +1,7 @@
 """JSON Schema to Code Generator
 
 A Python package for generating code from JSON Schema definitions.
-Supports Python and C# code generation with AST-based pipeline,
+Supports Python, C# and Swift code generation with AST-based pipeline,
 code merging, and configurable output options.
 """
 
