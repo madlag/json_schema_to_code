@@ -114,6 +114,30 @@ def test_scalar_value_default(tmp_path: Path):
     assert module.Root(kind="x").month == 0
 
 
+def test_value_default_on_an_optional_scalar_keeps_the_annotation_plain(tmp_path: Path):
+    """An optional scalar is normally widened to `T | None` to express absence; a
+    constructor default expresses it instead, so the annotation stays `T`."""
+    schema = {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Root",
+        "$defs": {
+            "Root": {
+                "type": "object",
+                "properties": {"kind": {"type": "string"}, "keyword": {"type": "string", "x-python-default": ""}, "note": {"type": "string"}},
+                "required": ["kind"],
+            }
+        },
+    }
+    code = generate(schema)
+
+    assert 'keyword: str = ""' in code or "keyword: str = ''" in code
+    assert "keyword: str | None" not in code
+    assert "note: str | None = None" in code  # untouched: no default of any kind
+
+    module = load(code, tmp_path, "generated_optional_scalar")
+    assert module.Root(kind="x").keyword == ""
+
+
 def test_a_defaulted_required_field_is_ordered_after_the_bare_ones():
     """A field with a constructor default cannot precede one without (dataclass rule)."""
     code = generate(root_with({"month": {"type": "integer", "x-python-default": 0}, "day": {"type": "integer"}}))

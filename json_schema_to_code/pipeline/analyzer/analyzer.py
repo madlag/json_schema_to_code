@@ -871,6 +871,12 @@ class SchemaAnalyzer:
             # The default provides the value, so no need for null
             if prop.has_default and field_def.type_ref and prop.default_value is not None:
                 field_def.type_ref.is_nullable = False
+            # Same for a non-null constructor default of this language: the
+            # optional-scalar widening (`str | None`) exists only to express
+            # absence, and the default already does that.
+            lang_key = {"cs": "csharp"}.get(self.language, self.language)
+            if field_def.type_ref and (field_def.language_defaults.get(lang_key) is not None or lang_key in field_def.language_default_code):
+                field_def.type_ref.is_nullable = False
             elif prop.has_default and field_def.type_ref and prop.default_value is None:
                 if not field_def.type_ref.is_nullable:
                     raise ValueError(
