@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import collections
 import dataclasses
+import re
 from typing import Any
 
 from json_schema_to_code.pipeline.config import ClassDefaultStrategy
@@ -49,6 +50,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
     def __init__(self, config: CodeGeneratorConfig):
         super().__init__(config)
         self.python_imports: set[tuple[str, str]] = set()
+        self.python_plain_imports: set[str] = set()
         self.needs_re_import = False
         self.type_aliases: set[str] = set()
         self.needs_optional_field_helper = False
@@ -63,6 +65,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
         """Generate Python code from IR using AST."""
         # Reset import tracking
         self.python_imports = set()
+        self.python_plain_imports = set()
         self.needs_re_import = False
         self.type_aliases = set()
         self.needs_optional_field_helper = False
@@ -187,7 +190,9 @@ def optional_field_in_json(*args, default=None, **kwargs):
             (module, ast.ImportFrom(module=module, names=[ast.alias(name=n, asname=None) for n in sorted(names)], level=0)) for module, names in names_by_module.items()
         ]
         if self.needs_re_import:
-            entries.append(("re", ast.Import(names=[ast.alias(name="re", asname=None)])))
+            self.python_plain_imports.add("re")
+        for module in self.python_plain_imports:
+            entries.append((module, ast.Import(names=[ast.alias(name=module, asname=None)])))
         entries.sort(key=lambda entry: (entry[0] != "__future__", entry[0]))
         return [node for _, node in entries]
 
@@ -322,6 +327,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
         constructibility and the default expression itself.
         """
         type_ref = field.type_ref
+        if "python" in field.language_defaults or "python" in field.language_default_code:
+            return True
         return field.has_default or not field.is_required or (type_ref is not None and (type_ref.has_default or type_ref.is_nullable))
 
     def _excludes_default(self, field: FieldDef) -> bool:
@@ -336,6 +343,21 @@ def optional_field_in_json(*args, default=None, **kwargs):
         """
         type_ref = field.type_ref
         exclude = self._excludes_default(field)
+
+        # `x-python-default` / `x-python-default-code`: the schema hands the
+        # constructor a default without touching `required` (see FieldDef).
+        code = field.language_default_code.get("python")
+        if code is not None:
+            self._register_language_imports(field, code)
+            return self._parse_expr(code), False
+        if "python" in field.language_defaults:
+            self._register_language_imports(field, "")
+            value = field.language_defaults["python"]
+            if value is None:
+                return self._format_default_expr(None, type_ref, exclude), not type_ref.is_nullable
+            if type_ref.kind == TypeKind.CLASS and isinstance(value, dict):
+                return self._class_default(field, value, exclude)
+            return self._format_default_expr(value, type_ref, exclude), False
 
         if field.has_default or type_ref.has_default:
             value = field.default_value if field.has_default else type_ref.default_value
@@ -725,6 +747,33 @@ def optional_field_in_json(*args, default=None, **kwargs):
     def _parse_expr(self, expr_str: str) -> ast.expr:
         """Parse an expression string into an AST expression."""
         return ast.parse(expr_str, mode="eval").body
+
+    def _register_language_imports(self, field: FieldDef, code: str) -> None:
+        """Imports an `x-python-default-code` expression needs: the `x-python-imports`
+        statements, plus `field` / `config` when the expression itself calls them."""
+        if re.search(r"\bfield\(", code):
+            self.python_imports.add(("dataclasses", "field"))
+        if re.search(r"\bconfig\(", code):
+            self.python_imports.add(("dataclasses_json", "config"))
+        for statement in field.language_imports.get("python", []):
+            what = f"x-python-imports on {field.name!r}: {statement!r}"
+            try:
+                parsed = ast.parse(statement).body
+            except SyntaxError as e:
+                raise ValueError(f"{what} is not an import statement") from e
+            if len(parsed) != 1 or not isinstance(parsed[0], (ast.Import, ast.ImportFrom)):
+                raise ValueError(f"{what} is not a single import statement")
+            node = parsed[0]
+            if any(alias.asname for alias in node.names):
+                raise ValueError(f"{what}: `as` aliases are not supported")
+            if isinstance(node, ast.ImportFrom):
+                if node.level or not node.module:
+                    raise ValueError(f"{what}: relative imports are not supported")
+                for alias in node.names:
+                    self.python_imports.add((node.module, alias.name))
+            else:
+                for alias in node.names:
+                    self.python_plain_imports.add(alias.name)
 
     def _order_fields(self, fields: list[FieldDef]) -> list[FieldDef]:
         """Fields without a default first, then the rest, each group in schema order."""

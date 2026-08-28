@@ -77,6 +77,15 @@ class FieldDef:
     # still holds its default (Python backend).
     omit_when_default: bool = False
 
+    # x-<language>-default / x-<language>-default-code / x-<language>-imports:
+    # a constructor default for one language. `is_required` keeps describing the
+    # wire (validation still demands the property); the class just knows how to
+    # fill the field when a caller leaves it out. `language_defaults` holds JSON
+    # values rendered like `default`, `language_default_code` verbatim expressions.
+    language_defaults: dict[str, Any] = field(default_factory=dict)
+    language_default_code: dict[str, str] = field(default_factory=dict)
+    language_imports: dict[str, list[str]] = field(default_factory=dict)
+
     # For C# keyword escaping
     escaped_name: str | None = None
 

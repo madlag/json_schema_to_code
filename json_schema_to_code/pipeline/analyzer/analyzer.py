@@ -850,6 +850,7 @@ class SchemaAnalyzer:
         )
         if prop.type_node:
             field_def.omit_when_default = bool(prop.type_node.metadata.get("x-omit-when-default", False))
+            self._collect_language_defaults(field_def, prop.type_node.metadata, parent_class)
 
         # Escape C# keywords
         if self.language == "cs":
@@ -921,6 +922,34 @@ class SchemaAnalyzer:
             if match and isinstance(value, str) and value:
                 overrides[match.group(1)] = value
         return overrides
+
+    _LANGUAGE_DEFAULT_KEY = re.compile(r"^x-([a-z]+)-(default|default-code|imports)$")
+
+    def _collect_language_defaults(self, field_def: FieldDef, metadata: dict, parent_class: str) -> None:
+        """`x-<language>-default` / `-default-code` / `-imports` -> per-language constructor defaults.
+
+        `required` describes the wire: validation demands the property. Whether a
+        constructor needs it is a different question (a server-built placeholder, a
+        generated id), and these keys answer it without loosening the schema.
+        """
+        where = f"{parent_class}.{field_def.name}"
+        for key, value in metadata.items():
+            match = self._LANGUAGE_DEFAULT_KEY.match(key)
+            if not match:
+                continue
+            language, kind = match.groups()
+            if kind == "default":
+                field_def.language_defaults[language] = value
+            elif kind == "default-code":
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"Schema error in {where}: {key} must be a non-empty expression string")
+                field_def.language_default_code[language] = value
+            else:
+                if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                    raise ValueError(f"Schema error in {where}: {key} must be a list of import statements")
+                field_def.language_imports[language] = list(value)
+        for language in sorted(field_def.language_defaults.keys() & field_def.language_default_code.keys()):
+            raise ValueError(f"Schema error in {where}: x-{language}-default and x-{language}-default-code both given; keep one")
 
     def _analyze_type_node(
         self,

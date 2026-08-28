@@ -160,6 +160,7 @@ Unknown keys are skipped with a warning, so a config file can carry options for 
 - **Custom enum member names**: Use `x-enum-members` to specify custom enum member names
 - **Verbatim types**: `x-python-type`, `x-csharp-type` and `x-swift-type` name the type to emit for that language instead of the inferred one (see below)
 - **Omit-when-default fields**: `x-omit-when-default` leaves a Python field out of the JSON while it still holds its default (see below)
+- **Constructor defaults**: `x-python-default`, `x-python-default-code` and `x-python-imports` give a field a Python constructor default while `required` keeps describing the wire (see below)
 
 ### Custom Enum Member Names
 
@@ -218,6 +219,21 @@ Python: `when: datetime`, `digest: str`. C#: `public DateTime When`. Swift: `let
 ```
 
 Both go through `dataclasses_json`'s `config(exclude=...)` (or the project's helper when `optional_field_helper_module` is set). A field typed as a generated class is compared against a freshly built default instance, so an all-default sub-object is omitted too. The flag on a required field with no default is a schema error.
+
+### Constructor Defaults (`x-python-default`, `x-python-default-code`, `x-python-imports`)
+
+`required` describes the wire: validation demands the property. Whether a *constructor* needs it is a different question — a server-built placeholder, a generated id — and these keys answer it without loosening the schema:
+
+```json
+{
+  "id":    {"type": "string", "x-python-default-code": "field(default_factory=unique_id)", "x-python-imports": ["from mylib.ids import unique_id"]},
+  "month": {"type": "integer", "x-python-default": 0},
+  "map":   {"$ref": "#/$defs/Map", "x-python-default": {"zoom": 2, "center": {"lat": 0, "lng": 0}}},
+  "scene": {"$ref": "#/$defs/Scene", "x-python-default": null}
+}
+```
+
+`x-python-default` takes a JSON value and renders it exactly like `default` would: a dict on a class-typed field becomes a `from_dict` factory, `null` widens the annotation to `X | None`. `x-python-default-code` is emitted verbatim; `field(` / `config(` in it pull in their own imports, anything else is listed in `x-python-imports` as plain `from m import n` / `import m` statements. The field stays `required` for validation and for the other backends; `default` remains the place for a value that holds on the wire too.
 
 ## Output Examples
 
