@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -301,3 +302,24 @@ def test_csharp_keeps_constructor_with_discriminator_override():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+CHAIN_DIR = Path(__file__).with_name("test_data") / "pipeline" / "allof_external_chain"
+
+
+def test_required_travels_a_two_hop_external_allof_chain():
+    """`required` is a constraint on the composed object: `ChildData` narrows `problem`
+    two schema files away from the `ActivityData` that requires it, and must not get a
+    default for it (the activity Data classes of explayn_main are exactly this shape)."""
+    schema = load_schema("child_schema.json", CHAIN_DIR)
+
+    config = CodeGeneratorConfig()
+    config.add_generation_comment = False
+    config.schema_base_path = str(CHAIN_DIR)
+    config.external_ref_base_module = "generated_chain"
+
+    code = PipelineGenerator("ChildData", schema, config, "python").generate()
+    ast.parse(code)
+    child = code.split("class ChildData")[1]
+    assert re.search(r"^\s+problem: ChildProblem\s*$", child, re.M), code
+    assert "problem: ChildProblem = " not in child, code

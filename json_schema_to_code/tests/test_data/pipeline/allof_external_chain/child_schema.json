@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/child_schema",
+  "$ref": "#/$defs/ChildData",
+  "$defs": {
+    "ChildProblem": {
+      "allOf": [
+        { "$ref": "/mid_schema#/$defs/MidProblem" },
+        { "type": "object", "properties": { "extra": { "type": "integer", "default": 0 } } }
+      ]
+    },
+    "ChildData": {
+      "description": "two hops away from the required list",
+      "allOf": [
+        { "$ref": "/mid_schema#/$defs/MidData" },
+        { "type": "object", "properties": { "problem": { "$ref": "#/$defs/ChildProblem" } } }
+      ]
+    }
+  }
+}

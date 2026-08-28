@@ -110,17 +110,7 @@ class ReferenceResolver:
         No file I/O is performed here; external definitions are loaded
         lazily via load_external_definition() when actually needed.
         """
-        ref_path = ref_node.ref_path
-
-        # Parse: "/path/to/schema#/$defs/ClassName"
-        if "#/$defs/" in ref_path:
-            path_part, class_name = ref_path.split("#/$defs/", 1)
-        elif "#/definitions/" in ref_path:
-            path_part, class_name = ref_path.split("#/definitions/", 1)
-        else:
-            # Just a schema reference without fragment
-            path_part = ref_path
-            class_name = ref_path.split("/")[-1].replace(".json", "")
+        path_part, class_name = self.split_external_ref(ref_node.ref_path)
 
         # Check for class name override
         if ref_node.class_name_override:
@@ -133,6 +123,21 @@ class ReferenceResolver:
             external_path=path_part,
             class_name_in_external=class_name,
         )
+
+    @staticmethod
+    def split_external_ref(ref_path: str) -> tuple[str, str]:
+        """``"/path/to/schema#/$defs/ClassName"`` -> ``("/path/to/schema", "ClassName")``.
+
+        A reference without a fragment names the schema file itself.
+        """
+        if "#/$defs/" in ref_path:
+            path_part, class_name = ref_path.split("#/$defs/", 1)
+        elif "#/definitions/" in ref_path:
+            path_part, class_name = ref_path.split("#/definitions/", 1)
+        else:
+            path_part = ref_path
+            class_name = ref_path.split("/")[-1].replace(".json", "")
+        return path_part, class_name
 
     def _load_external_schema(self, schema_path: str) -> dict | None:
         """Load and cache an external schema file, returning the full schema dict."""

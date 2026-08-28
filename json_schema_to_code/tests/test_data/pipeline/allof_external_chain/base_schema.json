@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/base_schema",
+  "$defs": {
+    "BaseProblem": {
+      "type": "object",
+      "properties": { "text": { "type": "string", "default": "" } }
+    },
+    "BaseState": {
+      "type": "object",
+      "properties": { "done": { "type": "boolean", "default": false } }
+    },
+    "ActivityData": {
+      "description": "problem and state are required on every activity data",
+      "type": "object",
+      "properties": {
+        "problem": { "$ref": "#/$defs/BaseProblem" },
+        "state": { "$ref": "#/$defs/BaseState" },
+        "note": { "type": "string", "default": "" }
+      },
+      "required": ["problem", "state"]
+    }
+  }
+}

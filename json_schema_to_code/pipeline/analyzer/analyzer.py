@@ -596,10 +596,17 @@ class SchemaAnalyzer:
                     if ref_path.startswith("#/$defs/") or ref_path.startswith("#/definitions/"):
                         ref_name = ref_path.split("/")[-1]
                         ref_def = schema_defs.get(ref_name)
-                        if ref_def:
-                            parent_props, parent_req = self._collect_external_properties(ref_def, schema_defs)
-                            properties.update(parent_props)
-                            required.update(parent_req)
+                        ref_defs = schema_defs
+                    else:
+                        # The base lives in yet another schema file: follow it so
+                        # `required` (and properties) travel the whole chain.
+                        ext_path, ext_name = self.ref_resolver.split_external_ref(ref_path)
+                        ref_def = self.ref_resolver.load_external_definition(ext_path, ext_name)
+                        ref_defs = self.ref_resolver.load_external_schema_defs(ext_path)
+                    if ref_def:
+                        parent_props, parent_req = self._collect_external_properties(ref_def, ref_defs)
+                        properties.update(parent_props)
+                        required.update(parent_req)
                 else:
                     sub_props, sub_req = self._collect_external_properties(item, schema_defs)
                     properties.update(sub_props)
