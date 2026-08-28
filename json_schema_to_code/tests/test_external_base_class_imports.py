@@ -323,3 +323,21 @@ def test_required_travels_a_two_hop_external_allof_chain():
     child = code.split("class ChildData")[1]
     assert re.search(r"^\s+problem: ChildProblem\s*$", child, re.M), code
     assert "problem: ChildProblem = " not in child, code
+
+
+def test_a_constructor_default_travels_a_two_hop_external_allof_chain():
+    """`ActivityData.state` carries `x-python-default: {}` two schema files up;
+    `ChildData` narrows `state` to `ChildState` and must get the same default,
+    rebuilt for the narrowed type (the activity Data classes of explayn_main)."""
+    schema = load_schema("child_schema.json", CHAIN_DIR)
+
+    config = CodeGeneratorConfig()
+    config.add_generation_comment = False
+    config.schema_base_path = str(CHAIN_DIR)
+    config.external_ref_base_module = "generated_chain"
+
+    code = PipelineGenerator("ChildData", schema, config, "python").generate()
+    ast.parse(code)
+    child = code.split("class ChildData")[1]
+    assert "state: ChildState = field(default_factory=lambda: ChildState.from_dict({}))" in child, code
+    assert re.search(r"^\s+problem: ChildProblem\s*$", child, re.M), code

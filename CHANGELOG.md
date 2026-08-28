@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-08-28
+
+### Added
+
+- **A redeclared property inherits the base's constructor default.** An allOf subclass that narrows a property's type (`state: SubState` over `state: BaseState`) keeps the base's `x-python-default` / `x-python-default-code` unless it declares its own for that language — across files too. Base-class properties now carry their `x-<lang>-*` keys into the IR.
+
 ## [1.1.1] - 2026-08-28
 
 ### Fixed

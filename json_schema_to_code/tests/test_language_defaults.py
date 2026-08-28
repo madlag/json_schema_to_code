@@ -138,6 +138,45 @@ def test_value_default_on_an_optional_scalar_keeps_the_annotation_plain(tmp_path
     assert module.Root(kind="x").keyword == ""
 
 
+def _data_schema(sub_state_default: dict | None = None) -> dict:
+    """Base{state: BaseState, x-python-default {}} and Sub narrowing state to SubState
+    (the activity Data classes' shape); Sub may declare its own default."""
+    sub_state = {"$ref": "#/$defs/SubState"}
+    if sub_state_default is not None:
+        sub_state["x-python-default"] = sub_state_default
+    return {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Sub",
+        "$defs": {
+            "BaseState": {"type": "object", "properties": {"n": {"type": "integer", "default": 0}}},
+            "SubState": {"allOf": [{"$ref": "#/$defs/BaseState"}, {"type": "object", "properties": {"m": {"type": "integer", "default": 0}}}]},
+            "Base": {"type": "object", "properties": {"kind": {"type": "string"}, "state": {"$ref": "#/$defs/BaseState", "x-python-default": {}}}, "required": ["kind", "state"]},
+            "Sub": {"allOf": [{"$ref": "#/$defs/Base"}, {"type": "object", "properties": {"state": sub_state}}]},
+        },
+    }
+
+
+def test_a_redeclaration_inherits_the_base_constructor_default(tmp_path: Path):
+    """`required` still travels (state is bare on the wire); the constructor default
+    travels too, rebuilt for the narrowed type."""
+    code = generate(_data_schema())
+
+    assert "state: BaseState = field(default_factory=lambda: BaseState.from_dict({}))" in code
+    assert "state: SubState = field(default_factory=lambda: SubState.from_dict({}))" in code
+
+    module = load(code, tmp_path, "generated_inherited_default")
+    assert isinstance(module.Sub(kind="x").state, module.SubState)
+    assert module.Sub(kind="x").state.m == 0
+
+
+def test_a_redeclaration_may_override_the_base_constructor_default(tmp_path: Path):
+    code = generate(_data_schema({"n": 1, "m": 2}))
+
+    assert "state: SubState = field(default_factory=lambda: SubState.from_dict({'n': 1, 'm': 2}))" in code
+    module = load(code, tmp_path, "generated_overridden_default")
+    assert module.Sub(kind="x").state.m == 2
+
+
 def test_a_defaulted_required_field_is_ordered_after_the_bare_ones():
     """A field with a constructor default cannot precede one without (dataclass rule)."""
     code = generate(root_with({"month": {"type": "integer", "x-python-default": 0}, "day": {"type": "integer"}}))

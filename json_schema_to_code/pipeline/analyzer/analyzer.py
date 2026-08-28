@@ -437,7 +437,8 @@ class SchemaAnalyzer:
         # when the subclass redeclares it to narrow its type.
         if allof.extension:
             inherited_required = frozenset(f.name for f in class_def.base_fields if f.is_required)
-            class_def.fields = self._analyze_properties(allof.extension, class_name, inherited_required)
+            base_fields_by_name = {f.name: f for f in class_def.base_fields}
+            class_def.fields = self._analyze_properties(allof.extension, class_name, inherited_required, base_fields_by_name)
 
         # When ignoreSubClassOverrides is set, remove from fields any field that
         # is already covered by a base_field, UNLESS it is a const override of a
@@ -503,6 +504,7 @@ class SchemaAnalyzer:
             # Set type_ref for C# constructor parameter types
             if base_prop.type_node:
                 field_def.type_ref = self._analyze_type(base_prop.type_node, base_prop.name, class_name, base_prop.is_required)
+                self._collect_language_defaults(field_def, base_prop.type_node.metadata, class_name)
 
             # Mark as const based on override or base status
             # is_const = True means exclude from constructor params
@@ -659,6 +661,7 @@ class SchemaAnalyzer:
 
             # Set type_ref based on JSON schema type
             field_def.type_ref = self._type_ref_from_json_schema(prop_schema, prop_name in required)
+            self._collect_language_defaults(field_def, prop_schema, class_name)
 
             # Mark as const based on override or base status
             if is_overridden_const:
@@ -819,7 +822,13 @@ class SchemaAnalyzer:
         # This is typically used for type aliases to primitives
         return None
 
-    def _analyze_properties(self, obj: ObjectNode, parent_class: str, inherited_required: frozenset[str] = frozenset()) -> list[FieldDef]:
+    def _analyze_properties(
+        self,
+        obj: ObjectNode,
+        parent_class: str,
+        inherited_required: frozenset[str] = frozenset(),
+        base_fields_by_name: dict[str, FieldDef] | None = None,
+    ) -> list[FieldDef]:
         """Analyze properties and create FieldDefs.
 
         ``inherited_required`` names the properties a base class already requires:
@@ -833,13 +842,20 @@ class SchemaAnalyzer:
             if prop.name in self.config.global_ignore_fields:
                 continue
 
-            field_def = self._analyze_property(prop, parent_class, prop.name in inherited_required)
+            base_field = base_fields_by_name.get(prop.name) if base_fields_by_name else None
+            field_def = self._analyze_property(prop, parent_class, prop.name in inherited_required, base_field)
             fields.append(field_def)
 
         return fields
 
-    def _analyze_property(self, prop: PropertyDef, parent_class: str, required_by_base: bool = False) -> FieldDef:
-        """Analyze a single property."""
+    def _analyze_property(self, prop: PropertyDef, parent_class: str, required_by_base: bool = False, base_field: FieldDef | None = None) -> FieldDef:
+        """Analyze a single property.
+
+        ``base_field`` is the base class's declaration when this property redeclares
+        one (an allOf subclass narrowing a type): the base's constructor default
+        still describes how to fill the field, so it carries over unless the
+        redeclaration sets its own for that language.
+        """
         is_required = prop.is_required or required_by_base
         field_def = FieldDef(
             name=prop.name,
@@ -851,6 +867,8 @@ class SchemaAnalyzer:
         if prop.type_node:
             field_def.omit_when_default = bool(prop.type_node.metadata.get("x-omit-when-default", False))
             self._collect_language_defaults(field_def, prop.type_node.metadata, parent_class)
+        if base_field is not None:
+            self._inherit_language_defaults(field_def, base_field)
 
         # Escape C# keywords
         if self.language == "cs":
@@ -930,6 +948,23 @@ class SchemaAnalyzer:
         return overrides
 
     _LANGUAGE_DEFAULT_KEY = re.compile(r"^x-([a-z]+)-(default|default-code|imports)$")
+
+    @staticmethod
+    def _inherit_language_defaults(field_def: FieldDef, base_field: FieldDef) -> None:
+        """Carry the base declaration's per-language constructor defaults onto a
+        redeclaration that sets none of its own for that language."""
+
+        def declared(lang: str) -> bool:
+            return lang in field_def.language_defaults or lang in field_def.language_default_code
+
+        for lang, value in base_field.language_defaults.items():
+            if not declared(lang):
+                field_def.language_defaults[lang] = value
+        for lang, code in base_field.language_default_code.items():
+            if not declared(lang):
+                field_def.language_default_code[lang] = code
+        for lang, imports in base_field.language_imports.items():
+            field_def.language_imports.setdefault(lang, list(imports))
 
     def _collect_language_defaults(self, field_def: FieldDef, metadata: dict, parent_class: str) -> None:
         """`x-<language>-default` / `-default-code` / `-imports` -> per-language constructor defaults.

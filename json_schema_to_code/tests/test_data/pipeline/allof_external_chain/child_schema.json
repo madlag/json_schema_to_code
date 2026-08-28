@@ -5,15 +5,53 @@
   "$defs": {
     "ChildProblem": {
       "allOf": [
-        { "$ref": "/mid_schema#/$defs/MidProblem" },
-        { "type": "object", "properties": { "extra": { "type": "integer", "default": 0 } } }
+        {
+          "$ref": "/mid_schema#/$defs/MidProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "extra": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        }
       ]
     },
     "ChildData": {
       "description": "two hops away from the required list",
       "allOf": [
-        { "$ref": "/mid_schema#/$defs/MidData" },
-        { "type": "object", "properties": { "problem": { "$ref": "#/$defs/ChildProblem" } } }
+        {
+          "$ref": "/mid_schema#/$defs/MidData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/ChildProblem"
+            },
+            "state": {
+              "$ref": "#/$defs/ChildState"
+            }
+          }
+        }
+      ]
+    },
+    "ChildState": {
+      "allOf": [
+        {
+          "$ref": "/base_schema#/$defs/BaseState"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "picked": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        }
       ]
     }
   }
