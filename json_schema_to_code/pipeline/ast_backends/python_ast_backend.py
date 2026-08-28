@@ -376,19 +376,25 @@ def optional_field_in_json(*args, default=None, **kwargs):
     def _class_default(self, field: FieldDef, value: dict | None, exclude: bool) -> tuple[ast.expr, bool]:
         """Default for a field typed as a class.
 
-        A dict default is built through `from_dict`, so the field holds an instance and
-        not the raw dict. A nullable field defaults to None. An enum with no value
-        defaults to None too (`E()` needs a value), widening the annotation. For any
-        other class the strategy decides (`ClassDefaultStrategy`): SCHEMA keeps the
-        schema's type and emits `default_factory=lambda: X()` — construction raises when
-        `X` needs arguments, as the schema implies; CONSTRUCTIBLE widens such a field to
-        `X | None = None` so the parent can always be built.
+        A non-empty dict default is built through `from_dict`, so the field holds an
+        instance and not the raw dict; an empty one (`{}`) is the empty instance,
+        `default_factory=lambda: X()` — the same spelling a non-required field gets, and
+        an explicit request that wins over nullability. A nullable field with no value
+        defaults to None. An enum with no value defaults to None too (`E()` needs a
+        value), widening the annotation. For any other class the strategy decides
+        (`ClassDefaultStrategy`): SCHEMA keeps the schema's type and emits
+        `default_factory=lambda: X()` — construction raises when `X` needs arguments, as
+        the schema implies; CONSTRUCTIBLE widens such a field to `X | None = None` so the
+        parent can always be built.
         """
         type_ref = field.type_ref
         class_name = type_ref.name.strip('"')
-        if isinstance(value, dict):
+        empty_instance = isinstance(value, dict) and not value
+        if isinstance(value, dict) and value:
             return self._factory_default(f"{class_name}.from_dict({value!r})", exclude), False
-        if type_ref.is_nullable:
+        if empty_instance and self._is_enum(class_name):
+            raise ValueError(f"{self._current_class_name}.{field.name}: an empty default ({{}}) cannot build " f"the enum {class_name!r}; give a value or leave the field nullable.")
+        if type_ref.is_nullable and not empty_instance:
             return self._format_default_expr(None, type_ref, exclude), False
         constructible_strategy = self.config.class_default_strategy == ClassDefaultStrategy.CONSTRUCTIBLE
         recurses = self._reaches_through_factories(class_name, self._current_class_name)
@@ -403,7 +409,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
                 f"class_default_strategy=constructible to widen it to None."
             )
         widen = self._is_enum(class_name) or (constructible_strategy and (recurses or not self._empty_constructible(class_name)))
-        if widen:
+        if widen and not empty_instance:
             return self._format_default_expr(None, type_ref, exclude), True
         return self._factory_default(f"{class_name}()", exclude), False
 

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-08-28
+
+### Changed
+
+- **`x-python-default: {}` renders as the empty-instance factory** — `field(default_factory=lambda: X())`, the spelling a non-required class field already gets — instead of `X.from_dict({})`. A non-empty dict still builds through `from_dict`. On a nullable field `{}` wins over `None`; on an enum it is a schema error.
+
+### Fixed
+
+- **An inherited constructor default now travels through an intermediate redeclaration.** `ActivityData.state` (`x-python-default: {}`) → `QuizData` narrows `state` without restating it → `StatementQuizData` narrows it again: the grandchild lost the default (the cross-file chain flattened properties with `dict.update`, the in-file chain replaced the ancestor's field outright) and came out with a bare required field, so `StatementQuizData(problem=...)` raised. Both chains now carry the ancestor's `x-<lang>-default` / `-default-code` / `-imports` onto a redeclaration that declares none for that language.
+
 ## [1.1.2] - 2026-08-28
 
 ### Added

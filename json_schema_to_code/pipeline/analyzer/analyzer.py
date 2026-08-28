@@ -559,11 +559,15 @@ class SchemaAnalyzer:
                 base_fields.extend(self._analyze_allof_base_properties(ancestor_def.body, extension, class_name))
 
         if allof_node.extension:
-            ancestor_names = {f.name for f in base_fields}
+            ancestors_by_name = {f.name: f for f in base_fields}
             parent_fields = self._analyze_base_properties(allof_node.extension, extension, class_name)
             for pf in parent_fields:
-                if pf.name in ancestor_names:
-                    # Drop the ancestor's view; the parent's view supersedes it.
+                ancestor = ancestors_by_name.get(pf.name)
+                if ancestor is not None:
+                    # Drop the ancestor's view; the parent's view supersedes it —
+                    # except for a constructor default the parent did not restate,
+                    # which keeps travelling down the chain.
+                    self._inherit_language_defaults(pf, ancestor)
                     base_fields = [f for f in base_fields if f.name != pf.name]
                     if pf.is_const:
                         # Parent constified at its level → grandchild's base()
@@ -607,17 +611,54 @@ class SchemaAnalyzer:
                         ref_defs = self.ref_resolver.load_external_schema_defs(ext_path)
                     if ref_def:
                         parent_props, parent_req = self._collect_external_properties(ref_def, ref_defs)
-                        properties.update(parent_props)
+                        self._merge_redeclared_properties(properties, parent_props)
                         required.update(parent_req)
                 else:
                     sub_props, sub_req = self._collect_external_properties(item, schema_defs)
-                    properties.update(sub_props)
+                    self._merge_redeclared_properties(properties, sub_props)
                     required.update(sub_req)
 
-        properties.update(external_def.get("properties", {}))
+        self._merge_redeclared_properties(properties, external_def.get("properties", {}))
         required.update(external_def.get("required", []))
 
         return properties, required
+
+    @classmethod
+    def _merge_redeclared_properties(cls, properties: dict[str, dict], incoming: dict[str, dict]) -> None:
+        """`properties.update(incoming)`, except that a redeclaration keeps the constructor
+        defaults it does not restate.
+
+        A later allOf member narrowing a property's type supersedes the earlier
+        declaration, but an `x-<lang>-default` / `-default-code` / `-imports` the
+        redeclaration says nothing about still describes how to fill the field (see
+        `_inherit_language_defaults` for the in-file counterpart).
+        """
+        for prop_name, prop_schema in incoming.items():
+            inherited = properties.get(prop_name)
+            if inherited is not None and isinstance(prop_schema, dict):
+                prop_schema = cls._with_inherited_language_default_keys(prop_schema, inherited)
+            properties[prop_name] = prop_schema
+
+    @classmethod
+    def _with_inherited_language_default_keys(cls, prop_schema: dict, inherited: dict) -> dict:
+        """`prop_schema` plus the `x-<lang>-default` / `-default-code` / `-imports` keys of
+        `inherited` for every language `prop_schema` declares no default of its own for."""
+        if not isinstance(inherited, dict):
+            return prop_schema
+
+        def declared_languages(schema: dict) -> set[str]:
+            languages = set()
+            for key in schema:
+                match = cls._LANGUAGE_DEFAULT_KEY.match(key)
+                if match and match.group(2) in ("default", "default-code"):
+                    languages.add(match.group(1))
+            return languages
+
+        own = declared_languages(prop_schema)
+        carried = {key: value for key, value in inherited.items() if (match := cls._LANGUAGE_DEFAULT_KEY.match(key)) and match.group(1) not in own}
+        if not carried:
+            return prop_schema
+        return {**carried, **prop_schema}
 
     def _analyze_external_base_properties(
         self,

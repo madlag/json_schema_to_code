@@ -161,8 +161,8 @@ def test_a_redeclaration_inherits_the_base_constructor_default(tmp_path: Path):
     travels too, rebuilt for the narrowed type."""
     code = generate(_data_schema())
 
-    assert "state: BaseState = field(default_factory=lambda: BaseState.from_dict({}))" in code
-    assert "state: SubState = field(default_factory=lambda: SubState.from_dict({}))" in code
+    assert "state: BaseState = field(default_factory=lambda: BaseState())" in code
+    assert "state: SubState = field(default_factory=lambda: SubState())" in code
 
     module = load(code, tmp_path, "generated_inherited_default")
     assert isinstance(module.Sub(kind="x").state, module.SubState)
@@ -201,4 +201,55 @@ def test_default_and_code_together_is_an_error():
 def test_a_bad_import_is_an_error():
     schema = root_with({"id": {"type": "string", "x-python-default-code": "make_id()", "x-python-imports": ["make_id = 1"]}})
     with pytest.raises(ValueError, match="not a single import statement"):
+        generate(schema)
+
+
+def _three_level_data_schema() -> dict:
+    """Base{state: BaseState, x-python-default {}}, Mid narrowing state WITHOUT restating the
+    default, Sub narrowing it again (explayn's ActivityData -> QuizData -> StatementQuizData)."""
+    return {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Sub",
+        "$defs": {
+            "BaseState": {"type": "object", "properties": {"n": {"type": "integer", "default": 0}}},
+            "MidState": {"allOf": [{"$ref": "#/$defs/BaseState"}, {"type": "object", "properties": {"m": {"type": "integer", "default": 0}}}]},
+            "SubState": {"allOf": [{"$ref": "#/$defs/MidState"}, {"type": "object", "properties": {"s": {"type": "integer", "default": 0}}}]},
+            "Base": {"type": "object", "properties": {"kind": {"type": "string"}, "state": {"$ref": "#/$defs/BaseState", "x-python-default": {}}}, "required": ["kind", "state"]},
+            "Mid": {"allOf": [{"$ref": "#/$defs/Base"}, {"type": "object", "properties": {"state": {"$ref": "#/$defs/MidState"}}}]},
+            "Sub": {"allOf": [{"$ref": "#/$defs/Mid"}, {"type": "object", "properties": {"state": {"$ref": "#/$defs/SubState"}}}]},
+        },
+    }
+
+
+def test_an_inherited_constructor_default_travels_through_an_intermediate_redeclaration(tmp_path: Path):
+    """The middle class narrows the type without restating the default; the default
+    still reaches the grandchild (it describes how to fill the field, not one class)."""
+    code = generate(_three_level_data_schema())
+
+    assert "state: MidState = field(default_factory=lambda: MidState())" in code
+    assert "state: SubState = field(default_factory=lambda: SubState())" in code
+
+    module = load(code, tmp_path, "generated_transitive_default")
+    assert isinstance(module.Sub(kind="x").state, module.SubState)
+    assert module.Sub(kind="x").state.s == 0
+
+
+def test_an_empty_default_is_the_empty_instance_even_on_a_nullable_field(tmp_path: Path):
+    """`{}` asks for an instance; a nullable type alone would have meant `None`. The
+    annotation follows the 1.1.1 rule: a non-null constructor default keeps it plain."""
+    empty = {"Empty": {"type": "object", "properties": {"n": {"type": "integer", "default": 0}}}}
+    schema = root_with({"inner": {"oneOf": [{"$ref": "#/$defs/Empty"}, {"type": "null"}], "x-python-default": {}}}, empty)
+    code = generate(schema)
+
+    assert "inner: Empty = field(default_factory=lambda: Empty())" in code
+    module = load(code, tmp_path, "generated_empty_on_nullable")
+    assert isinstance(module.Root(kind="x").inner, module.Empty)
+
+
+def test_an_empty_default_cannot_build_an_enum():
+    schema = root_with(
+        {"color": {"$ref": "#/$defs/Color", "x-python-default": {}}},
+        {"Color": {"type": "string", "enum": ["red", "blue"]}},
+    )
+    with pytest.raises(ValueError, match="cannot build the enum"):
         generate(schema)

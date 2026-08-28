@@ -327,8 +327,9 @@ def test_required_travels_a_two_hop_external_allof_chain():
 
 def test_a_constructor_default_travels_a_two_hop_external_allof_chain():
     """`ActivityData.state` carries `x-python-default: {}` two schema files up;
-    `ChildData` narrows `state` to `ChildState` and must get the same default,
-    rebuilt for the narrowed type (the activity Data classes of explayn_main)."""
+    `MidData` narrows `state` without restating the default and `ChildData` narrows
+    it again — both must get the default, rebuilt for the narrowed type (the
+    activity Data classes of explayn_main: ActivityData -> QuizData -> StatementQuizData)."""
     schema = load_schema("child_schema.json", CHAIN_DIR)
 
     config = CodeGeneratorConfig()
@@ -339,5 +340,5 @@ def test_a_constructor_default_travels_a_two_hop_external_allof_chain():
     code = PipelineGenerator("ChildData", schema, config, "python").generate()
     ast.parse(code)
     child = code.split("class ChildData")[1]
-    assert "state: ChildState = field(default_factory=lambda: ChildState.from_dict({}))" in child, code
+    assert "state: ChildState = field(default_factory=lambda: ChildState())" in child, code
     assert re.search(r"^\s+problem: ChildProblem\s*$", child, re.M), code

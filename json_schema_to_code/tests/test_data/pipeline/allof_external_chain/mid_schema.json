@@ -4,15 +4,53 @@
   "$defs": {
     "MidProblem": {
       "allOf": [
-        { "$ref": "/base_schema#/$defs/BaseProblem" },
-        { "type": "object", "properties": { "level": { "type": "integer", "default": 1 } } }
+        {
+          "$ref": "/base_schema#/$defs/BaseProblem"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        }
       ]
     },
     "MidData": {
-      "description": "one hop: narrows problem, redeclares nothing about required",
+      "description": "one hop: narrows problem and state, restates nothing about required or defaults",
       "allOf": [
-        { "$ref": "/base_schema#/$defs/ActivityData" },
-        { "type": "object", "properties": { "problem": { "$ref": "#/$defs/MidProblem" } } }
+        {
+          "$ref": "/base_schema#/$defs/ActivityData"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "problem": {
+              "$ref": "#/$defs/MidProblem"
+            },
+            "state": {
+              "$ref": "#/$defs/MidState"
+            }
+          }
+        }
+      ]
+    },
+    "MidState": {
+      "allOf": [
+        {
+          "$ref": "/base_schema#/$defs/BaseState"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "step": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        }
       ]
     }
   }

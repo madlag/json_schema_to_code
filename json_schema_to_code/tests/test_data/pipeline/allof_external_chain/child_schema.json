@@ -41,7 +41,7 @@
     "ChildState": {
       "allOf": [
         {
-          "$ref": "/base_schema#/$defs/BaseState"
+          "$ref": "/mid_schema#/$defs/MidState"
         },
         {
           "type": "object",
