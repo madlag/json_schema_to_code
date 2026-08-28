@@ -19,43 +19,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import AstMerger, CodeMergeError, CustomCode
-
-try:
-    import tree_sitter_swift as ts_swift
-    from tree_sitter import Language, Parser
-
-    TREE_SITTER_AVAILABLE = True
-except ImportError:
-    TREE_SITTER_AVAILABLE = False
-    Language = None
-    Parser = None
+from ..config import MergeStrategy
+from .base import CodeMergeError, CustomCode
+from .tree_sitter_merger import TreeSitterMerger
 
 
-class SwiftAstMerger(AstMerger):
+class SwiftAstMerger(TreeSitterMerger):
     """Merger for Swift source files using tree-sitter."""
+
+    LANGUAGE_NAME = "Swift"
+    GRAMMAR_MODULE = "tree_sitter_swift"
+    GRAMMAR_PACKAGE = "tree-sitter-swift"
 
     STANDARD_IMPORTS = {"Foundation"}
 
-    CUSTOM_CODE_START = "// CUSTOM CODE START"
-    CUSTOM_CODE_END = "// CUSTOM CODE END"
-
-    def __init__(self):
-        if not TREE_SITTER_AVAILABLE:
-            raise CodeMergeError("tree-sitter and tree-sitter-swift are required for Swift merging. " "Install with: pip install tree-sitter tree-sitter-swift")
-        self._parser = Parser(Language(ts_swift.language()))
-
     # ----------------------------------------------------------------- AstMerger
 
-    def parse(self, code: str) -> Any:
-        tree = self._parser.parse(bytes(code, "utf8"))
-        if tree.root_node.has_error:
-            errors = self._find_nodes(tree.root_node, "ERROR")
-            if errors:
-                first = errors[0]
-                snippet = self._text(first, code)[:50]
-                raise CodeMergeError(f"Failed to parse Swift code at line {first.start_point[0] + 1}: " f"syntax error near {snippet!r}")
-        return tree
+    def merge_files(
+        self,
+        generated_code: str,
+        existing_code: str,
+        merge_strategy: MergeStrategy = MergeStrategy.ERROR,
+    ) -> str:
+        custom_code = self.extract_custom_code(existing_code, generated_code)
+        if custom_code.is_empty():
+            return generated_code
+        merged = self.merge(generated_code, custom_code)
+        self.validate(merged)
+        return merged
 
     def extract_custom_code(self, existing_code: str, generated_code: str) -> CustomCode:
         existing_tree = self.parse(existing_code)
@@ -72,10 +63,9 @@ class SwiftAstMerger(AstMerger):
 
         # Custom imports
         for node in self._top_level(root, "import_declaration"):
-            text = self._text(node, existing_code).strip()
-            module = self._import_module(text)
+            module = self._import_module(node, existing_code)
             if module and module not in generated_imports and module not in self.STANDARD_IMPORTS:
-                custom.custom_imports.append(text)
+                custom.custom_imports.append(self._text(node, existing_code).strip())
 
         # Top-level declarations (struct/class/enum/extension), direct children only.
         for node in self._top_level(root, "class_declaration"):
@@ -95,13 +85,9 @@ class SwiftAstMerger(AstMerger):
         lines = generated_code.split("\n")
         result: list[str] = []
 
-        # Insert custom imports right after the last generated import line.
-        last_import_idx = -1
-        for i, line in enumerate(lines):
-            if line.strip().startswith("import "):
-                last_import_idx = i
-
         tree = self.parse(generated_code)
+        # Custom imports go right after the last generated import.
+        last_import_line = self._last_line(tree.root_node, "import_declaration")
         # Map generated type name -> last line index of its body (to append members).
         type_close_line: dict[str, int] = {}
         for node in self._top_level(tree.root_node, "class_declaration"):
@@ -120,9 +106,8 @@ class SwiftAstMerger(AstMerger):
                         for mline in member.split("\n"):
                             result.append("    " + mline if mline.strip() else mline)
             result.append(line)
-            if i == last_import_idx and custom_code.custom_imports:
-                for imp in custom_code.custom_imports:
-                    result.append(imp)
+            if i == last_import_line:
+                result.extend(custom_code.custom_imports)
 
         # Append custom top-level declarations and raw sections at end of file.
         tail: list[str] = []
@@ -173,7 +158,7 @@ class SwiftAstMerger(AstMerger):
     def _extract_imports(self, root, code) -> set[str]:
         modules = set()
         for node in self._top_level(root, "import_declaration"):
-            module = self._import_module(self._text(node, code).strip())
+            module = self._import_module(node, code)
             if module:
                 modules.add(module)
         return modules
@@ -208,39 +193,7 @@ class SwiftAstMerger(AstMerger):
                 members.setdefault(target, set()).update(self._member_names(node, code))
         return members
 
-    def _extract_marked_sections(self, code: str) -> list[str]:
-        sections: list[str] = []
-        current: list[str] = []
-        in_section = False
-        for line in code.split("\n"):
-            stripped = line.strip()
-            if stripped == self.CUSTOM_CODE_START:
-                in_section = True
-                current = []
-            elif stripped == self.CUSTOM_CODE_END:
-                if in_section and current:
-                    sections.append("\n".join(current))
-                in_section = False
-                current = []
-            elif in_section:
-                current.append(line)
-        return sections
-
     # -------------------------------------------------------------- tree helpers
-
-    def _top_level(self, root, node_type: str) -> list[Any]:
-        return [c for c in root.children if c.type == node_type]
-
-    def _find_nodes(self, node, node_type: str) -> list[Any]:
-        out = []
-        if node.type == node_type:
-            out.append(node)
-        for child in node.children:
-            out.extend(self._find_nodes(child, node_type))
-        return out
-
-    def _text(self, node, code: str) -> str:
-        return code[node.start_byte : node.end_byte]
 
     def _is_extension(self, node) -> bool:
         # struct/class/enum start with a `type_identifier` name child; an extension's
@@ -319,20 +272,14 @@ class SwiftAstMerger(AstMerger):
                     return self._text(ident[0], code)
         return None
 
-    def _import_module(self, import_text: str) -> str | None:
-        """The module an import names, ignoring any leading attributes.
+    def _import_module(self, node: Any, code: str) -> str | None:
+        """The module an import declaration names.
 
-        An import may be attributed -- ``@testable import Foo`` in a test target,
-        ``@_exported import Foo`` in an umbrella. Matching only a bare ``import``
-        prefix returned None for those, so the custom-import collector skipped
-        them and the merge dropped them.
+        Read from the declaration's ``identifier`` child, so attributes (``@testable
+        import Foo`` in a test target, ``@_exported import Foo`` in an umbrella) and
+        import kinds (``import struct Foundation.Date``) never get in the way.
         """
-        text = import_text.strip()
-        while text.startswith("@"):
-            head, _, rest = text.partition(" ")
-            if not rest:
-                return None
-            text = rest.strip()
-        if text.startswith("import "):
-            return text[len("import ") :].strip()
+        for child in node.children:
+            if child.type == "identifier":
+                return self._text(child, code)
         return None

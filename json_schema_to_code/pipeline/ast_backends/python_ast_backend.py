@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import collections
+import dataclasses
 from typing import Any
 
 from ..analyzer.ir_nodes import IR, ClassDef, FieldDef, TypeAlias, TypeKind, TypeRef
@@ -49,7 +50,11 @@ def optional_field_in_json(*args, default=None, **kwargs):
         self.needs_re_import = False
         self.type_aliases: set[str] = set()
         self.needs_optional_field_helper = False
-        self.enum_class_names: set[str] = set()
+        # The classes this IR defines, by name: an absent class-typed field defaults to
+        # an empty instance only when that instance can actually be built (see
+        # _empty_constructible), which only the class definitions can tell.
+        self.classes_by_name: dict[str, ClassDef] = {}
+        self._constructible: dict[str, bool] = {}
 
     def generate(self, ir: IR) -> str:
         """Generate Python code from IR using AST."""
@@ -58,9 +63,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
         self.needs_re_import = False
         self.type_aliases = set()
         self.needs_optional_field_helper = False
-        # A $ref to an enum and a $ref to an object are both TypeKind.CLASS; only the IR
-        # says which is which, and they need opposite defaults (see _get_field_default).
-        self.enum_class_names = {c.name for c in ir.classes if c.enum_def}
+        self.classes_by_name = {c.name: c for c in ir.classes}
+        self._constructible = {}
 
         # Build the module body
         body: list[ast.stmt] = []
@@ -166,56 +170,23 @@ def optional_field_in_json(*args, default=None, **kwargs):
                     self.needs_re_import = True
 
     def _generate_imports(self) -> list[ast.stmt]:
-        """Generate import statements as AST nodes."""
-        import_groups: dict[str, set[str]] = collections.defaultdict(set)
+        """Import statements: `__future__` first (Python insists), then modules alphabetically.
+
+        Grouping into stdlib / third-party / first-party is ruff's job (the isort pass
+        FormatterConfig.sort_imports turns on): which modules are first-party depends on
+        the project the file lands in, so any grouping done here would be wrong for it.
+        """
+        names_by_module: dict[str, set[str]] = collections.defaultdict(set)
         for module, name in self.python_imports:
-            import_groups[module].add(name)
+            names_by_module[module].add(name)
 
-        STDLIB_MODULES = {"abc", "collections", "dataclasses", "enum", "typing", "re"}
-
-        stdlib_groups = {m: import_groups[m] for m in import_groups if m in STDLIB_MODULES}
-        third_party_groups = {m: import_groups[m] for m in import_groups if m not in STDLIB_MODULES and m != "__future__"}
-
-        nodes: list[ast.stmt] = []
-
-        # __future__ imports first
-        if "__future__" in import_groups:
-            names = sorted(import_groups["__future__"])
-            nodes.append(
-                ast.ImportFrom(
-                    module="__future__",
-                    names=[ast.alias(name=n, asname=None) for n in names],
-                    level=0,
-                )
-            )
-
-        # re module import
+        entries: list[tuple[str, ast.stmt]] = [
+            (module, ast.ImportFrom(module=module, names=[ast.alias(name=n, asname=None) for n in sorted(names)], level=0)) for module, names in names_by_module.items()
+        ]
         if self.needs_re_import:
-            nodes.append(ast.Import(names=[ast.alias(name="re", asname=None)]))
-
-        # Standard library
-        for module in sorted(stdlib_groups.keys()):
-            names = sorted(stdlib_groups[module])
-            nodes.append(
-                ast.ImportFrom(
-                    module=module,
-                    names=[ast.alias(name=n, asname=None) for n in names],
-                    level=0,
-                )
-            )
-
-        # Third party
-        for module in sorted(third_party_groups.keys()):
-            names = sorted(third_party_groups[module])
-            nodes.append(
-                ast.ImportFrom(
-                    module=module,
-                    names=[ast.alias(name=n, asname=None) for n in names],
-                    level=0,
-                )
-            )
-
-        return nodes
+            entries.append(("re", ast.Import(names=[ast.alias(name="re", asname=None)])))
+        entries.sort(key=lambda entry: (entry[0] != "__future__", entry[0]))
+        return [node for _, node in entries]
 
     def _generate_class(self, class_def: ClassDef) -> ast.ClassDef | None:
         """Generate a class definition as AST node."""
@@ -315,10 +286,14 @@ def optional_field_in_json(*args, default=None, **kwargs):
         if not field.type_ref:
             return None
 
-        # Determine default first — may mutate field.type_ref.is_nullable
-        value = self._get_field_default(field)
+        value, widen_to_none = self._field_default(field)
+        if field.omit_when_default and value is None:
+            raise ValueError(f"x-omit-when-default on {field.name!r}: the field is required and declares no default, so there is nothing to omit it against.")
 
-        type_str = self.translate_type(field.type_ref)
+        # The annotation follows the default: a None default on a non-nullable class
+        # reference reads `X | None`. The IR itself is left as the analyzer built it.
+        type_ref = dataclasses.replace(field.type_ref, is_nullable=True) if widen_to_none else field.type_ref
+        type_str = self.translate_type(type_ref)
 
         # Build type annotation
         try:
@@ -334,56 +309,100 @@ def optional_field_in_json(*args, default=None, **kwargs):
             simple=1,
         )
 
-    def _get_field_default(self, field: FieldDef) -> ast.expr | None:
-        """Get the default value expression for a field."""
-        has_explicit_default = field.has_default or (field.type_ref and field.type_ref.has_default)
-        is_nullable = field.type_ref and field.type_ref.is_nullable
+    def _field_has_default(self, field: FieldDef) -> bool:
+        """Whether the generated declaration carries a default.
 
-        if has_explicit_default:
-            default_val = field.default_value if field.has_default else field.type_ref.default_value
-
-            if default_val is None and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-                if is_nullable or self._is_enum_ref(field.type_ref):
-                    return self._null_default(field)
-                else:
-                    clean_type = field.type_ref.name.strip('"')
-                    self.python_imports.add(("dataclasses", "field"))
-                    return self._parse_expr(f"field(default_factory=lambda: {clean_type}())")
-
-            return self._format_default_expr(default_val, field.type_ref)
-
-        elif not field.is_required and field.type_ref and field.type_ref.kind == TypeKind.CLASS:
-            # Optional CLASS types without explicit default
-            if is_nullable or self._is_enum_ref(field.type_ref):
-                return self._null_default(field)
-            else:
-                clean_type = field.type_ref.name.strip('"')
-                self.python_imports.add(("dataclasses", "field"))
-                return self._parse_expr(f"field(default_factory=lambda: {clean_type}())")
-
-        elif is_nullable:
-            return self._format_default_expr(None, field.type_ref)
-
-        return None
-
-    def _is_enum_ref(self, type_ref) -> bool:
-        """Whether this CLASS reference points at a generated Enum.
-
-        An object gets an empty instance as its default; an enum cannot -- ``E()`` raises
-        ``TypeError: missing 1 required positional argument: 'value'``, so the dataclass
-        could be neither constructed nor deserialized. Absent means None for enums.
+        Every non-required field gets one -- None, an empty instance or an empty
+        container -- and a required one only when the schema declares it or the type
+        admits null. This is the single predicate behind field ordering, empty
+        constructibility and the default expression itself.
         """
-        return type_ref.name.strip('"') in self.enum_class_names
+        type_ref = field.type_ref
+        return field.has_default or not field.is_required or (type_ref is not None and (type_ref.has_default or type_ref.is_nullable))
 
-    def _null_default(self, field: FieldDef) -> ast.expr | None:
-        """Default a field to None, widening its annotation to match."""
-        # translate_type() runs after this and reads is_nullable, so the annotation follows.
-        field.type_ref.is_nullable = True
-        return self._format_default_expr(None, field.type_ref)
+    def _excludes_default(self, field: FieldDef) -> bool:
+        """Whether the field is left out of the JSON while it holds its default."""
+        return self.config.exclude_default_value_from_json or field.omit_when_default
 
-    def _use_optional_field_helper(self) -> bool:
-        """Return True when the compact helper syntax should be used."""
-        return self.config.exclude_default_value_from_json and self.config.optional_field_helper_module is not None
+    def _field_default(self, field: FieldDef) -> tuple[ast.expr | None, bool]:
+        """The field's default expression, and whether the annotation must widen to `| None`.
+
+        Widening happens when an absent class-typed field cannot get an empty instance
+        and falls back to None while the analyzer marked the type non-nullable.
+        """
+        type_ref = field.type_ref
+        exclude = self._excludes_default(field)
+
+        if field.has_default or type_ref.has_default:
+            value = field.default_value if field.has_default else type_ref.default_value
+            if type_ref.kind == TypeKind.CLASS and (value is None or isinstance(value, dict)):
+                return self._class_default(field, value, exclude)
+            return self._format_default_expr(value, type_ref, exclude), False
+
+        if not field.is_required and type_ref.kind == TypeKind.CLASS:
+            return self._class_default(field, None, exclude)
+
+        if type_ref.is_nullable:
+            return self._format_default_expr(None, type_ref, exclude), False
+
+        return None, False
+
+    def _class_default(self, field: FieldDef, value: dict | None, exclude: bool) -> tuple[ast.expr, bool]:
+        """Default for a field typed as a class.
+
+        A dict default is built through `from_dict`, so the field holds an instance and
+        not the raw dict. Absent means an empty instance when the class can be built with
+        no arguments, and None otherwise: an enum cannot (`E()` needs a value) and neither
+        can a class with a required field -- `default_factory=lambda: X()` would raise at
+        construction, leaving the dataclass impossible to build or deserialize.
+        """
+        type_ref = field.type_ref
+        class_name = type_ref.name.strip('"')
+        if isinstance(value, dict):
+            return self._factory_default(f"{class_name}.from_dict({value!r})", exclude), False
+        if type_ref.is_nullable or not self._empty_constructible(class_name):
+            return self._format_default_expr(None, type_ref, exclude), not type_ref.is_nullable
+        return self._factory_default(f"{class_name}()", exclude), False
+
+    def _factory_default(self, instance: str, exclude: bool) -> ast.expr:
+        """`field(default_factory=lambda: <instance>)`; when excluded from JSON, a field still
+        equal to a freshly built instance is omitted (so an all-default sub-object is).
+
+        dataclasses_json hands the exclude predicate the field's already-serialized value,
+        so the fresh instance is compared in its dict form.
+        """
+        self.python_imports.add(("dataclasses", "field"))
+        if exclude:
+            self.python_imports.add(("dataclasses_json", "config"))
+            return self._parse_expr(f"field(default_factory=lambda: {instance}, metadata=config(exclude=lambda x: x == {instance}.to_dict()))")
+        return self._parse_expr(f"field(default_factory=lambda: {instance})")
+
+    def _empty_constructible(self, class_name: str) -> bool:
+        """Whether `Name()` succeeds: every field, inherited ones included, has a default.
+
+        Enums never do. A class this IR does not define (an external $ref) is taken to,
+        since nothing here can tell otherwise.
+        """
+        if class_name not in self._constructible:
+            class_def = self.classes_by_name.get(class_name)
+            if class_def is None:
+                self._constructible[class_name] = True
+            else:
+                self._constructible[class_name] = not class_def.is_enum and all(self._field_has_default(f) for f in self._effective_fields(class_def).values())
+        return self._constructible[class_name]
+
+    def _effective_fields(self, class_def: ClassDef) -> dict[str, FieldDef]:
+        """The fields `__init__` takes: inherited first, own fields overriding by name.
+
+        Bases outside this IR contribute nothing -- their fields are unknown here.
+        """
+        fields: dict[str, FieldDef] = {}
+        for base_name in [class_def.base_class, *class_def.extra_base_classes]:
+            base = self.classes_by_name.get(base_name) if base_name else None
+            if base is not None:
+                fields.update(self._effective_fields(base))
+        fields.update({f.name: f for f in class_def.fields})
+        return fields
 
     def _emit_helper_call(self, default_repr: str) -> ast.expr:
         """Emit optional_field_in_json(default=X) and mark helper as needed."""
@@ -394,21 +413,27 @@ def optional_field_in_json(*args, default=None, **kwargs):
             self.python_imports.add((self.config.optional_field_helper_module, "optional_field_in_json"))
         return self._parse_expr(f"optional_field_in_json(default={default_repr})")
 
-    def _format_default_expr(self, value: Any, type_ref: TypeRef | None) -> ast.expr:
-        """Format a default value as an AST expression."""
+    def _format_default_expr(self, value: Any, type_ref: TypeRef | None, exclude: bool) -> ast.expr:
+        """Format a default value as an AST expression.
+
+        With `exclude`, the field is left out of the JSON while it still equals the
+        default -- through the project's helper when one is configured, inline otherwise.
+        """
+        use_helper = exclude and self.config.optional_field_helper_module is not None
+
         if value is None:
-            if self._use_optional_field_helper():
+            if use_helper:
                 return self._emit_helper_call("None")
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
                 return self._parse_expr("field(default=None, metadata=config(exclude=lambda x: x is None))")
             return ast.Constant(value=None)
 
         if isinstance(value, bool):
-            if self._use_optional_field_helper():
+            if use_helper:
                 return self._emit_helper_call("True" if value else "False")
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
                 result = "True" if value else "False"
@@ -416,10 +441,10 @@ def optional_field_in_json(*args, default=None, **kwargs):
             return ast.Constant(value=value)
 
         if isinstance(value, str):
-            if self._use_optional_field_helper():
+            if use_helper:
                 escaped = value.replace('"', '\\"')
                 return self._emit_helper_call(f'"{escaped}"')
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
                 escaped = value.replace('"', '\\"')
@@ -427,28 +452,28 @@ def optional_field_in_json(*args, default=None, **kwargs):
             return ast.Constant(value=value)
 
         if isinstance(value, (int, float)):
-            if self._use_optional_field_helper():
+            if use_helper:
                 return self._emit_helper_call(repr(value))
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses", "field"))
                 self.python_imports.add(("dataclasses_json", "config"))
                 return self._parse_expr(f"field(default={value}, metadata=config(exclude=lambda x: x == {value}))")
             return ast.Constant(value=value)
 
         if isinstance(value, list):
-            return self._format_list_default_expr(value)
+            return self._format_list_default_expr(value, exclude)
 
         if isinstance(value, dict):
-            return self._format_dict_default_expr(value)
+            return self._format_dict_default_expr(value, exclude)
 
         return ast.Constant(value=value)
 
-    def _format_list_default_expr(self, value: list) -> ast.expr:
+    def _format_list_default_expr(self, value: list, exclude: bool) -> ast.expr:
         """Format a list default value as AST expression."""
         self.python_imports.add(("dataclasses", "field"))
 
         if len(value) == 0:
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses_json", "config"))
                 return self._parse_expr("field(default_factory=list, metadata=config(exclude=lambda x: len(x) == 0))")
             return self._parse_expr("field(default_factory=list)")
@@ -457,17 +482,17 @@ def optional_field_in_json(*args, default=None, **kwargs):
         items = [repr(item) for item in value]
         content = "[" + ", ".join(items) + "]"
 
-        if self.config.exclude_default_value_from_json:
+        if exclude:
             self.python_imports.add(("dataclasses_json", "config"))
             return self._parse_expr(f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))")
         return self._parse_expr(f"field(default_factory=lambda: {content})")
 
-    def _format_dict_default_expr(self, value: dict) -> ast.expr:
+    def _format_dict_default_expr(self, value: dict, exclude: bool) -> ast.expr:
         """Format a dict default value as AST expression."""
         self.python_imports.add(("dataclasses", "field"))
 
         if len(value) == 0:
-            if self.config.exclude_default_value_from_json:
+            if exclude:
                 self.python_imports.add(("dataclasses_json", "config"))
                 return self._parse_expr("field(default_factory=dict, metadata=config(exclude=lambda x: len(x) == 0))")
             return self._parse_expr("field(default_factory=dict)")
@@ -476,7 +501,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
         items = [f"{repr(k)}: {repr(v)}" for k, v in value.items()]
         content = "{" + ", ".join(items) + "}"
 
-        if self.config.exclude_default_value_from_json:
+        if exclude:
             self.python_imports.add(("dataclasses_json", "config"))
             return self._parse_expr(f"field(default_factory=lambda: {content}, metadata=config(exclude=lambda x: x == {content}))")
         return self._parse_expr(f"field(default_factory=lambda: {content})")
@@ -535,11 +560,12 @@ def optional_field_in_json(*args, default=None, **kwargs):
         # An explicit x-python-type wins over anything inferred from the schema:
         # it is how a schema maps a shape onto a type the generator must not
         # own (a hand-written class, a plain dict for a foreign wire payload...).
-        if type_ref.override_type_python:
+        override = type_ref.type_overrides.get("python")
+        if override:
             for module, name in (("typing", "Any"), ("typing", "Literal")):
-                if name in type_ref.override_type_python:
+                if name in override:
                     self.python_imports.add((module, name))
-            return type_ref.override_type_python
+            return override
 
         if type_ref.kind == TypeKind.PRIMITIVE:
             type_name = self.TYPE_MAP.get(type_ref.name, type_ref.name)
@@ -645,22 +671,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
         return ast.parse(expr_str, mode="eval").body
 
     def _order_fields(self, fields: list[FieldDef]) -> list[FieldDef]:
-        """Order fields for dataclass compatibility."""
-        required_fields = []
-        optional_fields = []
-
-        for field in fields:
-            has_default = field.has_default
-            is_nullable = field.type_ref and field.type_ref.is_nullable
-            type_has_default = field.type_ref and field.type_ref.has_default
-            is_optional_class = not field.is_required and field.type_ref and field.type_ref.kind == TypeKind.CLASS
-
-            if has_default or is_nullable or type_has_default or is_optional_class:
-                optional_fields.append(field)
-            else:
-                required_fields.append(field)
-
-        return required_fields + optional_fields
+        """Fields without a default first, then the rest, each group in schema order."""
+        return [f for f in fields if not self._field_has_default(f)] + [f for f in fields if self._field_has_default(f)]
 
     def _post_process_code(self, code: str, generation_comment: str) -> str:
         """Post-process the generated code for formatting."""

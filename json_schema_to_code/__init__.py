@@ -5,7 +5,7 @@ Supports Python, C# and Swift code generation with AST-based pipeline,
 code merging, and configurable output options.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 __author__ = "François Lagunas"
 
 from .pipeline import (

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-27
+
+### Added
+
+- **Swift backend**: `Codable` structs / discriminated enums with lenient decoding, `swift_conformances`, `swift_nonisolated`, `x-swift-type`, `x-swift-known-subtypes`; a tree-sitter based `SwiftAstMerger`.
+- **`x-python-type` / `x-csharp-type` / `x-swift-type`** are one mechanism: every schema node's `x-<language>-type` keys are collected once into `TypeRef.type_overrides`, and each backend reads its own key in `translate_type`. `x-python-type` now works on every node kind (a bare primitive emitted `str` before); `x-csharp-type` is honoured for the first time.
+- **`x-omit-when-default`** (Python): per-property counterpart of `exclude_default_value_from_json`, through the same `dataclasses_json` `config(exclude=...)` mechanism (or the configured helper). A class-typed field is compared against a freshly built default instance, so an all-default sub-object is omitted.
+- **`formatter.sort_imports`** (default `true`): run ruff's isort rules over the output with the destination path as `--stdin-filename`, so the *consuming* project's first-party grouping applies and regeneration stops churning imports.
+- Tests that execute the generated module for every runtime-only behaviour above.
+
+### Changed
+
+- **Python defaults** come from one rule: a non-required class-typed field defaults to an empty instance only when the class is empty-constructible (every field, inherited ones included, has a default; enums never do), otherwise to `None` with the annotation widened. A dict `default` on a class-typed field builds the instance through `from_dict` instead of leaving a raw dict in the field. The backend no longer mutates the IR's nullability.
+- **Python imports** are emitted `__future__` first, then alphabetically; grouping is ruff's job (see `sort_imports`). The formatter passes `--line-length` only when no destination path is known — with one, the consuming project's configuration decides.
+- **Python merge** treats module-level type aliases and class decorators as schema-owned, like bases and fields: an existing alias is updated in place (moving below a member defined further down), generated decorators replace their namesakes while hand-added ones survive. A base generated undecorated (see 1.0.1 → 1.1.0 fix below) heals on the next merge.
+- **`CodeGeneratorConfig.from_dict` / `to_dict`** are driven by `dataclasses.fields()`: enum fields coerce, nested blocks recurse, `from_dict(to_dict(c)) == c`, unknown keys warn.
+- **Mergers**: `AstMerger.merge_files` is the single abstract entry; C# and Swift share a `TreeSitterMerger` base (parser, error reporting, node lookups, `// CUSTOM CODE` sections, import placement from the last import node rather than a text scan). `CustomCode` lost the five fields no merger wrote.
+- Swift `_import_module` reads the declaration's `identifier` child, so `@testable import X`, `@_exported import X` and `import struct Foundation.Date` are all recognised.
+- Test suite: the root duplicates of the `v3/` suites (`test_functional.py`, `test_merge.py`, `test_pipeline_integration.py`) and the data-less `v3/test_code_merge_roundtrip.py` are gone, their unique tests folded into `v3/`; `test_csharp_ast_roundtrip.py` points at its data again. No test is permanently skipped.
+
+### Fixed
+
+- Polymorphic base classes were emitted without `@dataclass_json` / `@dataclass`, silently dropping inherited fields from subclasses' `__init__` and `to_dict`.
+- `x-python-type` was parsed but never applied.
+- A new union alias was dropped by the merge, or would have been placed above the classes it unions (a `NameError`, since `A | B` evaluates eagerly).
+- `from_dict` ignored `formatter` and most `output` keys, leaving `config.formatter` a raw dict.
+- A non-required `$ref` to an enum defaulted to `E()`, which raises; an optional field that stopped being optional kept its `= None` across merges.
+- Attributed Swift imports were lost on regeneration.
+- A `$ref` to a class with required fields defaulted to `X()`, which raises at construction; a `$ref` with a dict default held a dict.
+
 ## [1.0.1] - 2024-12-19
 
 ### Added

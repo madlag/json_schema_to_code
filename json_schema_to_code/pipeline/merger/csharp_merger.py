@@ -10,27 +10,16 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import MergeStrategy
-from .base import AstMerger, CodeMergeError, CustomCode
-
-# Try to import tree-sitter
-try:
-    import tree_sitter_c_sharp as ts_csharp
-    from tree_sitter import Language, Node, Parser
-
-    TREE_SITTER_AVAILABLE = True
-except ImportError:
-    TREE_SITTER_AVAILABLE = False
-    Language = None
-    Parser = None
-    Node = None
+from .base import CodeMergeError, CustomCode
+from .tree_sitter_merger import TreeSitterMerger
 
 
-class CSharpAstMerger(AstMerger):
-    """Merger for C# source files using tree-sitter.
+class CSharpAstMerger(TreeSitterMerger):
+    """Merger for C# source files using tree-sitter."""
 
-    Requires tree-sitter and tree-sitter-c-sharp packages.
-    Falls back to text-based merging if not available.
-    """
+    LANGUAGE_NAME = "C#"
+    GRAMMAR_MODULE = "tree_sitter_c_sharp"
+    GRAMMAR_PACKAGE = "tree-sitter-c-sharp"
 
     # Standard using statements that are always generated
     STANDARD_USINGS = {
@@ -40,46 +29,7 @@ class CSharpAstMerger(AstMerger):
         "JsonSubTypes",
     }
 
-    # Custom code marker comments
-    CUSTOM_CODE_START = "// CUSTOM CODE START"
-    CUSTOM_CODE_END = "// CUSTOM CODE END"
-
     NO_MERGE_MARKER = "// jstc-no-merge"
-
-    def __init__(self):
-        """Initialize the C# merger.
-
-        Raises:
-            CodeMergeError: If tree-sitter is not available
-        """
-        if not TREE_SITTER_AVAILABLE:
-            raise CodeMergeError("tree-sitter and tree-sitter-c-sharp are required for C# merging. Install with: pip install tree-sitter tree-sitter-c-sharp")
-
-        self._parser = Parser(Language(ts_csharp.language()))
-
-    def parse(self, code: str) -> Any:
-        """Parse C# source code into a tree-sitter tree.
-
-        Args:
-            code: C# source code string
-
-        Returns:
-            tree-sitter Tree object
-
-        Raises:
-            CodeMergeError: If the code cannot be parsed
-        """
-        tree = self._parser.parse(bytes(code, "utf8"))
-
-        # Check for parse errors
-        if tree.root_node.has_error:
-            # Find the error location
-            errors = self._find_errors(tree.root_node)
-            if errors:
-                first_error = errors[0]
-                raise CodeMergeError(f"Failed to parse C# code at line {first_error.start_point[0] + 1}: syntax error near '{first_error.text.decode('utf8')[:50]}...'")
-
-        return tree
 
     def merge_files(
         self,
@@ -131,7 +81,7 @@ class CSharpAstMerger(AstMerger):
 
         # Custom using statements
         for using in self._find_nodes(root, "using_directive"):
-            using_text = self._get_node_text(using, existing_code)
+            using_text = self._text(using, existing_code)
             namespace = self._extract_namespace_from_using(using_text)
             if namespace and namespace not in generated_usings:
                 if file_namespace and namespace == file_namespace:
@@ -217,7 +167,7 @@ class CSharpAstMerger(AstMerger):
                 if not is_custom and prev_comment_nodes:
                     key = self._member_key(member, existing_code, class_name)
                     if key:
-                        comments = [self._get_node_text(c, existing_code) for c in prev_comment_nodes]
+                        comments = [self._text(c, existing_code) for c in prev_comment_nodes]
                         custom.member_leading_comments.setdefault(class_name, {})[key] = comments
 
                 prev_attr_nodes = []
@@ -231,11 +181,12 @@ class CSharpAstMerger(AstMerger):
         lines = generated_code.split("\n")
         result_lines = []
 
-        usings_added = False
         current_class = None
         class_end_indices: dict[str, int] = {}
 
         tree = self.parse(generated_code)
+        # Custom usings go right after the last generated using directive.
+        last_using_line = self._last_line(tree.root_node, "using_directive")
         generated_members = self._extract_class_members(tree.root_node, generated_code)
         for class_node in self._find_nodes(tree.root_node, "class_declaration"):
             class_name = self._get_class_name(class_node, generated_code)
@@ -244,14 +195,6 @@ class CSharpAstMerger(AstMerger):
 
         for i, line in enumerate(lines):
             stripped = line.strip()
-
-            if stripped.startswith("using ") and not usings_added:
-                result_lines.append(line)
-                if i + 1 < len(lines) and not lines[i + 1].strip().startswith("using "):
-                    for custom_using in custom_code.custom_imports:
-                        result_lines.append(custom_using)
-                    usings_added = True
-                continue
 
             if "class " in stripped and stripped.endswith("{") or ("class " in stripped and i + 1 < len(lines) and lines[i + 1].strip() == "{"):
                 for class_name in class_end_indices:
@@ -282,6 +225,8 @@ class CSharpAstMerger(AstMerger):
                     current_class = None
 
             result_lines.append(line)
+            if i == last_using_line:
+                result_lines.extend(custom_code.custom_imports)
 
         if custom_code.raw_sections:
             for i in range(len(result_lines) - 1, -1, -1):
@@ -301,33 +246,12 @@ class CSharpAstMerger(AstMerger):
         if "class " not in code and "enum " not in code:
             raise CodeMergeError("Merged C# code has no type definitions")
 
-    # -- Tree helpers --
-
-    def _find_errors(self, node: Any) -> list[Any]:
-        errors = []
-        if node.type == "ERROR":
-            errors.append(node)
-        for child in node.children:
-            errors.extend(self._find_errors(child))
-        return errors
-
-    def _find_nodes(self, node: Any, node_type: str) -> list[Any]:
-        results = []
-        if node.type == node_type:
-            results.append(node)
-        for child in node.children:
-            results.extend(self._find_nodes(child, node_type))
-        return results
-
-    def _get_node_text(self, node: Any, code: str) -> str:
-        return code[node.start_byte : node.end_byte]
-
     # -- Extraction helpers --
 
     def _extract_usings(self, root: Any, code: str) -> set[str]:
         usings = set()
         for using in self._find_nodes(root, "using_directive"):
-            text = self._get_node_text(using, code)
+            text = self._text(using, code)
             namespace = self._extract_namespace_from_using(text)
             if namespace:
                 usings.add(namespace)
@@ -337,11 +261,11 @@ class CSharpAstMerger(AstMerger):
         for ns_node in self._find_nodes(root, "namespace_declaration"):
             for child in ns_node.children:
                 if child.type in ("identifier", "qualified_name"):
-                    return self._get_node_text(child, code)
+                    return self._text(child, code)
         for ns_node in self._find_nodes(root, "file_scoped_namespace_declaration"):
             for child in ns_node.children:
                 if child.type in ("identifier", "qualified_name"):
-                    return self._get_node_text(child, code)
+                    return self._text(child, code)
         return None
 
     def _extract_namespace_from_using(self, using_text: str) -> str | None:
@@ -423,7 +347,7 @@ class CSharpAstMerger(AstMerger):
                 name_node = variable.child_by_field_name("name")
                 if not name_node:
                     continue
-                field_name = self._get_node_text(name_node, code)
+                field_name = self._text(name_node, code)
                 if field_name:
                     members[field_name] = member
         return members
@@ -450,19 +374,19 @@ class CSharpAstMerger(AstMerger):
     def _get_class_name(self, node: Any, code: str) -> str | None:
         for child in node.children:
             if child.type == "identifier":
-                return self._get_node_text(child, code)
+                return self._text(child, code)
         return None
 
     def _get_enum_name(self, node: Any, code: str) -> str | None:
         for child in node.children:
             if child.type == "identifier":
-                return self._get_node_text(child, code)
+                return self._text(child, code)
         return None
 
     def _get_property_name(self, node: Any, code: str) -> str | None:
         name_node = node.child_by_field_name("name")
         if name_node:
-            return self._get_node_text(name_node, code)
+            return self._text(name_node, code)
         return None
 
     def _get_property_name_from_source(self, attr_source: str) -> str | None:
@@ -481,7 +405,7 @@ class CSharpAstMerger(AstMerger):
     def _get_method_name(self, node: Any, code: str) -> str | None:
         for child in node.children:
             if child.type == "identifier":
-                return self._get_node_text(child, code)
+                return self._text(child, code)
         return None
 
     # -- Member key and comment helpers --
@@ -500,13 +424,13 @@ class CSharpAstMerger(AstMerger):
             for var in self._find_nodes(member_node, "variable_declarator"):
                 name_node = var.child_by_field_name("name")
                 if name_node:
-                    return f"field_{self._get_node_text(name_node, code)}"
+                    return f"field_{self._text(name_node, code)}"
         return None
 
     def _get_text_with_preceding_comments(self, comment_nodes: list, member_node: Any, code: str) -> str:
         """Get member source text including preceding comment nodes."""
         if not comment_nodes:
-            return self._get_node_text(member_node, code)
+            return self._text(member_node, code)
         start = comment_nodes[0].start_byte
         return code[start : member_node.end_byte]
 
@@ -632,25 +556,3 @@ class CSharpAstMerger(AstMerger):
             merged_code = merged_code[:offset] + text + merged_code[offset:]
 
         return merged_code
-
-    def _extract_marked_sections(self, code: str) -> list[str]:
-        """Extract code sections marked with // CUSTOM CODE comments."""
-        sections = []
-        lines = code.split("\n")
-        in_section = False
-        current_section: list[str] = []
-
-        for line in lines:
-            stripped = line.strip()
-            if stripped == self.CUSTOM_CODE_START:
-                in_section = True
-                current_section = []
-            elif stripped == self.CUSTOM_CODE_END:
-                if in_section and current_section:
-                    sections.append("\n".join(current_section))
-                in_section = False
-                current_section = []
-            elif in_section:
-                current_section.append(line)
-
-        return sections

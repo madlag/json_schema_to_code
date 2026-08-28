@@ -233,11 +233,12 @@ class SwiftAstBackend(AstBackend):
         if field.has_default:
             default = self.format_default_value(field.default_value, field.type_ref)
 
-        # x-swift-type: emit the client-provided type verbatim. A trailing "?" makes it
-        # optional (decoded via decodeIfPresent); defaults are kept only for empty
-        # container literals, which format the same for any element type.
-        if field.swift_type_override:
-            swift_type = field.swift_type_override
+        # x-swift-type on the property: the client-provided type verbatim. A trailing "?"
+        # makes it optional (decoded via decodeIfPresent); defaults are kept only for
+        # empty container literals, which format the same for any element type.
+        override = field.type_ref.type_overrides.get("swift")
+        if override:
+            swift_type = override
             is_optional = swift_type.endswith("?")
             if is_optional:
                 default = None
@@ -278,6 +279,9 @@ class SwiftAstBackend(AstBackend):
         return result
 
     def _translate_type_inner(self, type_ref: TypeRef) -> str:
+        override = type_ref.type_overrides.get("swift")
+        if override:
+            return override
         kind = type_ref.kind
         if kind == TypeKind.PRIMITIVE:
             return self.TYPE_MAP.get(type_ref.name, type_ref.name)

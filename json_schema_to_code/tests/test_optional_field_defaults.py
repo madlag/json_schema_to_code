@@ -62,6 +62,81 @@ def test_generated_module_survives_the_absent_enum(tmp_path: Path):
     assert module.Root.from_dict({"kind": "x", "state": "A"}).state == module.State.A
 
 
+def _root_with(inner_ref: dict, inner_def: dict, bases: dict | None = None) -> dict:
+    """Root -> inner_ref -> Inner; `bases` are definitions Inner extends (emitted first, as a
+    Python subclass must follow its base)."""
+    return {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Root",
+        "$defs": {
+            "Root": {
+                "type": "object",
+                "properties": {"kind": {"type": "string"}, "inner": inner_ref},
+                "required": ["kind"],
+            },
+            **(bases or {}),
+            "Inner": inner_def,
+        },
+    }
+
+
+REQUIRED_INNER = {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
+OPTIONAL_INNER = {"type": "object", "properties": {"name": {"type": "string", "default": ""}, "n": {"type": "integer", "default": 0}}}
+
+
+def test_absent_ref_to_a_class_with_required_fields_is_optional(tmp_path: Path):
+    """`Inner()` would raise (missing `name`), so an empty-instance default cannot be
+    the answer: the field defaults to None and its annotation says so."""
+    code = generate(_root_with({"$ref": "#/$defs/Inner"}, REQUIRED_INNER))
+
+    assert "inner: Inner | None = None" in code
+    assert "Inner()" not in code
+
+    module = load(code, tmp_path)
+    assert module.Root(kind="x").inner is None
+    assert module.Root.from_dict({"kind": "x"}).inner is None
+    assert module.Root.from_dict({"kind": "x", "inner": {"name": "n"}}).inner.name == "n"
+
+
+def test_absent_ref_to_an_empty_constructible_class_gets_an_instance(tmp_path: Path):
+    code = generate(_root_with({"$ref": "#/$defs/Inner"}, OPTIONAL_INNER))
+
+    assert "inner: Inner = field(default_factory=lambda: Inner())" in code
+
+    module = load(code, tmp_path)
+    assert module.Root(kind="x").inner == module.Inner()
+    assert module.Root.from_dict({"kind": "x"}).to_dict() == {"kind": "x", "inner": {"name": "", "n": 0}}
+
+
+def test_constructibility_counts_inherited_fields(tmp_path: Path):
+    """A class whose required field comes from an allOf base cannot be built empty either."""
+    schema = _root_with(
+        {"$ref": "#/$defs/Inner"},
+        {"allOf": [{"$ref": "#/$defs/Base"}, {"type": "object", "properties": {"extra": {"type": "integer", "default": 0}}}]},
+        {"Base": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
+    )
+    code = generate(schema)
+
+    assert "inner: Inner | None = None" in code
+
+    module = load(code, tmp_path)
+    assert module.Root(kind="x").inner is None
+    assert module.Root.from_dict({"kind": "x", "inner": {"id": "i"}}).inner.extra == 0
+
+
+def test_a_dict_default_on_a_ref_builds_the_instance(tmp_path: Path):
+    """The field holds an Inner, not the raw dict the schema wrote the default as."""
+    code = generate(_root_with({"$ref": "#/$defs/Inner", "default": {"name": "n"}}, REQUIRED_INNER))
+
+    assert "inner: Inner = field(default_factory=lambda: Inner.from_dict({'name': 'n'}))" in code
+
+    module = load(code, tmp_path)
+    root = module.Root(kind="x")
+    assert isinstance(root.inner, module.Inner)
+    assert root.inner.name == "n"
+    assert module.Root.from_dict({"kind": "x"}).to_dict() == {"kind": "x", "inner": {"name": "n"}}
+
+
 def merge(generated: str, existing: str) -> str:
     return PythonAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
 

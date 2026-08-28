@@ -367,6 +367,11 @@ class CSharpAstBackend(AstBackend):
 
     def _translate_type_inner(self, type_ref: TypeRef) -> str:
         """Inner type translation without nullable handling."""
+        # x-csharp-type: the schema names the type verbatim.
+        override = type_ref.type_overrides.get("csharp")
+        if override:
+            return override
+
         if type_ref.kind == TypeKind.PRIMITIVE:
             return self.TYPE_MAP.get(type_ref.name, type_ref.name)
 

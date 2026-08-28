@@ -55,11 +55,11 @@ class TypeRef:
     # Whether this is a nullable type
     is_nullable: bool = False
 
-    # Explicit per-language type overrides (x-python-type / x-csharp-type):
-    # the schema names the type to emit instead of the inferred one, for shapes
-    # the generator must not own (foreign payloads, hand-written classes).
-    override_type_python: str = ""
-    override_type_csharp: str = ""
+    # Explicit per-language types from `x-<language>-type` keys on the schema node
+    # (language -> verbatim type, e.g. {"python": "datetime", "swift": "[NamedWidget]"}).
+    # The schema names the type to emit instead of the inferred one, for shapes the
+    # generator must not own: a hand-written class, a foreign payload, a scalar $def.
+    type_overrides: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -73,8 +73,9 @@ class FieldDef:
     default_value: Any = None
     has_default: bool = False
 
-    # Verbatim Swift type from x-swift-type (e.g. "[NamedWidget]", "JSONValue?")
-    swift_type_override: str | None = None
+    # x-omit-when-default: leave the field out of the serialized form when it
+    # still holds its default (Python backend).
+    omit_when_default: bool = False
 
     # For C# keyword escaping
     escaped_name: str | None = None

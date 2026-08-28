@@ -7,8 +7,11 @@ for backward compatibility.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import dataclasses
+import warnings
+from dataclasses import dataclass, field, fields
 from enum import Enum
+from typing import Any, get_type_hints
 
 
 class OutputMode(str, Enum):
@@ -131,42 +134,45 @@ class CodeGeneratorConfig:
 
     @staticmethod
     def from_dict(d: dict) -> CodeGeneratorConfig:
-        """Create a config from a dictionary."""
-        config = CodeGeneratorConfig()
-        for k, v in d.items():
-            if k == "output" and isinstance(v, dict):
-                if "mode" in v:
-                    config.output.mode = OutputMode(v["mode"])
-                if "merge_strategy" in v:
-                    config.output.merge_strategy = MergeStrategy(v["merge_strategy"])
-                for fk in ("output_path", "validate_before_write"):
-                    if fk in v:
-                        setattr(config.output, fk, v[fk])
-            elif k == "formatter" and isinstance(v, dict):
-                for fk, fv in v.items():
-                    if hasattr(config.formatter, fk):
-                        setattr(config.formatter, fk, fv)
-            elif hasattr(config, k):
-                setattr(config, k, v)
-        return config
+        """Build a config from a JSON-loaded dict (see `_config_from_dict`)."""
+        return _config_from_dict(CodeGeneratorConfig, d)
 
     def to_dict(self) -> dict:
-        """Convert config to a dictionary."""
-        return {
-            "ignore_classes": self.ignore_classes,
-            "global_ignore_fields": self.global_ignore_fields,
-            "order_classes": self.order_classes,
-            "ignoreSubClassOverrides": self.ignoreSubClassOverrides,
-            "drop_min_max_items": self.drop_min_max_items,
-            "use_array_of_super_type_for_variable_length_tuple": (self.use_array_of_super_type_for_variable_length_tuple),
-            "use_tuples": self.use_tuples,
-            "use_inline_unions": self.use_inline_unions,
-            "add_generation_comment": self.add_generation_comment,
-            "quoted_types_for_python": self.quoted_types_for_python,
-            "use_future_annotations": self.use_future_annotations,
-            "exclude_default_value_from_json": self.exclude_default_value_from_json,
-            "optional_field_helper_module": self.optional_field_helper_module,
-            "add_validation": self.add_validation,
-            "external_ref_base_module": self.external_ref_base_module,
-            "external_ref_schema_to_module": self.external_ref_schema_to_module,
-        }
+        """The JSON-ready form of this config; `from_dict(to_dict(c))` is `c`."""
+        return _config_to_dict(self)
+
+
+def _config_from_dict(cls: type, values: dict) -> Any:
+    """Populate a fresh `cls` from `values`, driven by its dataclass fields.
+
+    Enum fields coerce (`"merge"` -> OutputMode.MERGE), dataclass fields recurse (so a
+    partial `formatter` block overrides only the keys it names), and unknown keys are
+    warned about and skipped -- a config file may carry keys meant for other tools.
+    """
+    config = cls()
+    types = get_type_hints(cls)
+    known = {f.name for f in fields(cls)}
+    for key, value in values.items():
+        if key not in known:
+            warnings.warn(f"{cls.__name__}: unknown config key {key!r} ignored", stacklevel=3)
+            continue
+        field_type = types[key]
+        if isinstance(field_type, type) and issubclass(field_type, Enum):
+            value = field_type(value)
+        elif dataclasses.is_dataclass(field_type) and isinstance(value, dict):
+            value = _config_from_dict(field_type, value)
+        setattr(config, key, value)
+    return config
+
+
+def _config_to_dict(config: Any) -> dict:
+    """The inverse of `_config_from_dict`: enums as their values, nested configs as dicts."""
+    out: dict[str, Any] = {}
+    for f in fields(config):
+        value = getattr(config, f.name)
+        if isinstance(value, Enum):
+            value = value.value
+        elif dataclasses.is_dataclass(value):
+            value = _config_to_dict(value)
+        out[f.name] = value
+    return out

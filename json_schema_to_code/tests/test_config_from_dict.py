@@ -9,7 +9,10 @@ hence the end-to-end test at the bottom.
 
 from __future__ import annotations
 
+from dataclasses import fields
 from pathlib import Path
+
+import pytest
 
 from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
 from json_schema_to_code.pipeline.config import (
@@ -62,8 +65,9 @@ def test_formatter_block_is_a_partial_override():
     assert config.formatter.magic_trailing_comma is True
 
 
-def test_formatter_unknown_keys_are_ignored():
-    config = CodeGeneratorConfig.from_dict({"formatter": {"line_length": 120, "no_such_option": "boom"}})
+def test_formatter_unknown_keys_are_ignored_with_a_warning():
+    with pytest.warns(UserWarning, match="no_such_option"):
+        config = CodeGeneratorConfig.from_dict({"formatter": {"line_length": 120, "no_such_option": "boom"}})
 
     assert config.formatter.line_length == 120
     assert not hasattr(config.formatter, "no_such_option")
@@ -98,14 +102,15 @@ def test_output_block_is_a_partial_override():
 
 
 def test_top_level_keys_are_still_applied():
-    config = CodeGeneratorConfig.from_dict(
-        {
-            "use_inline_unions": True,
-            "quoted_types_for_python": ["Point"],
-            "formatter": {"line_length": 120},
-            "unknown_top_level_key": "ignored",
-        }
-    )
+    with pytest.warns(UserWarning, match="unknown_top_level_key"):
+        config = CodeGeneratorConfig.from_dict(
+            {
+                "use_inline_unions": True,
+                "quoted_types_for_python": ["Point"],
+                "formatter": {"line_length": 120},
+                "unknown_top_level_key": "ignored",
+            }
+        )
 
     assert config.use_inline_unions is True
     assert config.quoted_types_for_python == ["Point"]
@@ -121,3 +126,47 @@ def test_generate_to_file_accepts_a_json_config_with_a_formatter_block(tmp_path:
     PipelineGenerator("Point", SCHEMA, config, "python").generate_to_file(output_path)
 
     assert "class Point" in output_path.read_text(encoding="utf-8")
+
+
+def _fully_populated() -> CodeGeneratorConfig:
+    """Every field set away from its default, nested blocks included."""
+    config = CodeGeneratorConfig(
+        ignore_classes=["Temp"],
+        global_ignore_fields=["_internal"],
+        order_classes=["Base", "Child"],
+        ignoreSubClassOverrides=True,
+        drop_min_max_items=True,
+        use_array_of_super_type_for_variable_length_tuple=False,
+        use_tuples=False,
+        use_inline_unions=True,
+        add_generation_comment=False,
+        swift_conformances=["Decodable", "Sendable"],
+        swift_nonisolated=True,
+        quoted_types_for_python=["Node"],
+        use_future_annotations=False,
+        exclude_default_value_from_json=True,
+        optional_field_helper_module="app.helpers",
+        add_validation=True,
+        external_ref_base_module="app.schemas",
+        external_ref_schema_to_module={"quiz_schema": "app.quiz"},
+        csharp_namespace="App.Models",
+        csharp_additional_usings=["System.Linq"],
+        schema_base_path="/schemas",
+        output=OutputConfig(mode=OutputMode.OVERWRITE, merge_strategy=MergeStrategy.DELETE, output_path="out.py", validate_before_write=False),
+        formatter=FormatterConfig(enabled=False, line_length=120, target_version="py313", string_normalization=False, magic_trailing_comma=False, sort_imports=False),
+    )
+    defaults = CodeGeneratorConfig()
+    for f in fields(CodeGeneratorConfig):
+        assert getattr(config, f.name) != getattr(defaults, f.name), f"{f.name} is still at its default -- extend _fully_populated"
+    return config
+
+
+def test_to_dict_covers_every_field_and_round_trips():
+    config = _fully_populated()
+    as_dict = config.to_dict()
+
+    assert set(as_dict) == {f.name for f in fields(CodeGeneratorConfig)}
+    # JSON-ready: enums as their values, nested configs as dicts
+    assert as_dict["output"] == {"mode": "overwrite", "merge_strategy": "delete", "output_path": "out.py", "validate_before_write": False}
+    assert set(as_dict["formatter"]) == {f.name for f in fields(FormatterConfig)}
+    assert CodeGeneratorConfig.from_dict(as_dict) == config

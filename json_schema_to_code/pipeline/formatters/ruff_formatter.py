@@ -39,8 +39,9 @@ class RuffFormatter(Formatter):
             code: Python source code to format
             config: Formatter configuration
             path: Destination path of the generated file, when known. Passed to ruff as
-                --stdin-filename so ruff resolves the *consuming* project's settings
-                (notably isort's known-first-party) instead of this package's.
+                --stdin-filename so ruff resolves the *consuming* project's settings --
+                isort's known-first-party, the line length -- instead of this package's.
+                Without it, ``config.line_length`` stands in for the project's.
 
         Returns:
             Formatted code
@@ -50,31 +51,19 @@ class RuffFormatter(Formatter):
             return code
 
         stdin_filename = path or "code.py"
+        # The consuming project's configuration decides the line length; only a
+        # destination-less call has no project to defer to.
+        line_length = [] if path or not config.line_length else ["--line-length", str(config.line_length)]
 
         if config.sort_imports:
-            code = self._sort_imports(code, config, stdin_filename)
+            # ruff's isort rules (I) only. The backend emits imports in a fixed order but
+            # cannot group them: which modules are first-party to the consuming project is
+            # in that project's ruff config, which is why the destination path matters here.
+            code = self._run(["ruff", "check", "--select", "I", "--fix-only", "--stdin-filename", stdin_filename, *line_length, "-"], code)
 
-        cmd = ["ruff", "format", "--stdin-filename", stdin_filename]
-
-        if config.line_length:
-            cmd.extend(["--line-length", str(config.line_length)])
-
+        cmd = ["ruff", "format", "--stdin-filename", stdin_filename, *line_length]
         if config.target_version:
             cmd.extend(["--target-version", config.target_version])
-
-        return self._run(cmd, code)
-
-    def _sort_imports(self, code: str, config: FormatterConfig, stdin_filename: str) -> str:
-        """Apply ruff's isort rules (I) only.
-
-        The backend already emits imports sorted and grouped, but it cannot know which
-        modules are first-party to the project consuming the generated file, so it cannot
-        place the blank lines isort puts between groups. ruff can, from that project's own
-        configuration -- which is why the destination path matters here.
-        """
-        cmd = ["ruff", "check", "--select", "I", "--fix-only", "--stdin-filename", stdin_filename, "-"]
-        if config.line_length:
-            cmd.extend(["--line-length", str(config.line_length)])
         return self._run(cmd, code)
 
     def _run(self, cmd: list[str], code: str) -> str:

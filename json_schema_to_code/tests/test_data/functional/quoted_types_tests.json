@@ -1,9 +1,12 @@
 [
   {
     "name": "quoted_types_circular_references",
-    "description": "Test that types listed in quoted_types_for_python are properly quoted to handle circular references",
+    "description": "Types listed in quoted_types_for_python are quoted to handle circular references; an absent self-reference defaults to None (an empty Node would need an id, and would recurse into its own parent)",
     "config": {
-      "quoted_types_for_python": ["Node", "Tree"]
+      "quoted_types_for_python": [
+        "Node",
+        "Tree"
+      ]
     },
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -11,33 +14,55 @@
         "Node": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"},
+            "id": {
+              "type": "string"
+            },
             "children": {
               "type": "array",
-              "items": {"$ref": "#/definitions/Node"}
+              "items": {
+                "$ref": "#/definitions/Node"
+              }
             },
-            "parent": {"$ref": "#/definitions/Node"},
-            "tree": {"$ref": "#/definitions/Tree"}
+            "parent": {
+              "$ref": "#/definitions/Node"
+            },
+            "tree": {
+              "$ref": "#/definitions/Tree"
+            }
           },
-          "required": ["id"]
+          "required": [
+            "id"
+          ]
         },
         "Tree": {
           "type": "object",
           "properties": {
-            "name": {"type": "string"},
-            "root": {"$ref": "#/definitions/Node"},
+            "name": {
+              "type": "string"
+            },
+            "root": {
+              "$ref": "#/definitions/Node"
+            },
             "nodes": {
               "type": "array",
-              "items": {"$ref": "#/definitions/Node"}
+              "items": {
+                "$ref": "#/definitions/Node"
+              }
             }
           },
-          "required": ["name"]
+          "required": [
+            "name"
+          ]
         },
         "RegularType": {
           "type": "object",
           "properties": {
-            "value": {"type": "string"},
-            "node": {"$ref": "#/definitions/Node"}
+            "value": {
+              "type": "string"
+            },
+            "node": {
+              "$ref": "#/definitions/Node"
+            }
           }
         }
       }
@@ -49,24 +74,11 @@
       "class Tree:",
       "class RegularType:",
       "children: list['Node']",
-      "parent: 'Node'",
-      "tree: 'Tree'",
-      "root: 'Node'",
+      "parent: 'Node | None' = None",
+      "tree: 'Tree | None' = None",
+      "root: 'Node | None' = None",
       "nodes: list['Node']",
-      "node: 'Node'"
-    ],
-    "expected_contains_v1": [
-      "from dataclasses import dataclass",
-      "from dataclasses_json import dataclass_json",
-      "class Node:",
-      "class Tree:",
-      "class RegularType:",
-      "children: list[\"Node\"]",
-      "parent: \"Node\"",
-      "tree: \"Tree\"",
-      "root: \"Node\"",
-      "nodes: list[\"Node\"]",
-      "node: \"Node\""
+      "node: 'Node | None' = None"
     ],
     "expected_not_contains": [
       "children: list[Node]",
@@ -74,7 +86,8 @@
       "tree: Tree",
       "root: Node",
       "nodes: list[Node]",
-      "node: Node"
+      "node: Node",
+      "default_factory=lambda: Node()"
     ]
   },
   {
@@ -87,10 +100,16 @@
         "Node": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"},
-            "parent": {"$ref": "#/definitions/Node"}
+            "id": {
+              "type": "string"
+            },
+            "parent": {
+              "$ref": "#/definitions/Node"
+            }
           },
-          "required": ["id"]
+          "required": [
+            "id"
+          ]
         }
       }
     },
@@ -106,7 +125,9 @@
     "name": "quoted_types_partial_config",
     "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted",
     "config": {
-      "quoted_types_for_python": ["CircularType"]
+      "quoted_types_for_python": [
+        "CircularType"
+      ]
     },
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -114,16 +135,26 @@
         "CircularType": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"},
-            "self": {"$ref": "#/definitions/CircularType"},
-            "other": {"$ref": "#/definitions/NormalType"}
+            "id": {
+              "type": "string"
+            },
+            "self": {
+              "$ref": "#/definitions/CircularType"
+            },
+            "other": {
+              "$ref": "#/definitions/NormalType"
+            }
           }
         },
         "NormalType": {
           "type": "object",
           "properties": {
-            "value": {"type": "string"},
-            "circular": {"$ref": "#/definitions/CircularType"}
+            "value": {
+              "type": "string"
+            },
+            "circular": {
+              "$ref": "#/definitions/CircularType"
+            }
           }
         }
       }
@@ -157,7 +188,10 @@
     "name": "quoted_union_types_inline",
     "description": "Test that quoted types in unions generate proper Python syntax with inline unions",
     "config": {
-      "quoted_types_for_python": ["Component", "Style"],
+      "quoted_types_for_python": [
+        "Component",
+        "Style"
+      ],
       "use_inline_unions": true
     },
     "schema": {
@@ -166,34 +200,52 @@
         "Component": {
           "type": "object",
           "properties": {
-            "id": {"type": "string"}
+            "id": {
+              "type": "string"
+            }
           },
-          "required": ["id"]
+          "required": [
+            "id"
+          ]
         },
         "Style": {
           "type": "object",
           "properties": {
-            "color": {"type": "string"}
+            "color": {
+              "type": "string"
+            }
           },
-          "required": ["color"]
+          "required": [
+            "color"
+          ]
         },
         "TestClass": {
           "type": "object",
           "properties": {
             "element_pure": {
               "oneOf": [
-                {"$ref": "#/definitions/Component"},
-                {"$ref": "#/definitions/Style"}
+                {
+                  "$ref": "#/definitions/Component"
+                },
+                {
+                  "$ref": "#/definitions/Style"
+                }
               ]
             },
             "element_mixed": {
               "oneOf": [
-                {"type": "string"},
-                {"$ref": "#/definitions/Component"}
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/definitions/Component"
+                }
               ]
             }
           },
-          "required": ["element_pure"]
+          "required": [
+            "element_pure"
+          ]
         }
       }
     },

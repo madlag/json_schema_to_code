@@ -162,8 +162,37 @@ def test_x_python_type_overrides_an_inferred_union(tmp_path: Path):
     assert root.payload == {"any": "json"}
 
 
+PRIMITIVE_OVERRIDE_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$ref": "#/$defs/Root",
+    "$defs": {
+        "Root": {
+            "type": "object",
+            "properties": {
+                "blob": {"type": "string", "x-python-type": "bytes"},
+                "note": {"type": "string", "x-python-type": "bytes"},
+            },
+            "required": ["blob"],
+        },
+    },
+}
+
+
+def test_x_python_type_overrides_a_primitive(tmp_path: Path):
+    """The override applies to every node kind, a bare primitive included; nullability
+    stays the schema's (a non-required field is still `| None`)."""
+    code = generate(PRIMITIVE_OVERRIDE_SCHEMA, "Root")
+    assert "blob: bytes\n" in code
+    assert "note: bytes | None = None" in code
+
+    module = load_module(code, tmp_path, "override_c")
+    root = module.Root(blob=b"\x00\x01")
+    assert root.blob == b"\x00\x01"
+    assert root.note is None
+
+
 def test_generated_code_is_valid_json_schema_roundtrip():
     """Sanity: the schemas above are well-formed enough that generation is
     testing the backend, not a broken fixture."""
-    for schema in (POLYMORPHIC_SCHEMA, OVERRIDE_SCHEMA):
+    for schema in (POLYMORPHIC_SCHEMA, OVERRIDE_SCHEMA, PRIMITIVE_OVERRIDE_SCHEMA):
         json.dumps(schema)

@@ -207,3 +207,21 @@ def test_merge_preserves_attributed_imports():
         existing = generated.replace("import Foundation", f"import Foundation\n{attributed}", 1)
         merged = SwiftAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
         assert attributed in merged, f"{attributed} was dropped by the merge"
+
+
+def test_merge_preserves_import_kinds_and_places_them_after_the_generated_imports():
+    """`import struct Foundation.Date` names Foundation.Date, not Foundation: it is a
+    custom import and must survive; every custom import lands right after the last
+    generated one, whatever precedes its name."""
+    config = CodeGeneratorConfig()
+    config.add_generation_comment = False
+    generated = PipelineGenerator(
+        "Card", {"$defs": {"Card": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}}, "$ref": "#/$defs/Card"}, config, "swift"
+    ).generate()
+    existing = generated.replace("import Foundation", "import Foundation\n@testable import HostApp\nimport struct Foundation.Date", 1)
+
+    merged = SwiftAstMerger().merge_files(generated, existing, MergeStrategy.MERGE)
+
+    lines = merged.splitlines()
+    assert lines[lines.index("import Foundation") + 1 :][:2] == ["@testable import HostApp", "import struct Foundation.Date"]
+    assert merged.count("import Foundation\n") == 1

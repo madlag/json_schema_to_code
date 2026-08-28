@@ -9,7 +9,7 @@ A Python package that generates strongly-typed classes from JSON Schema definiti
 - **Type safety**: Generates strongly-typed code with proper nullable handling
 - **Inheritance and polymorphism**: Handles base classes and subclass discrimination
 - **AST-based pipeline**: Schemas are compiled to a language-native AST, not rendered from text templates
-- **Merge-aware output**: Regenerating a file preserves hand-written methods, imports and constants
+- **Merge-aware output**: Regenerating a file preserves hand-written methods, imports and constants, while fields, bases, decorators and type aliases follow the schema
 - **Runtime validation**: Optionally emits constraint checks from the schema
 - **Configuration support**: Flexible configuration options for customizing output
 - **Command-line interface**: Easy-to-use CLI tool
@@ -87,7 +87,7 @@ Create a JSON configuration file to customize code generation:
 
 ### Configuration Options
 
-Unknown keys are ignored, so a config file can carry options for several projects.
+Unknown keys are skipped with a warning, so a config file can carry options for several projects.
 
 **Selecting what is generated**
 
@@ -137,7 +137,9 @@ Unknown keys are ignored, so a config file can carry options for several project
 
 **`formatter` block** (Python only)
 
-- **`enabled`** (default `true`), **`line_length`** (default `100`), **`target_version`**, **`string_normalization`** (default `true`), **`magic_trailing_comma`** (default `true`)
+- **`enabled`** (default `true`), **`target_version`**, **`string_normalization`** (default `true`), **`magic_trailing_comma`** (default `true`)
+- **`sort_imports`** (default `true`): run ruff's isort rules over the output. The backend emits imports in a fixed order (`__future__`, then alphabetical); only ruff, reading the *consuming* project's configuration, knows which modules are first-party there and can group them
+- **`line_length`** (default `100`): used only when the destination file is not known (e.g. `Formatter.format()` called without a path). When it is, the consuming project's own ruff configuration decides, as it does for every other formatting option
 
 ## Supported JSON Schema Features
 
@@ -155,7 +157,8 @@ Unknown keys are ignored, so a config file can carry options for several project
 - **Const values**: Fixed literal values
 - **Optional properties**: Nullable type generation
 - **Custom enum member names**: Use `x-enum-members` to specify custom enum member names
-- **Verbatim Swift types**: Use `x-swift-type` on a property to emit a client-provided Swift type as-is (e.g. `"[NamedWidget]"`, `"JSONValue?"`)
+- **Verbatim types**: `x-python-type`, `x-csharp-type` and `x-swift-type` name the type to emit for that language instead of the inferred one (see below)
+- **Omit-when-default fields**: `x-omit-when-default` leaves a Python field out of the JSON while it still holds its default (see below)
 
 ### Custom Enum Member Names
 
@@ -187,6 +190,33 @@ class ElementState(str, Enum):
 ```
 
 **Note**: `x-enum-members` maps enum values (the keys) to member names (the values). All three languages honour it: C# additionally emits a `JsonConverter` mapping the members back to their string values, and Swift lower-camels the member names (`CORRECT_ANSWER` becomes `case correctAnswer`).
+
+### Verbatim Types (`x-python-type`, `x-csharp-type`, `x-swift-type`)
+
+Any schema node can name the type a language should emit for it, verbatim, when the inferred one is not what the code needs: a `$ref` to a scalar `$def` (no class is generated for it), a payload the language's JSON library cannot decode as the inferred union, a hand-written type living elsewhere. Each backend reads only its own key, so the three can sit side by side; nullability still comes from the schema.
+
+```json
+{
+  "when":    {"type": "string", "x-python-type": "datetime", "x-csharp-type": "DateTime", "x-swift-type": "Date"},
+  "widgets": {"type": "array", "items": {"type": "object", "x-swift-type": "NamedWidget"}, "default": []},
+  "digest":  {"$ref": "#/$defs/Sha256", "x-python-type": "str"}
+}
+```
+
+Python: `when: datetime`, `digest: str`. C#: `public DateTime When`. Swift: `let when: Date`, `var widgets: [NamedWidget] = []`. For Swift a property-level override ending in `?` is decoded leniently (`decodeIfPresent`), and a default survives only for empty container literals.
+
+### Omit-when-default Fields (`x-omit-when-default`, Python)
+
+`exclude_default_value_from_json` omits every field still at its default from `to_dict()`; `x-omit-when-default: true` does the same for one property:
+
+```json
+{
+  "count": {"type": "integer", "default": 0, "x-omit-when-default": true},
+  "style": {"$ref": "#/$defs/Style", "x-omit-when-default": true}
+}
+```
+
+Both go through `dataclasses_json`'s `config(exclude=...)` (or the project's helper when `optional_field_helper_module` is set). A field typed as a generated class is compared against a freshly built default instance, so an all-default sub-object is omitted too. The flag on a required field with no default is a schema error.
 
 ## Output Examples
 
@@ -336,10 +366,12 @@ with open('output.py', 'w') as f:
 ## Language-Specific Features
 
 ### Python Output
-- Uses `@dataclass` with `dataclasses_json` for JSON serialization
+- Uses `@dataclass(kw_only=True)` with `dataclasses_json` for JSON serialization
 - Supports union types with `|` syntax (Python 3.10+)
 - Generates `Literal` types for const values
 - Uses `ABC` for abstract base classes
+- A non-required field typed as a generated class defaults to an empty instance when the class can be built with no arguments, and to `None` (widening the annotation) when it cannot — an enum, or a class with a required field, inherited ones included. A dict `default` on a class-typed field builds the instance through `from_dict`
+- Imports are emitted `__future__` first, then alphabetically; grouping is left to ruff (`formatter.sort_imports`)
 
 ### C# Output
 - Includes `[Serializable]` attributes
@@ -395,7 +427,10 @@ json_schema_to_code/
 │   │   │   ├── csharp_ast_backend.py / csharp_serializer.py
 │   │   │   └── swift_ast_backend.py / swift_serializer.py
 │   │   ├── formatters/             # Phase 5: ruff
-│   │   └── merger/                 # Phase 6: per-language AST merge + atomic write
+│   │   └── merger/                 # Phase 6: per-language merge + atomic write
+│   │       ├── python_merger.py    #   stdlib ast, order-preserving
+│   │       ├── tree_sitter_merger.py  # shared base of the two below
+│   │       └── csharp_merger.py / swift_merger.py
 │   └── tests/
 │       ├── test_data/              # Reference cases and functional test JSON
 │       └── v3/                     # Pipeline test suites

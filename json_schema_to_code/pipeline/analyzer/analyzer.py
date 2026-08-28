@@ -7,6 +7,7 @@ and build the IR ready for code generation.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..config import CodeGeneratorConfig
@@ -420,13 +421,9 @@ class SchemaAnalyzer:
                 if extra_def and isinstance(extra_def.body, ObjectNode):
                     class_def.base_fields += self._analyze_properties(extra_def.body, class_name)
                 elif extra_resolved.is_external:
-                    ext_def = self.ref_resolver.load_external_definition(
-                        extra_resolved.external_path, extra_resolved.class_name_in_external
-                    )
+                    ext_def = self.ref_resolver.load_external_definition(extra_resolved.external_path, extra_resolved.class_name_in_external)
                     if ext_def:
-                        class_def.base_fields += self._analyze_external_base_properties(
-                            ext_def, allof.extension, class_name, extra_resolved.external_path
-                        )
+                        class_def.base_fields += self._analyze_external_base_properties(ext_def, allof.extension, class_name, extra_resolved.external_path)
 
         # Add subclasses if this is a base class
         class_def.subclasses = self.subclasses.get(class_name, [])
@@ -500,8 +497,6 @@ class SchemaAnalyzer:
             if self.language == "swift" and base_prop.has_default and base_prop.default_value is not None:
                 field_def.has_default = True
                 field_def.default_value = base_prop.default_value
-            if base_prop.type_node:
-                field_def.swift_type_override = base_prop.type_node.metadata.get("x-swift-type")
 
             # Set type_ref for C# constructor parameter types
             if base_prop.type_node:
@@ -652,7 +647,6 @@ class SchemaAnalyzer:
             if self.language == "swift" and prop_schema.get("default") is not None:
                 field_def.has_default = True
                 field_def.default_value = prop_schema["default"]
-            field_def.swift_type_override = prop_schema.get("x-swift-type")
 
             # Set type_ref based on JSON schema type
             field_def.type_ref = self._type_ref_from_json_schema(prop_schema, prop_name in required)
@@ -673,6 +667,11 @@ class SchemaAnalyzer:
 
     def _type_ref_from_json_schema(self, prop_schema: dict, is_required: bool) -> TypeRef:
         """Create a TypeRef from a raw JSON schema property definition."""
+        type_ref = self._type_ref_from_json_schema_inner(prop_schema, is_required)
+        type_ref.type_overrides = self._type_overrides(prop_schema)
+        return type_ref
+
+    def _type_ref_from_json_schema_inner(self, prop_schema: dict, is_required: bool) -> TypeRef:
         if "$ref" in prop_schema and "type" not in prop_schema:
             return TypeRef(kind=TypeKind.ANY)
 
@@ -834,7 +833,7 @@ class SchemaAnalyzer:
             default_value=prop.default_value,
         )
         if prop.type_node:
-            field_def.swift_type_override = prop.type_node.metadata.get("x-swift-type")
+            field_def.omit_when_default = bool(prop.type_node.metadata.get("x-omit-when-default", False))
 
         # Escape C# keywords
         if self.language == "cs":
@@ -888,6 +887,32 @@ class SchemaAnalyzer:
         is_required: bool,
     ) -> TypeRef:
         """Analyze a type node and create TypeRef."""
+        type_ref = self._analyze_type_node(node, field_name, parent_class, is_required)
+        # Every node kind takes its overrides here, once: the schema author's
+        # `x-<language>-type` wins over whatever the dispatch inferred. A wrapper that
+        # collapsed to its inner node's TypeRef (`oneOf: [T, null]`) keeps what that
+        # node declared, the wrapper's own keys taking precedence.
+        type_ref.type_overrides = {**type_ref.type_overrides, **self._type_overrides(node.metadata)}
+        return type_ref
+
+    _TYPE_OVERRIDE_KEY = re.compile(r"^x-([a-z]+)-type$")
+
+    def _type_overrides(self, metadata: dict) -> dict[str, str]:
+        """`x-python-type` / `x-csharp-type` / `x-swift-type` -> {language: type}."""
+        overrides: dict[str, str] = {}
+        for key, value in metadata.items():
+            match = self._TYPE_OVERRIDE_KEY.match(key)
+            if match and isinstance(value, str) and value:
+                overrides[match.group(1)] = value
+        return overrides
+
+    def _analyze_type_node(
+        self,
+        node: SchemaNode,
+        field_name: str,
+        parent_class: str,
+        is_required: bool,
+    ) -> TypeRef:
         if isinstance(node, RefNode):
             return self._analyze_ref_type(node, is_required)
 
@@ -915,7 +940,6 @@ class SchemaAnalyzer:
                 has_default = "default" in node.metadata
                 if not is_required and not has_default:
                     type_ref.is_nullable = True
-                self._apply_type_overrides(type_ref, node.metadata)
                 return type_ref
             # Objects without properties become Any (matching original codegen.py)
             if not node.properties:
@@ -924,7 +948,6 @@ class SchemaAnalyzer:
                 has_default = "default" in node.metadata
                 if not is_required and not has_default:
                     type_ref.is_nullable = True
-                self._apply_type_overrides(type_ref, node.metadata)
                 return type_ref
             return self._analyze_inline_object_type(node, field_name, parent_class, is_required)
 
@@ -933,13 +956,6 @@ class SchemaAnalyzer:
 
         # Fallback
         return TypeRef(kind=TypeKind.ANY, name="Any")
-
-    def _apply_type_overrides(self, type_ref: TypeRef, metadata: dict) -> None:
-        """Apply x-python-type and x-csharp-type overrides from metadata."""
-        if "x-python-type" in metadata:
-            type_ref.override_type_python = metadata["x-python-type"]
-        if "x-csharp-type" in metadata:
-            type_ref.override_type_csharp = metadata["x-csharp-type"]
 
     def _analyze_ref_type(self, node: RefNode, is_required: bool) -> TypeRef:
         """Analyze a $ref type."""
@@ -969,8 +985,6 @@ class SchemaAnalyzer:
         # Register external import for Python
         if resolved.is_external and self.language == "python":
             self._register_external_import(resolved)
-
-        self._apply_type_overrides(type_ref, node.metadata)
 
         return type_ref
 
@@ -1255,8 +1269,6 @@ class SchemaAnalyzer:
             type_ref.default_value = node.metadata["default"]
         elif not is_required and not is_nullable:
             type_ref.is_nullable = True
-
-        self._apply_type_overrides(type_ref, node.metadata)
 
         return type_ref
 

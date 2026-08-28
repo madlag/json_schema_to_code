@@ -2,9 +2,9 @@
 
 ## Project overview
 
-**json_schema_to_code** generates strongly-typed classes from JSON Schema definitions for Python and C#. It uses a five-phase AST-based pipeline: parse, analyze, generate AST, serialize, format/merge.
+**json_schema_to_code** generates strongly-typed classes from JSON Schema definitions for Python, C# and Swift. It uses a five-phase AST-based pipeline: parse, analyze, generate AST, serialize, format/merge.
 
-- **Stack**: Python 3.12+, Click (CLI), ruff (formatting), tree-sitter (C# merge parsing)
+- **Stack**: Python 3.12+, Click (CLI), ruff (formatting), tree-sitter (C# / Swift merge parsing)
 - **Entry point**: `json_schema_to_code` CLI command (defined in `pyproject.toml`)
 
 ## Key paths
@@ -24,9 +24,12 @@
 | Python backend | `json_schema_to_code/pipeline/ast_backends/python_ast_backend.py` |
 | C# backend | `json_schema_to_code/pipeline/ast_backends/csharp_ast_backend.py` |
 | C# serializer | `json_schema_to_code/pipeline/ast_backends/csharp_serializer.py` |
+| Swift backend | `json_schema_to_code/pipeline/ast_backends/swift_ast_backend.py` |
 | Merger base | `json_schema_to_code/pipeline/merger/base.py` |
 | Python merger | `json_schema_to_code/pipeline/merger/python_merger.py` |
+| Tree-sitter merger base | `json_schema_to_code/pipeline/merger/tree_sitter_merger.py` |
 | C# merger | `json_schema_to_code/pipeline/merger/csharp_merger.py` |
+| Swift merger | `json_schema_to_code/pipeline/merger/swift_merger.py` |
 | Atomic writer | `json_schema_to_code/pipeline/merger/atomic_writer.py` |
 | Ruff formatter | `json_schema_to_code/pipeline/formatters/ruff_formatter.py` |
 | Tests | `json_schema_to_code/tests/` |
@@ -40,7 +43,7 @@ json_schema_to_code <schema.json> <output_file> [options]
 # Options:
 #   --name, -n        Root class name (default: schema filename stem)
 #   --config, -c      JSON config file path
-#   --language, -l    Target language: "cs" (default) or "python"
+#   --language, -l    Target language: "cs" (default), "python" or "swift"
 #   --add-validation  Add runtime validation code
 #   --merge-strategy  "error" | "merge" | "delete"
 ```
@@ -78,7 +81,7 @@ json_schema_to_code <schema.json> <output_file> [options]
 | `FieldDef` | Field with name, type_ref, is_required, default_value, is_const |
 | `EnumDef` | Enum with members (name -> value mapping) |
 | `TypeAlias` | Union type alias |
-| `TypeRef` | Resolved type reference with kind, name, type_args, nullable |
+| `TypeRef` | Resolved type reference with kind, name, type_args, nullable, `type_overrides` (`x-<language>-type`, language -> verbatim type) |
 | `ImportDef` | Import statement |
 
 **`TypeKind` enum values**: `PRIMITIVE`, `CLASS`, `ARRAY`, `TUPLE`, `DICT`, `UNION`, `OPTIONAL`, `ENUM`, `CONST`, `ANY`, `TYPE_ALIAS`
@@ -90,7 +93,9 @@ json_schema_to_code <schema.json> <output_file> [options]
 - `translate_type(type_ref: TypeRef) -> str`
 - `format_default_value(value: Any, type_ref: TypeRef) -> str`
 
-**Backends**: `PythonAstBackend`, `CSharpAstBackend`
+**Backends**: `PythonAstBackend`, `CSharpAstBackend`, `SwiftAstBackend`. Each reads its own key from `TypeRef.type_overrides` (`python`, `csharp`, `swift`) in `translate_type`.
+
+The Python backend decides defaults from the IR alone: a non-required class-typed field gets `field(default_factory=lambda: X())` only when `X` is empty-constructible (every field, inherited ones included, has a default; enums never are), else `None` with the annotation widened to `X | None`. The IR is not mutated for this.
 
 ### Phase 4: Serialization
 
@@ -100,7 +105,7 @@ json_schema_to_code <schema.json> <output_file> [options]
 ### Phase 5: Formatting & Merging
 
 - **Formatting**: `RuffFormatter` for Python (configurable via `FormatterConfig`)
-- **Merging**: `PythonAstMerger` / `CSharpAstMerger` preserve custom code in existing files
+- **Merging**: `PythonAstMerger` (stdlib `ast`, order-preserving walk) and `CSharpAstMerger` / `SwiftAstMerger` (both on `TreeSitterMerger`, which owns the parser, node lookups, `// CUSTOM CODE` sections and import placement). `AstMerger.merge_files` is the single entry point
 - **Atomic writes**: `AtomicWriter` writes to temp file then renames
 
 ## Configuration
@@ -121,7 +126,10 @@ json_schema_to_code <schema.json> <output_file> [options]
 | `quoted_types_for_python` | `list[str]` | `[]` | Types to quote for forward references |
 | `use_future_annotations` | `bool` | `true` | Add `from __future__ import annotations` |
 | `exclude_default_value_from_json` | `bool` | `false` | Exclude defaults from JSON serialization |
+| `optional_field_helper_module` | `str \| None` | `null` | With excluded defaults: `null` inline lambdas, `""` inline helper, `"a.b"` import the helper |
 | `add_validation` | `bool` | `false` | Add runtime validation |
+| `swift_conformances` | `list[str]` | `["Codable"]` | Protocols generated Swift types conform to |
+| `swift_nonisolated` | `bool` | `false` | Prefix generated Swift types with `nonisolated` |
 | `external_ref_base_module` | `str` | `""` | Base module for external `$ref` imports (Python) |
 | `external_ref_schema_to_module` | `dict[str,str]` | `{}` | Schema path -> module mapping |
 | `csharp_namespace` | `str` | `""` | C# namespace |
@@ -140,21 +148,21 @@ json_schema_to_code <schema.json> <output_file> [options]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `true` | Enable ruff formatting |
-| `line_length` | `100` | Line length |
+| `sort_imports` | `true` | Run ruff's isort rules (grouping needs the consuming project's config) |
+| `line_length` | `100` | Only when no destination path is known; otherwise the consuming project's ruff config decides |
 | `target_version` | `""` | Python target (e.g. `py313`) |
+| `string_normalization` | `true` | |
+| `magic_trailing_comma` | `true` | |
+
+`CodeGeneratorConfig.from_dict` / `to_dict` are driven by `dataclasses.fields()`: enum fields coerce from their value, nested blocks recurse, unknown keys warn.
 
 ## Code merging
 
-When `output.mode = "merge"`, the generator preserves custom code from the existing file. The merger extracts and reinserts:
+When `output.mode = "merge"`, the generator preserves custom code from the existing file.
 
-- Custom imports
-- Module-level constants
-- Custom classes (not in generated schema)
-- Custom class methods
-- Custom class attributes
-- `__post_init__` bodies (Python)
-- Raw code sections (marked with `// CUSTOM CODE` or `# CUSTOM CODE`)
-- Docstrings
+Python walks the existing module in order. Schema-owned and taken from the generated code where they already stand: class fields (unless marked, or carrying `field(metadata=...)`), bases, decorators (generated ones replace their namesakes, hand-added ones survive), and module-level type aliases (an alias that gained a member defined further down moves below it). Kept from the file: custom imports, constants, custom classes and methods, comments, docstrings. New classes and imports are appended.
+
+C# / Swift extract and reinsert: custom `using` / `import` statements (placed after the last generated one), custom members and top-level declarations, member comments, and `// CUSTOM CODE START/END` sections.
 
 **Merge strategy** controls what happens with value members in the existing file that are not in the new generated code:
 - `error`: Raise error (safest)
@@ -174,6 +182,9 @@ When `output.mode = "merge"`, the generator preserves custom code from the exist
 | `x-csharp-implements` | Object | C# interface to implement |
 | `x-csharp-properties` | Object | C# interface property mappings |
 | `x-csharp-known-subtypes` | Object definition | Declare cross-schema polymorphic subtypes for C# `JsonSubtypes` |
+| `x-swift-known-subtypes` | Object definition | Swift counterpart (falls back to the C# key) |
+| `x-python-type`, `x-csharp-type`, `x-swift-type` | Any type node | Emit this type verbatim for that language (collected once into `TypeRef.type_overrides`) |
+| `x-omit-when-default` | Property | Python: leave the field out of `to_dict()` while it holds its default; class-typed fields compare against a fresh default instance |
 
 ### `x-csharp-generate`
 
@@ -284,14 +295,18 @@ The analyzer raises fatal errors for invalid schema patterns:
 
 | File | Tests |
 |------|-------|
-| `test_functional.py` | Schema-to-code generation for various schemas |
-| `test_merge.py` | Code merging (output modes, merge strategies) |
-| `test_pipeline_integration.py` | Full pipeline integration |
-| `test_code_merge_roundtrip.py` | Merge roundtrip (generate -> merge -> verify) |
+| `v3/test_functional.py` | Data-driven generation cases from `test_data/functional/*.json` |
+| `v3/test_merge.py` | Code merging: Python (aliases, decorators, markers, comments) and C# |
+| `v3/test_pipeline_integration.py` | Full pipeline over `test_data/pipeline/integration` schemas |
+| `test_code_merge_roundtrip.py` | Merge roundtrip over `test_data/code_merge` |
+| `test_optional_field_defaults.py`, `test_omit_when_default.py`, `test_python_base_and_type_overrides.py` | Python runtime behaviour, by executing the generated module |
 | `test_external_base_class_imports.py` | External `$ref` import resolution |
-| `test_csharp_ast_roundtrip.py` | C# AST parsing roundtrip |
+| `test_csharp_ast_roundtrip.py`, `test_swift_ast_roundtrip.py` | tree-sitter parsing and merging |
+| `test_config_from_dict.py`, `test_import_sorting.py` | Config loading, ruff isort pass |
 | `test_validation_rules.py` | Validation rule generation |
 | `test_cli_utils.py` | CLI utility functions |
+
+No test is left permanently skipped: a data-driven test whose data is missing fails, not skips.
 
 **Running tests**:
 ```bash
@@ -328,4 +343,4 @@ generator.generate_to_file(Path("output.py"))
 
 ## Ruff configuration
 
-The project's `pyproject.toml` configures ruff with `line-length = 200` for the project source itself. Generated code uses `line_length = 100` (from `FormatterConfig`).
+The project's `pyproject.toml` configures ruff with `line-length = 200` for the project source itself. Generated code is formatted with the *consuming* project's ruff configuration (the destination path is passed as `--stdin-filename`); `FormatterConfig.line_length` only applies when no destination is known.

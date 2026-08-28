@@ -62,146 +62,6 @@ class Person:
         with pytest.raises(CodeMergeError):
             merger.parse(code)
 
-    @pytest.mark.skip(reason="extract_custom_code replaced by order-preserving merge_files")
-    def test_extract_custom_imports(self):
-        """Test extraction of custom import statements."""
-        merger = PythonAstMerger()
-
-        existing = """
-from __future__ import annotations
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-import json
-from my_custom_module import helper
-
-@dataclass_json
-@dataclass
-class Person:
-    name: str
-"""
-
-        generated = """
-from __future__ import annotations
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-
-@dataclass_json
-@dataclass
-class Person:
-    name: str
-"""
-
-        custom = merger.extract_custom_code(existing, generated)
-
-        # Should find the custom import
-        assert len(custom.custom_imports) == 2
-        assert any("json" in imp for imp in custom.custom_imports)
-        assert any("my_custom_module" in imp for imp in custom.custom_imports)
-
-    @pytest.mark.skip(reason="extract_custom_code replaced by order-preserving merge_files")
-    def test_extract_custom_constants(self):
-        """Test extraction of module-level constants."""
-        merger = PythonAstMerger()
-
-        existing = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-MY_CONSTANT = 42
-DEFAULT_NAME = "Unknown"
-
-@dataclass
-class Person:
-    name: str
-"""
-
-        generated = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass
-class Person:
-    name: str
-"""
-
-        custom = merger.extract_custom_code(existing, generated)
-
-        # Should find both constants
-        assert len(custom.constants) == 2
-        assert any("MY_CONSTANT" in c for c in custom.constants)
-        assert any("DEFAULT_NAME" in c for c in custom.constants)
-
-    @pytest.mark.skip(reason="extract_custom_code replaced by order-preserving merge_files")
-    def test_extract_custom_methods(self):
-        """Test extraction of custom methods from classes."""
-        merger = PythonAstMerger()
-
-        existing = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass
-class Person:
-    name: str
-
-    def greet(self):
-        return f"Hello, {self.name}!"
-
-    def custom_method(self):
-        pass
-"""
-
-        generated = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass
-class Person:
-    name: str
-"""
-
-        custom = merger.extract_custom_code(existing, generated)
-
-        # Should find both custom methods
-        assert "Person" in custom.class_methods
-        assert len(custom.class_methods["Person"]) == 2
-        assert any("greet" in m for m in custom.class_methods["Person"])
-        assert any("custom_method" in m for m in custom.class_methods["Person"])
-
-    @pytest.mark.skip(reason="extract_custom_code replaced by order-preserving merge_files")
-    def test_extract_custom_post_init_body(self):
-        """Test extraction of custom __post_init__ body."""
-        merger = PythonAstMerger()
-
-        existing = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass
-class Person:
-    name: str
-
-    def __post_init__(self):
-        self.name = self.name.strip()
-        if not self.name:
-            raise ValueError("Name cannot be empty")
-"""
-
-        generated = """
-from __future__ import annotations
-from dataclasses import dataclass
-
-@dataclass
-class Person:
-    name: str
-"""
-
-        custom = merger.extract_custom_code(existing, generated)
-
-        # Should find custom __post_init__ body
-        assert "Person" in custom.post_init_bodies
-        assert len(custom.post_init_bodies["Person"]) == 2
-
     def test_merge_preserves_custom_imports(self):
         """Test that merge preserves custom imports."""
         merger = PythonAstMerger()
@@ -442,6 +302,63 @@ class Person:
         assert "ERROR" in merged
         # Should have the generated field
         assert "age: int" in merged
+
+    def test_no_merge_marker_preserves_field(self):
+        """Field with # jstc-no-merge is kept as-is, ignoring generated version."""
+        merger = PythonAstMerger()
+
+        existing = (
+            "from __future__ import annotations\n"
+            "from dataclasses import dataclass, field\n"
+            "from dataclasses_json import config\n"
+            "\n"
+            "MY_CONFIG = config(encoder=lambda v: v)\n"
+            "\n"
+            "@dataclass\n"
+            "class Person:\n"
+            "    name: str = field(metadata=MY_CONFIG)  # jstc-no-merge\n"
+            "    age: int = 0\n"
+        )
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "field(metadata=MY_CONFIG)" in merged
+        assert "age: int" in merged
+
+    def test_field_metadata_preserved_without_marker(self):
+        """Field with field(metadata=...) is preserved automatically, no marker needed."""
+        merger = PythonAstMerger()
+
+        existing = (
+            "from __future__ import annotations\n"
+            "from dataclasses import dataclass, field\n"
+            "from dataclasses_json import config\n"
+            "\n"
+            "MY_CONFIG = config(encoder=lambda v: v)\n"
+            "\n"
+            "@dataclass\n"
+            "class Person:\n"
+            "    name: str = field(metadata=MY_CONFIG)\n"
+            "    age: int = 0\n"
+        )
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "field(metadata=MY_CONFIG)" in merged
+        assert "age: int" in merged
+
+    def test_normal_field_still_merges(self):
+        """Simple fields without metadata are merged normally from generated."""
+        merger = PythonAstMerger()
+
+        existing = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 0\n"
+
+        generated = "from __future__ import annotations\n" "from dataclasses import dataclass\n" "\n" "@dataclass\n" "class Person:\n" "    name: str\n" "    age: int = 99\n"
+
+        merged = merger.merge_files(generated, existing)
+        assert "age: int = 99" in merged
 
     def test_validate_valid_code(self):
         """Test validation passes for valid code."""
@@ -1179,8 +1096,116 @@ class TestPythonNoMergeMarkerPersistence:
                 assert "jstc-no-merge" not in line
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+class TestCSharpMemberComments:
+    """Comments above C# members survive a merge, whether the member is generated or custom."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        try:
+            from json_schema_to_code.pipeline.merger import CSharpAstMerger
+
+            self.merger = CSharpAstMerger()
+        except (CodeMergeError, ImportError):
+            pytest.skip("tree-sitter-c-sharp not installed")
+
+    def test_merge_preserves_comment_before_generated_constructor(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    [Serializable]\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public Bar(string name)\n"
+            "        {\n"
+            "        }\n"
+            "        // Parameterless constructor for Unity\n"
+            "        public Bar() { }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    [Serializable]\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public Bar(string name)\n"
+            "        {\n"
+            "        }\n"
+            "        public Bar() { }\n"
+            "    }\n"
+            "}\n"
+        )
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Parameterless constructor for Unity" in merged
+        assert "public Bar() { }" in merged
+
+    def test_merge_preserves_comment_before_generated_property(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Person\n"
+            "    {\n"
+            "        // Full legal name\n"
+            "        public string Name { get; set; }\n"
+            "        public int Age { get; set; }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = (
+            "using System;\n" "namespace Foo\n" "{\n" "    public class Person\n" "    {\n" "        public string Name { get; set; }\n" "        public int Age { get; set; }\n" "    }\n" "}\n"
+        )
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Full legal name" in merged
+        assert "public string Name" in merged
+
+    def test_merge_preserves_multiple_comment_lines(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        // First line of comment\n"
+            "        // Second line of comment\n"
+            "        public string Name { get; set; }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert "// First line of comment" in merged
+        assert "// Second line of comment" in merged
+
+    def test_merge_preserves_comment_before_custom_method(self):
+        existing = (
+            "using System;\n"
+            "namespace Foo\n"
+            "{\n"
+            "    public class Bar\n"
+            "    {\n"
+            "        public string Name { get; set; }\n"
+            "        // Custom helper for serialization\n"
+            "        public string ToJson()\n"
+            "        {\n"
+            "            return Name;\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert "// Custom helper for serialization" in merged
+        assert "public string ToJson()" in merged
+
+    def test_no_comment_no_change(self):
+        existing = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "    }\n" "}\n"
+        generated = "using System;\n" "namespace Foo\n" "{\n" "    public class Bar\n" "    {\n" "        public string Name { get; set; }\n" "        public int Age { get; set; }\n" "    }\n" "}\n"
+        merged = self.merger.merge_files(generated, existing)
+        assert merged == generated
 
 
 def test_merge_adds_new_union_alias_after_its_dependencies():
@@ -1245,3 +1270,235 @@ def test_merge_adds_new_union_alias_after_its_dependencies():
     namespace: dict = {}
     exec(compile(merged, "<merged>", "exec"), namespace)
     assert namespace["Pet"] is not None
+
+
+def _merge(generated: str, existing: str) -> str:
+    return PythonAstMerger().merge_files(textwrap.dedent(generated).strip(), textwrap.dedent(existing).strip(), MergeStrategy.MERGE)
+
+
+def _exec(code: str) -> dict:
+    namespace: dict = {}
+    exec(compile(code, "<merged>", "exec"), namespace)
+    return namespace
+
+
+def test_merge_updates_an_alias_that_gained_a_member():
+    """A module-level alias is schema-owned: when the union gains a variant, the
+    file's alias follows -- and moves below the new class, which the merge appends."""
+    generated = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        @dataclass
+        class Bird:
+            name: str
+
+        @dataclass
+        class Owner:
+            pet: Pet
+
+        Pet = Bird | Cat | Dog
+        """
+    existing = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        Pet = Cat | Dog
+
+        @dataclass
+        class Owner:
+            pet: Pet
+
+            def feed(self) -> None:
+                pass
+        """
+    merged = _merge(generated, existing)
+
+    assert "def feed" in merged
+    assert merged.count("Pet = ") == 1
+    assert "Pet = Bird | Cat | Dog" in merged
+    lines = merged.splitlines()
+    alias = next(i for i, line in enumerate(lines) if line.startswith("Pet = "))
+    assert alias > next(i for i, line in enumerate(lines) if "class Bird" in line)
+    namespace = _exec(merged)
+    assert namespace["Pet"] == namespace["Bird"] | namespace["Cat"] | namespace["Dog"]
+
+
+def test_merge_keeps_an_unchanged_alias_where_it_stands():
+    """No churn: an alias the schema did not change stays exactly where the file had it."""
+    generated = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        Pet = Cat | Dog
+        """
+    existing = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        HELPER = 1
+
+        Pet = Cat | Dog
+        """
+    merged = _merge(generated, existing)
+
+    body = [line for line in merged.splitlines() if line and not line.startswith(" ")]
+    assert body.index("HELPER = 1") < body.index("Pet = Cat | Dog")
+    assert merged.count("Pet = ") == 1
+
+
+def test_merge_keeps_a_marked_alias_verbatim_across_regenerations():
+    """`# jstc-no-merge` on a module-level alias pins it: dataclasses_json decodes a
+    union's members in order, so a hand-ordered alias must not take the generator's
+    alphabetical one -- and the marker itself must survive the round trip."""
+    generated = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        Pet = Cat | Dog
+        """
+    existing = """
+        from __future__ import annotations
+        from dataclasses import dataclass
+
+        @dataclass
+        class Cat:
+            name: str
+
+        @dataclass
+        class Dog:
+            name: str
+
+        Pet = (
+            Dog | Cat
+        )  # jstc-no-merge
+        """
+    once = _merge(generated, existing)
+    assert "Pet = Dog | Cat  # jstc-no-merge" in once
+    assert "Cat | Dog" not in once
+
+    twice = _merge(generated, once)
+    assert "Pet = Dog | Cat  # jstc-no-merge" in twice
+
+
+def _decorators_above(merged: str, class_name: str) -> list[str]:
+    lines = merged.splitlines()
+    end = next(i for i, line in enumerate(lines) if line.startswith(f"class {class_name}"))
+    start = end
+    while start > 0 and lines[start - 1].startswith("@"):
+        start -= 1
+    return lines[start:end]
+
+
+def test_merge_restores_generated_decorators_on_an_undecorated_base():
+    """A file generated while polymorphic bases were emitted bare heals on the next merge."""
+    generated = """
+        from dataclasses import dataclass
+        from dataclasses_json import dataclass_json
+
+        @dataclass_json
+        @dataclass(kw_only=True)
+        class Base:
+            kind: str
+        """
+    existing = """
+        from dataclasses import dataclass
+        from dataclasses_json import dataclass_json
+
+        class Base:
+            kind: str
+        """
+    merged = _merge(generated, existing)
+
+    assert _decorators_above(merged, "Base") == ["@dataclass_json", "@dataclass(kw_only=True)"]
+
+
+def test_merge_keeps_a_hand_added_decorator():
+    generated = """
+        from dataclasses import dataclass
+
+        @dataclass(kw_only=True)
+        class Point:
+            x: int
+        """
+    existing = """
+        import functools
+        from dataclasses import dataclass
+
+        @functools.total_ordering
+        @dataclass(kw_only=True)
+        class Point:
+            x: int
+
+            def __lt__(self, other):
+                return self.x < other.x
+        """
+    merged = _merge(generated, existing)
+
+    assert _decorators_above(merged, "Point") == ["@dataclass(kw_only=True)", "@functools.total_ordering"]
+    assert "def __lt__" in merged
+
+
+def test_merge_takes_a_generated_decorator_whose_arguments_changed():
+    """`@dataclass` -> `@dataclass(kw_only=True)` is one decorator changing, not two."""
+    generated = """
+        from dataclasses import dataclass
+
+        @dataclass(kw_only=True)
+        class Point:
+            x: int
+        """
+    existing = """
+        from dataclasses import dataclass
+
+        @dataclass
+        class Point:
+            x: int
+        """
+    merged = _merge(generated, existing)
+
+    assert _decorators_above(merged, "Point") == ["@dataclass(kw_only=True)"]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

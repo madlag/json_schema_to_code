@@ -23,10 +23,7 @@ except ImportError:
 
 def get_csharp_test_files():
     """Get all C# test files for roundtrip testing."""
-    test_dir = Path(__file__).parent.parent / "test_data" / "v3" / "csharp_roundtrip"
-    if not test_dir.exists():
-        return []
-    return list(test_dir.glob("*.cs"))
+    return sorted((Path(__file__).parent / "test_data" / "csharp_roundtrip").glob("*.cs"))
 
 
 _CSHARP_TEST_FILES = get_csharp_test_files()
@@ -126,9 +123,7 @@ def extract_class_names_from_tree(tree) -> set[str]:
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter-c-sharp not installed")
 def test_csharp_simple_class_names(csharp_parser):
     """Test that SimpleClass is correctly identified."""
-    test_file = Path(__file__).parent.parent / "test_data" / "v3" / "csharp_roundtrip" / "simple_class.cs"
-    if not test_file.exists():
-        pytest.skip("Test file not found")
+    test_file = Path(__file__).parent / "test_data" / "csharp_roundtrip" / "simple_class.cs"
 
     code = test_file.read_text()
     tree = csharp_parser.parse(code.encode("utf-8"))
@@ -140,9 +135,7 @@ def test_csharp_simple_class_names(csharp_parser):
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter-c-sharp not installed")
 def test_csharp_inheritance_class_names(csharp_parser):
     """Test that inheritance classes are correctly identified."""
-    test_file = Path(__file__).parent.parent / "test_data" / "v3" / "csharp_roundtrip" / "class_with_inheritance.cs"
-    if not test_file.exists():
-        pytest.skip("Test file not found")
+    test_file = Path(__file__).parent / "test_data" / "csharp_roundtrip" / "class_with_inheritance.cs"
 
     code = test_file.read_text()
     tree = csharp_parser.parse(code.encode("utf-8"))
@@ -155,9 +148,7 @@ def test_csharp_inheritance_class_names(csharp_parser):
 @pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter-c-sharp not installed")
 def test_csharp_enum_names(csharp_parser):
     """Test that enum is correctly identified."""
-    test_file = Path(__file__).parent.parent / "test_data" / "v3" / "csharp_roundtrip" / "enum_with_converter.cs"
-    if not test_file.exists():
-        pytest.skip("Test file not found")
+    test_file = Path(__file__).parent / "test_data" / "csharp_roundtrip" / "enum_with_converter.cs"
 
     code = test_file.read_text()
     tree = csharp_parser.parse(code.encode("utf-8"))

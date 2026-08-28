@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
 
 from ..config import MergeStrategy
 
@@ -28,134 +27,45 @@ class CodeMergeError(Exception):
 
 @dataclass
 class CustomCode:
-    """Container for extracted custom code from an existing file.
+    """Hand-written code found in an existing C# / Swift file, to carry into the regenerated one.
 
     Attributes:
-        custom_imports: Import statements not in the generated code
-        constants: Module-level constant assignments
-        custom_classes: Full class definitions not in generated code (e.g., Enums)
-        class_methods: Dict mapping class name to list of custom method names
-        class_attributes: Dict mapping class name to list of custom attribute names
-        post_init_bodies: Dict mapping class name to custom __post_init__ body lines
-        raw_sections: Raw code sections marked for preservation (e.g., // CUSTOM CODE)
-        class_docstrings: Dict mapping class name to docstring content
-        method_docstrings: Dict mapping (class_name, method_name) to docstring content
-        module_docstring: Module-level docstring content
+        custom_imports: Import / using statements the generator does not emit
+        custom_classes: Whole top-level declarations the generator does not produce
+        class_methods: Class name -> custom member declarations (methods, constructors)
+        class_attributes: Class name -> custom property declarations
+        raw_sections: Bodies of ``// CUSTOM CODE START/END`` blocks
+        member_leading_comments: Class name -> member key -> comment lines above it
     """
 
     custom_imports: list[str] = field(default_factory=list)
-    constants: list[str] = field(default_factory=list)
     custom_classes: list[str] = field(default_factory=list)
     class_methods: dict[str, list[str]] = field(default_factory=dict)
     class_attributes: dict[str, list[str]] = field(default_factory=dict)
-    post_init_bodies: dict[str, list[str]] = field(default_factory=dict)
     raw_sections: list[str] = field(default_factory=list)
-    class_docstrings: dict[str, str] = field(default_factory=dict)
-    method_docstrings: dict[tuple[str, str], str] = field(default_factory=dict)
-    module_docstring: str | None = None
     member_leading_comments: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         """Check if there's any custom code to preserve."""
-        return (
-            not self.custom_imports
-            and not self.constants
-            and not self.custom_classes
-            and not self.class_methods
-            and not self.class_attributes
-            and not self.post_init_bodies
-            and not self.raw_sections
-            and not self.class_docstrings
-            and not self.method_docstrings
-            and self.module_docstring is None
-            and not self.member_leading_comments
-        )
+        return not (self.custom_imports or self.custom_classes or self.class_methods or self.class_attributes or self.raw_sections or self.member_leading_comments)
 
 
 class AstMerger(ABC):
-    """Abstract base class for language-specific AST mergers.
+    """A language's merge of freshly generated code into an existing file.
 
-    Subclasses implement the language-specific logic for:
-    1. Parsing existing code into an AST
-    2. Extracting custom code elements
-    3. Merging custom code into generated AST
-    4. Validating the merged result
+    ``merge_files`` is the single entry point; how a merger gets there -- Python walks
+    the existing module's AST, C# and Swift extract custom code with tree-sitter and
+    splice it back -- is its own business.
     """
 
     @abstractmethod
-    def parse(self, code: str) -> Any:
-        """Parse source code into an AST.
-
-        Args:
-            code: Source code string
-
-        Returns:
-            Language-specific AST representation
-
-        Raises:
-            CodeMergeError: If the code cannot be parsed
-        """
-        pass
-
-    @abstractmethod
-    def extract_custom_code(self, existing_code: str, generated_code: str) -> CustomCode:
-        """Extract custom code elements from existing file.
-
-        Compares existing code with generated code to identify
-        elements that were added by the user and should be preserved.
-
-        Args:
-            existing_code: The existing file contents
-            generated_code: The newly generated code
-
-        Returns:
-            CustomCode object containing extracted elements
-
-        Raises:
-            CodeMergeError: If existing code cannot be parsed
-        """
-        pass
-
-    @abstractmethod
-    def merge(self, generated_code: str, custom_code: CustomCode) -> str:
-        """Merge custom code into generated code.
-
-        Args:
-            generated_code: The newly generated code
-            custom_code: Custom code elements to preserve
-
-        Returns:
-            Merged code string
-
-        Raises:
-            CodeMergeError: If merge fails or would lose custom code
-        """
-        pass
-
-    @abstractmethod
-    def validate(self, code: str) -> None:
-        """Validate that merged code is syntactically correct.
-
-        Args:
-            code: The merged code to validate
-
-        Raises:
-            CodeMergeError: If validation fails
-        """
-        pass
-
     def merge_files(
         self,
         generated_code: str,
         existing_code: str,
         merge_strategy: MergeStrategy = MergeStrategy.ERROR,
     ) -> str:
-        """High-level merge operation.
-
-        Convenience method that performs the full merge workflow:
-        1. Extract custom code from existing file
-        2. Merge into generated code
-        3. Validate result
+        """Merge ``generated_code`` into ``existing_code``, keeping the hand-written parts.
 
         Args:
             generated_code: The newly generated code
@@ -166,15 +76,10 @@ class AstMerger(ABC):
             Merged code string
 
         Raises:
-            CodeMergeError: If any step fails
+            CodeMergeError: If the existing file cannot be parsed, the merge would lose
+                custom code, or the result does not validate
         """
-        custom_code = self.extract_custom_code(existing_code, generated_code)
 
-        if custom_code.is_empty():
-            # No custom code to preserve, just return generated
-            return generated_code
-
-        merged = self.merge(generated_code, custom_code)
-        self.validate(merged)
-
-        return merged
+    @abstractmethod
+    def validate(self, code: str) -> None:
+        """Raise CodeMergeError unless ``code`` is syntactically sound merged output."""

@@ -1,9 +1,9 @@
 """Formatter: isort grouping of the generated imports.
 
-The Python backend already emits imports sorted and grouped (`__future__`, then
-stdlib, then third party). What it cannot do is insert the blank lines isort puts
-*between* those groups, because the grouping depends on which modules are
-first-party to the project consuming the generated file -- knowledge that lives in
+The Python backend emits imports in a fixed order (`__future__`, then modules
+alphabetically) and leaves the grouping -- stdlib, third party, first party, with a
+blank line between -- to ruff, because the grouping depends on which modules are
+first-party to the project consuming the generated file, knowledge that lives in
 that project's ruff config, not here.
 
 Without the isort pass, any project whose own lint sorts imports rewrites every
@@ -85,13 +85,14 @@ def test_sorting_is_idempotent(tmp_path: Path):
     assert first == second
 
 
-def test_opting_out_leaves_the_groups_unseparated(tmp_path: Path):
+def test_opting_out_leaves_the_backend_order(tmp_path: Path):
     block = import_block(generate(tmp_path, sort_imports=False))
 
     assert "" not in block
-    # still ordered by the backend, just without isort's separators
+    # `__future__` first, then alphabetical by module: deterministic, ungrouped
     assert block[0] == "from __future__ import annotations"
-    assert block[-1] == "from dataclasses_json import dataclass_json"
+    modules = [line.split()[1] for line in block[1:]]
+    assert modules == sorted(modules), modules
 
 
 def test_sorting_is_on_by_default():

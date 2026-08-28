@@ -10,7 +10,6 @@ Test data is in: test_data/code_merge/<activity_name>/
 Each directory contains:
   - schema.json: The JSON schema
   - dataclass.py: The existing Python dataclass file
-  - dataclass.cs: The existing C# dataclass file (optional)
 """
 
 from __future__ import annotations
@@ -27,43 +26,20 @@ from json_schema_to_code.pipeline.merger import PythonAstMerger
 def discover_code_merge_test_cases():
     """Discover all code_merge test cases."""
     code_merge_dir = Path(__file__).parent / "test_data" / "code_merge"
-    test_cases = []
-
-    if not code_merge_dir.exists():
-        return test_cases
-
-    for activity_dir in sorted(code_merge_dir.iterdir()):
-        if not activity_dir.is_dir():
-            continue
-
-        schema_file = activity_dir / "schema.json"
-        python_file = activity_dir / "dataclass.py"
-        csharp_file = activity_dir / "dataclass.cs"
-
-        if not schema_file.exists():
-            continue
-
-        test_cases.append(
-            {
-                "name": activity_dir.name,
-                "schema_file": schema_file,
-                "python_file": python_file if python_file.exists() else None,
-                "csharp_file": csharp_file if csharp_file.exists() else None,
-            }
-        )
-
-    return test_cases
+    return [
+        {
+            "name": activity_dir.name,
+            "schema_file": activity_dir / "schema.json",
+            "python_file": activity_dir / "dataclass.py",
+        }
+        for activity_dir in sorted(code_merge_dir.iterdir())
+        if activity_dir.is_dir()
+    ]
 
 
 def get_test_ids():
     """Get test IDs for pytest parametrization."""
     return [tc["name"] for tc in discover_code_merge_test_cases()]
-
-
-@pytest.fixture
-def code_merge_test_cases():
-    """Fixture to provide all test cases."""
-    return discover_code_merge_test_cases()
 
 
 class TestCodeMergeRoundtrip:
@@ -79,9 +55,6 @@ class TestCodeMergeRoundtrip:
         2. When merged with the existing file, all custom imports/constants/methods are preserved
         3. The generated classes are syntactically valid
         """
-        if test_case["python_file"] is None:
-            pytest.skip(f"No Python file for {test_case['name']}")
-
         # Load schema
         with open(test_case["schema_file"]) as f:
             schema = json.load(f)
@@ -98,20 +71,11 @@ class TestCodeMergeRoundtrip:
         class_name = schema.get("title", test_case["name"]).replace(" ", "")
 
         # Generate Python code
-        try:
-            generator = PipelineGenerator(class_name, schema, config, "python")
-            generated_python = generator.generate()
-        except Exception as e:
-            # Some schemas may have external references that can't be resolved
-            # in isolation - this is expected for activity schemas
-            pytest.skip(f"Generation failed (likely due to external refs): {e}")
+        generated_python = PipelineGenerator(class_name, schema, config, "python").generate()
 
         # Merge generated with existing
         merger = PythonAstMerger()
-        try:
-            merged_python = merger.merge_files(generated_python, existing_python)
-        except Exception as e:
-            pytest.fail(f"Merge failed for {test_case['name']}: {e}")
+        merged_python = merger.merge_files(generated_python, existing_python)
 
         # Verify custom code is preserved
         # Check for custom imports (non-standard dataclass imports)
@@ -146,9 +110,6 @@ class TestCodeMergeRoundtrip:
 
         This is a basic sanity check that the generator can process the schema.
         """
-        if test_case["python_file"] is None:
-            pytest.skip(f"No Python file for {test_case['name']}")
-
         # Load schema
         with open(test_case["schema_file"]) as f:
             schema = json.load(f)
@@ -159,13 +120,7 @@ class TestCodeMergeRoundtrip:
 
         class_name = schema.get("title", test_case["name"]).replace(" ", "")
 
-        # Generate Python code
-        try:
-            generator = PipelineGenerator(class_name, schema, config, "python")
-            generated = generator.generate()
-        except Exception as e:
-            # External references may cause failures - skip these
-            pytest.skip(f"Generation failed (likely due to external refs): {e}")
+        generated = PipelineGenerator(class_name, schema, config, "python").generate()
 
         # Validate generated code
         merger = PythonAstMerger()
@@ -182,9 +137,6 @@ class TestCodeMergeRoundtrip:
         Note: We can't fully validate C# without a compiler, but we check for
         basic structure.
         """
-        if test_case["csharp_file"] is None:
-            pytest.skip(f"No C# file for {test_case['name']}")
-
         # Load schema
         with open(test_case["schema_file"]) as f:
             schema = json.load(f)
@@ -195,13 +147,7 @@ class TestCodeMergeRoundtrip:
 
         class_name = schema.get("title", test_case["name"]).replace(" ", "")
 
-        # Generate C# code
-        try:
-            generator = PipelineGenerator(class_name, schema, config, "cs")
-            generated = generator.generate()
-        except Exception as e:
-            # External references may cause failures - skip these
-            pytest.skip(f"Generation failed (likely due to external refs): {e}")
+        generated = PipelineGenerator(class_name, schema, config, "cs").generate()
 
         # Basic structure checks
         assert "class " in generated or "public class" in generated, f"No class generated for {test_case['name']}"

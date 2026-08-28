@@ -1,0 +1,107 @@
+[
+  {
+    "name": "x_csharp_type_overrides_a_primitive",
+    "description": "x-csharp-type names the C# type verbatim, on any node kind",
+    "config": {},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Record": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-csharp-type": "Guid"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "x-csharp-type": "Tag"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "tags"
+          ]
+        }
+      }
+    },
+    "expected_cs": [
+      "public Guid Id { get; set; }",
+      "public List<Tag> Tags { get; set; }"
+    ],
+    "expected_python": [
+      "id: str",
+      "tags: list[str]"
+    ]
+  },
+  {
+    "name": "x_swift_type_overrides_nested_nodes",
+    "description": "x-swift-type on an array's items rewrites the element type for Swift only; the array stays an array everywhere",
+    "config": {},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Card": {
+          "type": "object",
+          "properties": {
+            "widgets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "x-swift-type": "WidgetID"
+              }
+            }
+          },
+          "required": [
+            "widgets"
+          ]
+        }
+      }
+    },
+    "expected_swift": [
+      "let widgets: [WidgetID]"
+    ],
+    "expected_cs": [
+      "public List<string> Widgets { get; set; }"
+    ],
+    "expected_python": [
+      "widgets: list[str]"
+    ]
+  },
+  {
+    "name": "each_language_reads_only_its_own_override",
+    "description": "x-python-type, x-csharp-type and x-swift-type on one property do not leak across backends",
+    "config": {},
+    "schema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "definitions": {
+        "Event": {
+          "type": "object",
+          "properties": {
+            "when": {
+              "type": "string",
+              "x-python-type": "datetime",
+              "x-csharp-type": "DateTime",
+              "x-swift-type": "Date"
+            }
+          },
+          "required": [
+            "when"
+          ]
+        }
+      }
+    },
+    "expected_python": [
+      "when: datetime"
+    ],
+    "expected_cs": [
+      "public DateTime When { get; set; }"
+    ],
+    "expected_swift": [
+      "let when: Date"
+    ]
+  }
+]
