@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A non-required `$ref` to an enum defaulted to `E()`, which raises; an optional field that stopped being optional kept its `= None` across merges.
 - Attributed Swift imports were lost on regeneration.
 - A `$ref` to a class with required fields defaulted to `X()`, which raises at construction; a `$ref` with a dict default held a dict.
-- `class_default_strategy` config option (default `schema`): a non-required class-typed field keeps the schema's type and gets `field(default_factory=lambda: X())`; `constructible` widens non-constructible ones to `X | None = None` (the 1.1.0 behaviour before this option). Enums always default to `None`.
+- `class_default_strategy` config option (default `schema`): a non-required class-typed field keeps the schema's type and gets `field(default_factory=lambda: X())`; `constructible` widens non-constructible ones to `X | None = None` (the 1.1.0 behaviour before this option). Enums always default to `None`; a self-referential optional reference is an error under `schema` (the schema must declare it nullable) and widened under `constructible`.
 
 ## [1.0.1] - 2024-12-19
 

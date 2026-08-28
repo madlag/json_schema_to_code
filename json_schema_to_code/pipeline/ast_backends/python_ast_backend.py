@@ -368,11 +368,19 @@ def optional_field_in_json(*args, default=None, **kwargs):
             return self._factory_default(f"{class_name}.from_dict({value!r})", exclude), False
         if type_ref.is_nullable:
             return self._format_default_expr(None, type_ref, exclude), False
-        widen = (
-            self._is_enum(class_name)
-            or self._reaches_through_factories(class_name, self._current_class_name)
-            or (self.config.class_default_strategy == ClassDefaultStrategy.CONSTRUCTIBLE and not self._empty_constructible(class_name))
-        )
+        constructible_strategy = self.config.class_default_strategy == ClassDefaultStrategy.CONSTRUCTIBLE
+        recurses = self._reaches_through_factories(class_name, self._current_class_name)
+        if recurses and not constructible_strategy:
+            # A None is never introduced silently: a factory that would build the class
+            # being generated again can only mean the schema meant nullable.
+            raise ValueError(
+                f"{self._current_class_name}.{field.name}: a non-nullable optional reference to "
+                f"{class_name!r} would build {self._current_class_name!r} again through its "
+                f"default factory. Declare the property nullable in the schema "
+                f'(`"type": [..., "null"]` / `oneOf` with null), or set '
+                f"class_default_strategy=constructible to widen it to None."
+            )
+        widen = self._is_enum(class_name) or (constructible_strategy and (recurses or not self._empty_constructible(class_name)))
         if widen:
             return self._format_default_expr(None, type_ref, exclude), True
         return self._factory_default(f"{class_name}()", exclude), False
@@ -387,8 +395,8 @@ def optional_field_in_json(*args, default=None, **kwargs):
         A non-required, non-nullable, non-enum class field with no default gets
         `default_factory=lambda: X()`. If the class being generated is reachable that
         way from a field's own target, the field's factory could never terminate
-        (`Node()` building its own `parent: Node`), so the field is widened to None
-        under every strategy: a self-referential optional field is really nullable. A
+        (`Node()` building its own `parent: Node`), Under the SCHEMA strategy that is an error naming
+        the schema fix (declare it nullable); CONSTRUCTIBLE widens it to None. A
         field that merely points *into* a cycle from outside keeps its factory.
         """
         if from_class == to_class:

@@ -143,9 +143,9 @@ def test_constructibility_counts_inherited_fields(tmp_path: Path):
     assert module.Root.from_dict({"kind": "x", "inner": {"id": "i"}}).inner.extra == 0
 
 
-def test_a_self_referential_optional_field_is_widened_under_every_strategy(tmp_path: Path):
-    """`Node()` building a `Node()` for its own `parent` can never terminate, so the
-    field defaults to None even under SCHEMA — the schema meant nullable."""
+def test_a_self_referential_optional_field_is_an_error_under_schema(tmp_path: Path):
+    """`Node()` building a `Node()` for its own `parent` can never terminate; the schema
+    strategy never introduces a None silently, so it names the schema fix instead."""
     schema = {
         "$schema": "https://json-schema.org/draft/2019-09/schema",
         "$ref": "#/$defs/Root",
@@ -154,9 +154,11 @@ def test_a_self_referential_optional_field_is_widened_under_every_strategy(tmp_p
             "Node": {"type": "object", "properties": {"label": {"type": "string", "default": ""}, "parent": {"$ref": "#/$defs/Node"}}},
         },
     }
-    code = generate(schema)
+    with pytest.raises(ValueError, match="Node.parent.*nullable"):
+        generate(schema)
+
+    code = generate(schema, ClassDefaultStrategy.CONSTRUCTIBLE)
     assert "parent: Node | None = None" in code
-    assert "node: Node = field(default_factory=lambda: Node())" in code
     module = load(code, tmp_path)
     assert module.Root(kind="x").node.parent is None
 

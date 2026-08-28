@@ -124,11 +124,12 @@
   },
   {
     "name": "quoted_types_partial_config",
-    "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted; the mutually recursive optional references are widened to None (their factories could never terminate)",
+    "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted; under class_default_strategy=constructible the mutually recursive optional references are widened to None (the schema strategy refuses them)",
     "config": {
       "quoted_types_for_python": [
         "CircularType"
-      ]
+      ],
+      "class_default_strategy": "constructible"
     },
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
