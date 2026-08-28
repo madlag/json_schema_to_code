@@ -93,7 +93,7 @@
   },
   {
     "name": "quoted_types_no_config",
-    "description": "Test that without quoted_types_for_python config, types are not quoted",
+    "description": "Test that without quoted_types_for_python config, types are not quoted; the self-reference is declared nullable, as the schema strategy requires",
     "config": {},
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -105,7 +105,14 @@
               "type": "string"
             },
             "parent": {
-              "$ref": "#/definitions/Node"
+              "oneOf": [
+                {
+                  "$ref": "#/definitions/Node"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
