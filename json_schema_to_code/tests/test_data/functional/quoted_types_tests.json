@@ -1,12 +1,13 @@
 [
   {
     "name": "quoted_types_circular_references",
-    "description": "Types listed in quoted_types_for_python are quoted to handle circular references; an absent self-reference defaults to None (an empty Node would need an id, and would recurse into its own parent)",
+    "description": "Types listed in quoted_types_for_python are quoted to handle circular references; an absent self-reference defaults to None (an empty Node would need an id, and would recurse into its own parent). Under class_default_strategy=constructible every optional reference to a class that cannot be built empty is widened to None; the self-reference is widened under every strategy.",
     "config": {
       "quoted_types_for_python": [
         "Node",
         "Tree"
-      ]
+      ],
+      "class_default_strategy": "constructible"
     },
     "schema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -123,7 +124,7 @@
   },
   {
     "name": "quoted_types_partial_config",
-    "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted",
+    "description": "Test that only types listed in quoted_types_for_python are quoted, others remain unquoted; the mutually recursive optional references are widened to None (their factories could never terminate)",
     "config": {
       "quoted_types_for_python": [
         "CircularType"
@@ -162,16 +163,16 @@
     "expected_contains": [
       "class CircularType:",
       "class NormalType:",
-      "self: 'CircularType'",
-      "other: NormalType",
-      "circular: 'CircularType'"
+      "self: 'CircularType | None' = None",
+      "other: NormalType | None = None",
+      "circular: 'CircularType | None' = None"
     ],
     "expected_contains_v1": [
       "class CircularType:",
       "class NormalType:",
-      "self: \"CircularType\"",
-      "other: NormalType",
-      "circular: \"CircularType\""
+      "self: \"CircularType | None\" = None",
+      "other: NormalType | None = None",
+      "circular: \"CircularType | None\" = None"
     ],
     "expected_not_contains": [
       "self: CircularType",

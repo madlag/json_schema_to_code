@@ -16,6 +16,7 @@ import pytest
 
 from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
 from json_schema_to_code.pipeline.config import (
+    ClassDefaultStrategy,
     FormatterConfig,
     MergeStrategy,
     OutputConfig,
@@ -145,6 +146,7 @@ def _fully_populated() -> CodeGeneratorConfig:
         quoted_types_for_python=["Node"],
         use_future_annotations=False,
         exclude_default_value_from_json=True,
+        class_default_strategy=ClassDefaultStrategy.CONSTRUCTIBLE,
         optional_field_helper_module="app.helpers",
         add_validation=True,
         external_ref_base_module="app.schemas",

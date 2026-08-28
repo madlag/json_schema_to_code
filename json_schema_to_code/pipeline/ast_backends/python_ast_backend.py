@@ -11,6 +11,8 @@ import collections
 import dataclasses
 from typing import Any
 
+from json_schema_to_code.pipeline.config import ClassDefaultStrategy
+
 from ..analyzer.ir_nodes import IR, ClassDef, FieldDef, TypeAlias, TypeKind, TypeRef
 from ..config import CodeGeneratorConfig
 from .base import AstBackend
@@ -54,6 +56,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
         # an empty instance only when that instance can actually be built (see
         # _empty_constructible), which only the class definitions can tell.
         self.classes_by_name: dict[str, ClassDef] = {}
+        self._current_class_name: str = ""
         self._constructible: dict[str, bool] = {}
 
     def generate(self, ir: IR) -> str:
@@ -225,6 +228,7 @@ def optional_field_in_json(*args, default=None, **kwargs):
         # Order fields: required first, then with defaults
         ordered_fields = self._order_fields(class_def.fields)
 
+        self._current_class_name = class_def.name
         for field in ordered_fields:
             field_node = self._generate_field(field)
             if field_node:
@@ -351,18 +355,62 @@ def optional_field_in_json(*args, default=None, **kwargs):
         """Default for a field typed as a class.
 
         A dict default is built through `from_dict`, so the field holds an instance and
-        not the raw dict. Absent means an empty instance when the class can be built with
-        no arguments, and None otherwise: an enum cannot (`E()` needs a value) and neither
-        can a class with a required field -- `default_factory=lambda: X()` would raise at
-        construction, leaving the dataclass impossible to build or deserialize.
+        not the raw dict. A nullable field defaults to None. An enum with no value
+        defaults to None too (`E()` needs a value), widening the annotation. For any
+        other class the strategy decides (`ClassDefaultStrategy`): SCHEMA keeps the
+        schema's type and emits `default_factory=lambda: X()` — construction raises when
+        `X` needs arguments, as the schema implies; CONSTRUCTIBLE widens such a field to
+        `X | None = None` so the parent can always be built.
         """
         type_ref = field.type_ref
         class_name = type_ref.name.strip('"')
         if isinstance(value, dict):
             return self._factory_default(f"{class_name}.from_dict({value!r})", exclude), False
-        if type_ref.is_nullable or not self._empty_constructible(class_name):
-            return self._format_default_expr(None, type_ref, exclude), not type_ref.is_nullable
+        if type_ref.is_nullable:
+            return self._format_default_expr(None, type_ref, exclude), False
+        widen = (
+            self._is_enum(class_name)
+            or self._reaches_through_factories(class_name, self._current_class_name)
+            or (self.config.class_default_strategy == ClassDefaultStrategy.CONSTRUCTIBLE and not self._empty_constructible(class_name))
+        )
+        if widen:
+            return self._format_default_expr(None, type_ref, exclude), True
         return self._factory_default(f"{class_name}()", exclude), False
+
+    def _is_enum(self, class_name: str) -> bool:
+        class_def = self.classes_by_name.get(class_name)
+        return class_def is not None and class_def.is_enum
+
+    def _reaches_through_factories(self, from_class: str, to_class: str, seen: frozenset[str] = frozenset()) -> bool:
+        """Whether `from_class()` would build a `to_class()` through empty-instance factories.
+
+        A non-required, non-nullable, non-enum class field with no default gets
+        `default_factory=lambda: X()`. If the class being generated is reachable that
+        way from a field's own target, the field's factory could never terminate
+        (`Node()` building its own `parent: Node`), so the field is widened to None
+        under every strategy: a self-referential optional field is really nullable. A
+        field that merely points *into* a cycle from outside keeps its factory.
+        """
+        if from_class == to_class:
+            return True
+        if from_class in seen:
+            return False
+        class_def = self.classes_by_name.get(from_class)
+        if class_def is None or class_def.is_enum:
+            return False
+        for f in self._effective_fields(class_def).values():
+            ref = f.type_ref
+            if (
+                ref is not None
+                and ref.kind == TypeKind.CLASS
+                and not f.is_required
+                and not ref.is_nullable
+                and not f.has_default
+                and not self._is_enum(ref.name.strip('"'))
+                and self._reaches_through_factories(ref.name.strip('"'), to_class, seen | {from_class})
+            ):
+                return True
+        return False
 
     def _factory_default(self, instance: str, exclude: bool) -> ast.expr:
         """`field(default_factory=lambda: <instance>)`; when excluded from JSON, a field still

@@ -22,6 +22,21 @@ class OutputMode(str, Enum):
     MERGE = "merge"  # Merge with existing file
 
 
+class ClassDefaultStrategy(str, Enum):
+    """Default of a non-required field typed as a generated class (Python).
+
+    SCHEMA: the annotation follows the schema. A nullable field defaults to ``None``;
+    a non-nullable one gets ``field(default_factory=lambda: X())`` — if ``X`` cannot
+    be built without arguments, constructing the parent without that field raises,
+    which is what the schema says. CONSTRUCTIBLE: a non-nullable field whose class
+    cannot be built empty is widened to ``X | None = None`` so the parent stays
+    constructible. Enums always default to ``None`` (there is no empty enum value).
+    """
+
+    SCHEMA = "schema"
+    CONSTRUCTIBLE = "constructible"
+
+
 class MergeStrategy(str, Enum):
     """Strategy for handling existing value members not present in generated code."""
 
@@ -101,6 +116,9 @@ class CodeGeneratorConfig:
 
     # Exclude default values from JSON serialization
     exclude_default_value_from_json: bool = False
+
+    # How a non-required class-typed field gets its default (see ClassDefaultStrategy).
+    class_default_strategy: ClassDefaultStrategy = ClassDefaultStrategy.SCHEMA
 
     # When exclude_default_value_from_json is True, use a helper function instead of inline lambdas.
     # None  → verbose inline form (current behaviour)

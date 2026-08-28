@@ -11,8 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from json_schema_to_code.pipeline import CodeGeneratorConfig, PipelineGenerator
-from json_schema_to_code.pipeline.config import MergeStrategy
+from json_schema_to_code.pipeline.config import ClassDefaultStrategy, MergeStrategy
 from json_schema_to_code.pipeline.merger import PythonAstMerger
 
 ENUM_REF_SCHEMA = {
@@ -39,9 +41,11 @@ def load(code: str, tmp_path: Path) -> Any:
     return module
 
 
-def generate(schema: dict) -> str:
+def generate(schema: dict, strategy: ClassDefaultStrategy | None = None) -> str:
     config = CodeGeneratorConfig()
     config.add_generation_comment = False
+    if strategy is not None:
+        config.class_default_strategy = strategy
     return PipelineGenerator("Root", schema, config, "python").generate()
 
 
@@ -84,10 +88,25 @@ REQUIRED_INNER = {"type": "object", "properties": {"name": {"type": "string"}}, 
 OPTIONAL_INNER = {"type": "object", "properties": {"name": {"type": "string", "default": ""}, "n": {"type": "integer", "default": 0}}}
 
 
-def test_absent_ref_to_a_class_with_required_fields_is_optional(tmp_path: Path):
-    """`Inner()` would raise (missing `name`), so an empty-instance default cannot be
-    the answer: the field defaults to None and its annotation says so."""
+def test_absent_ref_to_a_class_with_required_fields_keeps_the_schema_type(tmp_path: Path):
+    """Default strategy (SCHEMA): the annotation is the schema's, non-nullable, with an
+    empty-instance factory. `Inner()` needs `name`, so building Root without `inner`
+    raises — exactly what a non-nullable field means — while deserializing with it works."""
     code = generate(_root_with({"$ref": "#/$defs/Inner"}, REQUIRED_INNER))
+
+    assert "inner: Inner = field(default_factory=lambda: Inner())" in code
+    assert "Inner | None" not in code
+
+    module = load(code, tmp_path)
+    with pytest.raises(TypeError):
+        module.Root(kind="x")
+    assert module.Root.from_dict({"kind": "x", "inner": {"name": "n"}}).inner.name == "n"
+
+
+def test_absent_ref_to_a_class_with_required_fields_is_optional_under_constructible(tmp_path: Path):
+    """CONSTRUCTIBLE strategy: `Inner()` would raise (missing `name`), so the field is
+    widened to None and its annotation says so."""
+    code = generate(_root_with({"$ref": "#/$defs/Inner"}, REQUIRED_INNER), ClassDefaultStrategy.CONSTRUCTIBLE)
 
     assert "inner: Inner | None = None" in code
     assert "Inner()" not in code
@@ -115,13 +134,31 @@ def test_constructibility_counts_inherited_fields(tmp_path: Path):
         {"allOf": [{"$ref": "#/$defs/Base"}, {"type": "object", "properties": {"extra": {"type": "integer", "default": 0}}}]},
         {"Base": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
     )
-    code = generate(schema)
+    code = generate(schema, ClassDefaultStrategy.CONSTRUCTIBLE)
 
     assert "inner: Inner | None = None" in code
 
     module = load(code, tmp_path)
     assert module.Root(kind="x").inner is None
     assert module.Root.from_dict({"kind": "x", "inner": {"id": "i"}}).inner.extra == 0
+
+
+def test_a_self_referential_optional_field_is_widened_under_every_strategy(tmp_path: Path):
+    """`Node()` building a `Node()` for its own `parent` can never terminate, so the
+    field defaults to None even under SCHEMA — the schema meant nullable."""
+    schema = {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Root",
+        "$defs": {
+            "Root": {"type": "object", "properties": {"kind": {"type": "string"}, "node": {"$ref": "#/$defs/Node"}}, "required": ["kind"]},
+            "Node": {"type": "object", "properties": {"label": {"type": "string", "default": ""}, "parent": {"$ref": "#/$defs/Node"}}},
+        },
+    }
+    code = generate(schema)
+    assert "parent: Node | None = None" in code
+    assert "node: Node = field(default_factory=lambda: Node())" in code
+    module = load(code, tmp_path)
+    assert module.Root(kind="x").node.parent is None
 
 
 def test_a_dict_default_on_a_ref_builds_the_instance(tmp_path: Path):
