@@ -433,9 +433,11 @@ class SchemaAnalyzer:
         if class_def.base_class:
             class_def.discriminator_property = self.discriminator_property_by_base.get(class_def.base_class)
 
-        # Analyze extension properties
+        # Analyze extension properties. A property the base requires stays required
+        # when the subclass redeclares it to narrow its type.
         if allof.extension:
-            class_def.fields = self._analyze_properties(allof.extension, class_name)
+            inherited_required = frozenset(f.name for f in class_def.base_fields if f.is_required)
+            class_def.fields = self._analyze_properties(allof.extension, class_name, inherited_required)
 
         # When ignoreSubClassOverrides is set, remove from fields any field that
         # is already covered by a base_field, UNLESS it is a const override of a
@@ -810,25 +812,32 @@ class SchemaAnalyzer:
         # This is typically used for type aliases to primitives
         return None
 
-    def _analyze_properties(self, obj: ObjectNode, parent_class: str) -> list[FieldDef]:
-        """Analyze properties and create FieldDefs."""
+    def _analyze_properties(self, obj: ObjectNode, parent_class: str, inherited_required: frozenset[str] = frozenset()) -> list[FieldDef]:
+        """Analyze properties and create FieldDefs.
+
+        ``inherited_required`` names the properties a base class already requires:
+        a subclass re-declaring one of them (to narrow its type) keeps it required —
+        ``required`` is a constraint on the composed object, not on the member that
+        happens to redeclare the property.
+        """
         fields = []
 
         for prop in obj.properties:
             if prop.name in self.config.global_ignore_fields:
                 continue
 
-            field_def = self._analyze_property(prop, parent_class)
+            field_def = self._analyze_property(prop, parent_class, prop.name in inherited_required)
             fields.append(field_def)
 
         return fields
 
-    def _analyze_property(self, prop: PropertyDef, parent_class: str) -> FieldDef:
+    def _analyze_property(self, prop: PropertyDef, parent_class: str, required_by_base: bool = False) -> FieldDef:
         """Analyze a single property."""
+        is_required = prop.is_required or required_by_base
         field_def = FieldDef(
             name=prop.name,
             original_name=prop.name,
-            is_required=prop.is_required,
+            is_required=is_required,
             has_default=prop.has_default,
             default_value=prop.default_value,
         )
@@ -847,7 +856,7 @@ class SchemaAnalyzer:
                 prop.type_node,
                 prop.name,
                 parent_class,
-                prop.is_required,
+                is_required,
             )
 
             # If field has a non-null default value, it shouldn't be nullable

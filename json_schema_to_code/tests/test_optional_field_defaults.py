@@ -210,3 +210,25 @@ def test_merge_keeps_a_default_when_the_field_becomes_optional():
     merged = merge(HEADER + "    sim: Simulation | None = None\n", HEADER + "    sim: Simulation\n")
 
     assert field_lines(merged) == ["sim: Simulation | None = None"]
+
+
+def test_a_subclass_redeclaring_a_required_base_property_keeps_it_required(tmp_path: Path):
+    """`required` constrains the composed object: a subclass narrowing `problem`'s type
+    in its own allOf member does not make it optional again."""
+    schema = {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "$ref": "#/$defs/Root",
+        "$defs": {
+            "BaseProblem": {"type": "object", "properties": {"text": {"type": "string", "default": ""}}},
+            "MyProblem": {"allOf": [{"$ref": "#/$defs/BaseProblem"}, {"type": "object", "properties": {"extra": {"type": "integer", "default": 0}}}]},
+            "Base": {"type": "object", "properties": {"kind": {"type": "string", "default": ""}, "problem": {"$ref": "#/$defs/BaseProblem"}}, "required": ["problem"]},
+            "Root": {"allOf": [{"$ref": "#/$defs/Base"}, {"type": "object", "properties": {"problem": {"$ref": "#/$defs/MyProblem"}}}]},
+        },
+    }
+    code = generate(schema)
+    assert "problem: MyProblem\n" in code or "problem: MyProblem" in code.split("class Root")[1].split("\n")[1]
+    assert "problem: MyProblem = field" not in code
+    module = load(code, tmp_path)
+    with pytest.raises(TypeError):
+        module.Root()
+    assert module.Root(problem=module.MyProblem()).problem.extra == 0
