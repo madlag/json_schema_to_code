@@ -198,11 +198,12 @@ def test_merge_drops_a_default_the_new_annotation_invalidates():
     assert field_lines(merged) == ["sim: Simulation"]
 
 
-def test_merge_still_keeps_a_default_when_the_type_is_unchanged():
-    """The behaviour the rule exists for: hand-set defaults survive regeneration."""
+def test_merge_does_not_keep_a_hand_set_default():
+    """A generated field's default is schema-owned: a default set by hand in the
+    generated file does not survive regeneration (put it in the schema)."""
     merged = merge(HEADER + "    label: str\n", HEADER + "    label: str = 'hand-set'\n")
 
-    assert field_lines(merged) == ["label: str = 'hand-set'"]
+    assert field_lines(merged) == ["label: str"]
 
 
 def test_merge_keeps_a_default_when_the_field_becomes_optional():

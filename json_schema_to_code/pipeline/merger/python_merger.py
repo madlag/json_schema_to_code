@@ -490,14 +490,8 @@ class PythonAstMerger(AstMerger):
                         new_body.append(item)
                     else:
                         gen_field = gen_fields[field_name]
-                        if gen_field.value is None and item.value is not None and self._same_annotation(gen_field, item):
-                            # Carry a hand-set default over -- but only while the field's
-                            # type is unchanged. A differing annotation means the schema
-                            # changed the field's shape, and the old default was usually a
-                            # consequence of the old shape: keeping it splices `X = None`
-                            # out of `X | None = None` + `X`, a declaration that appears in
-                            # neither input and type-checks as a lie.
-                            gen_field.value = item.value
+                        # A generated field's default is schema-owned: the generated declaration wins
+                        # outright (express a default in the schema, not by hand in this file).
                         new_body.append(gen_field)
                 elif merge_strategy != MergeStrategy.DELETE:
                     new_body.append(item)
