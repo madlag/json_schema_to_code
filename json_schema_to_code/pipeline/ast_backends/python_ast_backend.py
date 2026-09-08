@@ -295,6 +295,12 @@ def optional_field_in_json(*args, default=None, **kwargs):
         if not field.type_ref:
             return None
 
+        # `x-python-imports` stands on its own: a field whose `x-python-type`
+        # names an external class needs its import even without a constructor
+        # default (the default path registers too; the sets dedupe).
+        if field.language_imports.get("python"):
+            self._register_language_imports(field, "")
+
         value, widen_to_none = self._field_default(field)
         if field.omit_when_default and value is None:
             raise ValueError(f"x-omit-when-default on {field.name!r}: the field is required and declares no default, so there is nothing to omit it against.")

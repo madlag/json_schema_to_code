@@ -191,8 +191,41 @@ def test_x_python_type_overrides_a_primitive(tmp_path: Path):
     assert root.note is None
 
 
+IMPORTED_TYPE_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "$ref": "#/$defs/Root",
+    "$defs": {
+        "Root": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string",
+                    "x-python-type": "Decimal",
+                    "x-python-imports": ["from decimal import Decimal"],
+                },
+            },
+            "required": ["amount"],
+        },
+    },
+}
+
+
+def test_x_python_imports_stands_alone_with_a_verbatim_type(tmp_path: Path):
+    """`x-python-imports` must be honored on a field that has no constructor
+    default: a bare `x-python-type` naming an external class needs its import
+    too, or the generated module raises NameError at import time."""
+    code = generate(IMPORTED_TYPE_SCHEMA, "Root")
+    assert "from decimal import Decimal" in code
+
+    module = load_module(code, tmp_path, "override_d")
+    from decimal import Decimal
+
+    root = module.Root(amount=Decimal("1.5"))
+    assert root.amount == Decimal("1.5")
+
+
 def test_generated_code_is_valid_json_schema_roundtrip():
     """Sanity: the schemas above are well-formed enough that generation is
     testing the backend, not a broken fixture."""
-    for schema in (POLYMORPHIC_SCHEMA, OVERRIDE_SCHEMA, PRIMITIVE_OVERRIDE_SCHEMA):
+    for schema in (POLYMORPHIC_SCHEMA, OVERRIDE_SCHEMA, PRIMITIVE_OVERRIDE_SCHEMA, IMPORTED_TYPE_SCHEMA):
         json.dumps(schema)

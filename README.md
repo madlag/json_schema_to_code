@@ -207,6 +207,14 @@ Any schema node can name the type a language should emit for it, verbatim, when 
 
 Python: `when: datetime`, `digest: str`. C#: `public DateTime When`. Swift: `let when: Date`, `var widgets: [NamedWidget] = []`. For Swift a property-level override ending in `?` is decoded leniently (`decodeIfPresent`), and a default survives only for empty container literals.
 
+A Python override naming a type that lives elsewhere brings its import via `x-python-imports` (which stands on its own — no constructor default required):
+
+```json
+{
+  "amount": {"type": "string", "x-python-type": "Decimal", "x-python-imports": ["from decimal import Decimal"]}
+}
+```
+
 ### Omit-when-default Fields (`x-omit-when-default`, Python)
 
 `exclude_default_value_from_json` omits every field still at its default from `to_dict()`; `x-omit-when-default: true` does the same for one property:
