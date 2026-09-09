@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-09-09
+
+### Fixed
+
+- **`x-python-imports` stands on its own.** A field whose `x-python-type` names a class living elsewhere needs that import even when it declares no constructor default; the imports were previously registered only alongside `x-python-default` / `x-python-default-code`, so a plain type override emitted a module that raised `NameError` at import time. Imports are now registered whenever present (the sets dedupe with the default path), and the README documents the pairing.
+
 ## [1.1.3] - 2026-08-28
 
 ### Changed
