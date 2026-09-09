@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-09-09
+
+### Fixed
+
+- **`__version__` no longer drifts from the packaged version.** It was a hand-maintained string that had fallen three releases behind (`1.1.0` while `pyproject.toml` said `1.1.4`), so every file the generator wrote stamped the wrong version into its header — the one place that provenance is recorded. It now comes from the installed distribution's metadata (`importlib.metadata`), leaving `pyproject.toml` as the single source. Note this reports the version actually *installed*: after bumping, refresh an editable install (`pip install -e . --no-deps`) or it will keep reporting the previous one.
+
 ## [1.1.4] - 2026-09-09
 
 ### Fixed
